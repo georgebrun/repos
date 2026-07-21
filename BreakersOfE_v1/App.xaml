@@ -1,0 +1,15 @@
+﻿<Application x:Class="BreakersOfE.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:services="clr-namespace:BreakersOfE.Services"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+            </ResourceDictionary.MergedDictionaries>
+            <services:ImageSourceConverter    x:Key="ImageSourceConverter"/>
+            <services:ManaCostConverter       x:Key="ManaCostConverter"/>
+            <services:BoolToGreenRedConverter x:Key="BoolToGreenRedConverter"/>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

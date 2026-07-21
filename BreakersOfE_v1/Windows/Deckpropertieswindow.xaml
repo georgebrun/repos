@@ -1,0 +1,280 @@
+﻿<Window x:Class="BreakersOfE.Windows.DeckPropertiesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Deck Properties"
+        Width="480" Height="520"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+    <Grid Margin="0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ScrollViewer Grid.Row="0"
+                      VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="16">
+
+                <!-- ── GENERAL ─────────────────────────────────────── -->
+                <Border Background="#F0F0F0"
+                        BorderBrush="#CCCCCC"
+                        BorderThickness="1"
+                        Padding="8,6"
+                        Margin="0,0,0,12">
+                    <TextBlock Text="General"
+                               FontWeight="Bold"
+                               FontSize="13"/>
+                </Border>
+
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="120"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="30"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="30"/>
+                        <RowDefinition Height="30"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Name -->
+                    <TextBlock Grid.Row="0" Grid.Column="0"
+                               Text="Name"
+                               VerticalAlignment="Center"
+                               FontSize="13"/>
+                    <TextBox Grid.Row="0" Grid.Column="1"
+                             Name="TxtName"
+                             Height="26" FontSize="13"
+                             Padding="4,0"
+                             VerticalContentAlignment="Center"/>
+
+                    <!-- Description -->
+                    <TextBlock Grid.Row="1" Grid.Column="0"
+                               Text="Description"
+                               VerticalAlignment="Top"
+                               Margin="0,4,0,0"
+                               FontSize="13"/>
+                    <TextBox Grid.Row="1" Grid.Column="1"
+                             Name="TxtDescription"
+                             Height="60" FontSize="13"
+                             Padding="4"
+                             TextWrapping="Wrap"
+                             AcceptsReturn="True"
+                             VerticalScrollBarVisibility="Auto"
+                             Margin="0,4,0,4"/>
+
+                    <!-- File Name -->
+                    <TextBlock Grid.Row="2" Grid.Column="0"
+                               Text="File Name"
+                               VerticalAlignment="Center"
+                               FontSize="13"/>
+                    <TextBlock Grid.Row="2" Grid.Column="1"
+                               Name="TxtFileName"
+                               VerticalAlignment="Center"
+                               FontSize="12"
+                               Foreground="Gray"
+                               TextTrimming="CharacterEllipsis"/>
+
+                    <!-- File Type -->
+                    <TextBlock Grid.Row="3" Grid.Column="0"
+                               Text="File Type"
+                               VerticalAlignment="Center"
+                               FontSize="13"/>
+                    <TextBlock Grid.Row="3" Grid.Column="1"
+                               Text="Breakers of E Deck"
+                               VerticalAlignment="Center"
+                               FontSize="12"
+                               Foreground="Gray"/>
+                </Grid>
+
+                <!-- ── COMPUTED ─────────────────────────────────────── -->
+                <Border Background="#F0F0F0"
+                        BorderBrush="#CCCCCC"
+                        BorderThickness="1"
+                        Padding="8,6"
+                        Margin="0,4,0,12">
+                    <TextBlock Text="Computed"
+                               FontWeight="Bold"
+                               FontSize="13"/>
+                </Border>
+
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="120"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="30"/>
+                        <RowDefinition Height="30"/>
+                        <RowDefinition Height="30"/>
+                        <RowDefinition Height="30"/>
+                        <RowDefinition Height="30"/>
+                        <RowDefinition Height="36"/>
+                        <RowDefinition Height="30"/>
+                        <RowDefinition Height="30"/>
+                        <RowDefinition Height="36"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Deck / Sideboard counts -->
+                    <TextBlock Grid.Row="0" Grid.Column="0"
+                               Text="Cards"
+                               VerticalAlignment="Center"
+                               FontSize="13"/>
+                    <StackPanel Grid.Row="0" Grid.Column="1"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <TextBlock Text="Deck: " FontSize="13"/>
+                        <TextBlock Name="LblDeckCount"
+                                   FontSize="13" FontWeight="Bold"
+                                   Margin="0,0,16,0"/>
+                        <TextBlock Text="Sideboard: " FontSize="13"/>
+                        <TextBlock Name="LblSideboardCount"
+                                   FontSize="13" FontWeight="Bold"/>
+                    </StackPanel>
+
+                    <!-- Land / Creature / Spell -->
+                    <TextBlock Grid.Row="1" Grid.Column="0"
+                               Text="Types"
+                               VerticalAlignment="Center"
+                               FontSize="13"/>
+                    <StackPanel Grid.Row="1" Grid.Column="1"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <TextBlock Text="Land: " FontSize="13"/>
+                        <TextBlock Name="LblLandCount"
+                                   FontSize="13" FontWeight="Bold"
+                                   Margin="0,0,12,0"/>
+                        <TextBlock Text="Creature: " FontSize="13"/>
+                        <TextBlock Name="LblCreatureCount"
+                                   FontSize="13" FontWeight="Bold"
+                                   Margin="0,0,12,0"/>
+                        <TextBlock Text="Spell: " FontSize="13"/>
+                        <TextBlock Name="LblSpellCount"
+                                   FontSize="13" FontWeight="Bold"/>
+                    </StackPanel>
+
+                    <!-- Colors -->
+                    <TextBlock Grid.Row="2" Grid.Column="0"
+                               Text="Colors"
+                               VerticalAlignment="Center"
+                               FontSize="13"/>
+                    <StackPanel Grid.Row="2" Grid.Column="1"
+                                Name="ColorsPanel"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center"/>
+
+                    <!-- Avg CMC -->
+                    <TextBlock Grid.Row="3" Grid.Column="0"
+                               Text="Avg CMC"
+                               VerticalAlignment="Center"
+                               FontSize="13"/>
+                    <TextBlock Grid.Row="3" Grid.Column="1"
+                               Name="LblAvgCmc"
+                               VerticalAlignment="Center"
+                               FontSize="13" FontWeight="Bold"/>
+
+                    <!-- Value -->
+                    <TextBlock Grid.Row="4" Grid.Column="0"
+                               Text="Collection Value"
+                               VerticalAlignment="Center"
+                               FontSize="13"/>
+                    <TextBlock Grid.Row="4" Grid.Column="1"
+                               Name="LblValue"
+                               VerticalAlignment="Center"
+                               FontSize="13" FontWeight="Bold"/>
+
+                    <!-- Aggression -->
+                    <TextBlock Grid.Row="5" Grid.Column="0"
+                               Text="Aggression"
+                               VerticalAlignment="Center"
+                               FontSize="13"/>
+                    <StackPanel Grid.Row="5" Grid.Column="1"
+                                VerticalAlignment="Center">
+                        <ProgressBar Name="AggressionBar"
+                                     Height="12" Minimum="0" Maximum="100"
+                                     Margin="0,4,0,2"/>
+                        <TextBlock Name="LblAggression"
+                                   FontSize="11" Foreground="Gray"/>
+                    </StackPanel>
+
+                    <!-- Power Level -->
+                    <TextBlock Grid.Row="6" Grid.Column="0"
+                               Text="Power Level"
+                               VerticalAlignment="Center"
+                               FontSize="13"/>
+                    <StackPanel Grid.Row="6" Grid.Column="1"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <TextBlock Name="LblCalculatedPower"
+                                   FontSize="13"
+                                   Foreground="Gray"
+                                   Margin="0,0,8,0"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="Override:"
+                                   FontSize="12"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,4,0"/>
+                        <ComboBox Name="CmbPowerOverride"
+                                  Width="60" Height="24"
+                                  FontSize="12"/>
+                        <CheckBox Name="ChkUseCalculated"
+                                  Content="Use calculated"
+                                  FontSize="12"
+                                  Margin="8,0,0,0"
+                                  VerticalAlignment="Center"
+                                  Checked="ChkUseCalculated_Changed"
+                                  Unchecked="ChkUseCalculated_Changed"/>
+                    </StackPanel>
+
+                    <!-- Archetype -->
+                    <TextBlock Grid.Row="7" Grid.Column="0"
+                               Text="Archetype"
+                               VerticalAlignment="Center"
+                               FontSize="13"/>
+                    <ComboBox Grid.Row="7" Grid.Column="1"
+                              Name="CmbArchetype"
+                              Height="26" FontSize="13"
+                              VerticalAlignment="Center"/>
+
+                    <!-- Legality -->
+                    <TextBlock Grid.Row="8" Grid.Column="0"
+                               Text="Legality"
+                               VerticalAlignment="Center"
+                               FontSize="13"/>
+                    <StackPanel Grid.Row="8" Grid.Column="1"
+                                Name="LegalityPanel"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center"/>
+                </Grid>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Buttons -->
+        <Border Grid.Row="1"
+                Background="#F0F0F0"
+                BorderBrush="#CCCCCC"
+                BorderThickness="0,1,0,0"
+                Padding="8,6">
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <Button Name="BtnOK"
+                        Content="OK"
+                        Width="80" Height="28"
+                        FontSize="13"
+                        IsDefault="True"
+                        Margin="0,0,8,0"
+                        Click="BtnOK_Click"/>
+                <Button Name="BtnCancel"
+                        Content="Cancel"
+                        Width="80" Height="28"
+                        FontSize="13"
+                        IsCancel="True"
+                        Click="BtnCancel_Click"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

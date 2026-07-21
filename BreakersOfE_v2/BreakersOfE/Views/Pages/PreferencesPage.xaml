@@ -1,0 +1,85 @@
+<Page x:Class="BreakersOfE.Views.Pages.PreferencesPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+
+    <!--
+    ═══════════════════════════════════════════════════════════
+    SETTINGS PAGE
+    
+    Phase 1: Theme switching (Dark / Light) works right away.
+    Later phases will add:
+      - MTG color themes
+      - XP Classic theme
+      - Custom theme editor
+      - Agent schedule configuration
+      - Image cache management
+      - Backup settings
+    ═══════════════════════════════════════════════════════════
+    -->
+
+    <ScrollViewer Margin="24">
+        <StackPanel MaxWidth="600" HorizontalAlignment="Left">
+
+            <!-- Section: Appearance -->
+            <TextBlock Text="Appearance"
+                       FontSize="24" FontWeight="SemiBold"
+                       Margin="0,0,0,16" />
+
+            <TextBlock Text="Theme"
+                       FontSize="14" Opacity="0.6"
+                       Margin="0,0,0,8" />
+
+            <!-- Theme selection buttons -->
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,24">
+                <ui:Button Content="Dark"
+                           Appearance="Primary"
+                           Click="DarkTheme_Click"
+                           Margin="0,0,8,0" />
+                <ui:Button Content="Light"
+                           Click="LightTheme_Click"
+                           Margin="0,0,8,0" />
+            </StackPanel>
+
+            <Separator Margin="0,0,0,24" />
+
+            <!-- Section: About -->
+            <TextBlock Text="About"
+                       FontSize="24" FontWeight="SemiBold"
+                       Margin="0,0,0,16" />
+
+            <TextBlock Text="Breakers of E"
+                       FontSize="18" FontWeight="Medium" />
+            <TextBlock Text="Version 2.0.0 — Complete Overhaul"
+                       FontSize="14" Opacity="0.6"
+                       Margin="0,4,0,4" />
+            <TextBlock Text="Magic: The Gathering Collection &amp; Deck Manager"
+                       FontSize="14" Opacity="0.6" />
+
+            <Separator Margin="0,24,0,24" />
+
+            <!-- Placeholder sections for later phases -->
+            <TextBlock Text="Agent Schedule"
+                       FontSize="24" FontWeight="SemiBold"
+                       Margin="0,0,0,8" />
+            <TextBlock Text="Coming in Phase 7 — configure automatic price updates and backups."
+                       FontSize="14" Opacity="0.4"
+                       Margin="0,0,0,24" />
+
+            <TextBlock Text="Image Cache"
+                       FontSize="24" FontWeight="SemiBold"
+                       Margin="0,0,0,8" />
+            <TextBlock Text="Coming in Phase 7 — manage locally cached card images."
+                       FontSize="14" Opacity="0.4"
+                       Margin="0,0,0,24" />
+
+            <TextBlock Text="Backup &amp; Restore"
+                       FontSize="24" FontWeight="SemiBold"
+                       Margin="0,0,0,8" />
+            <TextBlock Text="Coming in Phase 10 — one-click backup and restore."
+                       FontSize="14" Opacity="0.4" />
+
+        </StackPanel>
+    </ScrollViewer>
+
+</Page>

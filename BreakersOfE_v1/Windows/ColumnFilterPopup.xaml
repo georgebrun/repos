@@ -1,0 +1,127 @@
+﻿<Window x:Class="BreakersOfE.Windows.ColumnFilterPopup"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Filter"
+        Width="280" Height="420"
+        MinWidth="220" MinHeight="320"
+        ResizeMode="CanResize"
+        WindowStartupLocation="Manual"
+        ShowInTaskbar="False"
+        WindowStyle="ToolWindow">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ── SORT BUTTONS ─────────────────────────────────────── -->
+        <Border Grid.Row="0" BorderBrush="#CCCCCC" BorderThickness="0,0,0,1" Padding="6,4">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="Sort A → Z" FontSize="11" Padding="8,3" Margin="0,0,4,0" Click="BtnSortAsc_Click"/>
+                <Button Content="Sort Z → A" FontSize="11" Padding="8,3" Click="BtnSortDesc_Click"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ── FILTER AREA ──────────────────────────────────────── -->
+        <TabControl Grid.Row="1" Name="MainTabControl">
+
+            <!-- ── VALUES TAB ──────────────────────────────────── -->
+            <TabItem Header="Values">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="36"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Search box — filters the checkbox list -->
+                    <Border Grid.Row="0" BorderBrush="#CCCCCC" BorderThickness="0,0,0,1" Padding="4,4">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="24"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Name="ValueSearchBox" Grid.Column="0" Height="24"
+                                     FontSize="12" VerticalContentAlignment="Center" Padding="4,0"
+                                     TextChanged="ValueSearchBox_TextChanged"/>
+                            <TextBlock Grid.Column="1" Text="&#xE11A;"
+                                       FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                       Foreground="Gray" VerticalAlignment="Center"
+                                       HorizontalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Pinned Select All row — toggles only VISIBLE items -->
+                    <Border Grid.Row="1" BorderBrush="#CCCCCC" BorderThickness="0,0,0,1" Padding="8,4">
+                        <CheckBox Name="ChkSelectAll" Content="(Select All)"
+                                  IsThreeState="False"
+                                  FontSize="12" Padding="4,2"
+                                  Checked="SelectAll_Changed" Unchecked="SelectAll_Changed"/>
+                    </Border>
+
+                    <!-- Checkbox list — virtualized -->
+                    <ListBox Name="ValuesListBox" Grid.Row="2"
+                             BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Standard">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Content="{Binding DisplayValue}"
+                                          IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                          FontSize="12" Padding="4,2"
+                                          Checked="ValueCheckBox_Changed"
+                                          Unchecked="ValueCheckBox_Changed"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </TabItem>
+
+            <!-- ── TEXT FILTERS TAB ────────────────────────────── -->
+            <TabItem Header="Text Filters">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <ComboBox Name="OperatorCombo" Grid.Row="0" Height="28"
+                              FontSize="12" Margin="0,0,0,8"
+                              SelectionChanged="OperatorCombo_SelectionChanged"/>
+                    <TextBox Name="TextFilterBox" Grid.Row="1" Height="28"
+                             FontSize="12" Padding="4,0" VerticalContentAlignment="Center"
+                             TextChanged="TextFilterBox_TextChanged"
+                             KeyDown="TextFilterBox_KeyDown"/>
+                    <Button Grid.Row="2" Content="&#xE10A;" FontFamily="Segoe MDL2 Assets"
+                            FontSize="14" Width="28" Height="28" HorizontalAlignment="Left"
+                            Margin="0,6,0,0" Background="Transparent" BorderThickness="1"
+                            Cursor="Hand" ToolTip="Clear text filter"
+                            Click="BtnClearTextFilter_Click"/>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <!-- ── OK / CANCEL / CLEAR ──────────────────────────────── -->
+        <Border Grid.Row="2" Background="#F0F0F0" BorderBrush="#CCCCCC"
+                BorderThickness="0,1,0,0" Padding="8,6">
+            <DockPanel>
+                <Button Name="BtnClearFilter" Content="Clear Filter"
+                        Width="80" Height="26" FontSize="12"
+                        DockPanel.Dock="Left" Click="BtnClearFilter_Click"/>
+                <Button Name="BtnCancel" Content="Cancel"
+                        Width="65" Height="26" FontSize="12"
+                        HorizontalAlignment="Right" DockPanel.Dock="Right"
+                        Margin="4,0,0,0" IsCancel="True"
+                        Click="BtnCancel_Click"/>
+                <Button Name="BtnOk" Content="OK"
+                        Width="65" Height="26" FontSize="12"
+                        HorizontalAlignment="Right" DockPanel.Dock="Right"
+                        IsDefault="True" Click="BtnOk_Click"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

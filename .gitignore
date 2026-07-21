@@ -1,0 +1,26 @@
+# Build output
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+.vs/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Temp files
+*.tmp
+*.temp
+
+# NuGet packages
+packages/
+*.nupkg
+
+# Card images (too large for GitHub)
+CardImages/
+SetSymbols/
+ManaSymbols/

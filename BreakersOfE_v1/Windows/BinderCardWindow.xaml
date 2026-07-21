@@ -1,0 +1,76 @@
+﻿<Window x:Class="BreakersOfE.Windows.BinderCardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Card Detail"
+        Width="320" Height="520"
+        MinWidth="280" MinHeight="440"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        Background="#1A1008">
+
+    <Window.Resources>
+        <LinearGradientBrush x:Key="LeatherBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#2C1810" Offset="0.0"/>
+            <GradientStop Color="#1A0E08" Offset="0.5"/>
+            <GradientStop Color="#2C1810" Offset="1.0"/>
+        </LinearGradientBrush>
+    </Window.Resources>
+
+    <Border Background="{StaticResource LeatherBrush}" Padding="20">
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+
+            <!-- Sleeve border around image -->
+            <Border Name="SleeveOuter"
+                    Background="#CCC8BC"
+                    BorderBrush="#AAA090"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="4"
+                    HorizontalAlignment="Center">
+
+                <!-- Canvas holds image + badges -->
+                <Canvas Name="CardCanvas" Width="213" Height="297"/>
+
+            </Border>
+
+            <!-- Card name -->
+            <TextBlock Name="NameText"
+                       FontSize="14" FontWeight="SemiBold"
+                       Foreground="#E8D898"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       MaxWidth="260"
+                       Margin="0,10,0,3"/>
+
+            <!-- Set + foil -->
+            <TextBlock Name="SetText"
+                       FontSize="11"
+                       Foreground="#886633"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,3"/>
+
+            <!-- Condition -->
+            <TextBlock Name="ConditionText"
+                       FontSize="11"
+                       Foreground="#888866"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,3"
+                       Visibility="Collapsed"/>
+
+            <!-- Price -->
+            <TextBlock Name="PriceText"
+                       FontSize="18" FontWeight="Bold"
+                       Foreground="#44AA44"
+                       HorizontalAlignment="Center"
+                       Margin="0,4,0,0"
+                       Visibility="Collapsed"/>
+
+            <TextBlock Text="Images provided by Scryfall"
+                               FontSize="9" Foreground="Gray"
+                               HorizontalAlignment="Center"
+                               Margin="0,8,0,2"/>
+        </StackPanel>
+    </Border>
+</Window>

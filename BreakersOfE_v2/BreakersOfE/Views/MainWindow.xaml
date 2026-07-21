@@ -1,0 +1,128 @@
+<ui:FluentWindow x:Class="BreakersOfE.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:pages="clr-namespace:BreakersOfE.Views.Pages"
+        Title="Breakers of E  —  v2.0"
+        Width="1400" Height="900"
+        MinWidth="1000" MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica">
+
+    <!-- 
+    ═══════════════════════════════════════════════════════════
+    MAIN WINDOW LAYOUT
+    
+    This is the "app shell" — it holds the navigation sidebar
+    on the left and loads pages into the content area on the 
+    right. Think of it like an HMI with a menu that switches
+    between different screens.
+    
+    The NavigationView from Wpf.Ui handles:
+      - Sidebar with icons and labels
+      - Page switching when you click a menu item
+      - Responsive collapse on narrow windows
+    ═══════════════════════════════════════════════════════════
+    -->
+
+    <Grid>
+        <!-- Title bar area at the top -->
+        <ui:TitleBar x:Name="TitleBar" 
+                     Grid.Row="0"
+                     Title="Breakers of E"
+                     ShowMaximize="True"
+                     ShowMinimize="True" />
+
+        <!-- Navigation sidebar + content area -->
+        <ui:NavigationView x:Name="RootNavigation"
+                           PaneDisplayMode="Left"
+                           IsBackButtonVisible="Collapsed"
+                           Margin="0,40,0,0">
+
+            <!-- ═══ TOP MENU ITEMS ═══ -->
+            <ui:NavigationView.MenuItems>
+
+                <!-- Dashboard — collection insights landing page -->
+                <ui:NavigationViewItem Content="Dashboard"
+                                       TargetPageType="{x:Type pages:DashboardPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="Home24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+
+                <!-- Collection — browse and filter your cards -->
+                <ui:NavigationViewItem Content="Collection"
+                                       TargetPageType="{x:Type pages:CollectionPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="Library24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+
+                <!-- Deck Editor — build and edit decks -->
+                <ui:NavigationViewItem Content="Decks"
+                                       TargetPageType="{x:Type pages:DeckPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="DocumentBulletList24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+
+                <!-- Deck Builder — AI-assisted deckbuilding -->
+                <ui:NavigationViewItem Content="Deck Builder"
+                                       TargetPageType="{x:Type pages:DeckBuilderPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="Wand24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+
+                <!-- Trade Binder -->
+                <ui:NavigationViewItem Content="Trade Binder"
+                                       TargetPageType="{x:Type pages:TradeBinderPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="ArrowSwap24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+
+                <!-- Want List -->
+                <ui:NavigationViewItem Content="Want List"
+                                       TargetPageType="{x:Type pages:WantListPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="Heart24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+
+                <!-- Playtest — tabletop simulator -->
+                <ui:NavigationViewItem Content="Playtest"
+                                       TargetPageType="{x:Type pages:PlaytestPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="Play24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+
+            </ui:NavigationView.MenuItems>
+
+            <!-- ═══ BOTTOM MENU ITEMS (pinned to bottom of sidebar) ═══ -->
+            <ui:NavigationView.FooterMenuItems>
+
+                <!-- Database Update -->
+                <ui:NavigationViewItem Content="Update Database"
+                                       TargetPageType="{x:Type pages:DatabaseUpdatePage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="ArrowDownload24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+
+                <!-- Settings / Preferences -->
+                <ui:NavigationViewItem Content="Settings"
+                                       TargetPageType="{x:Type pages:PreferencesPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="Settings24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+
+            </ui:NavigationView.FooterMenuItems>
+
+        </ui:NavigationView>
+    </Grid>
+
+</ui:FluentWindow>

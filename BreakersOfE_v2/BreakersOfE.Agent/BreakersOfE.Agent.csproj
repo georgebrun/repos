@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- WinExe so it doesn't show a console window when running in the tray -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>BreakersOfE.Agent</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Reference the shared Core library -->
+    <ProjectReference Include="..\BreakersOfE.Core\BreakersOfE.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Background service hosting (timers, scheduled workers) -->
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.*" />
+    <!-- System tray icon -->
+    <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="1.*" />
+  </ItemGroup>
+
+</Project>

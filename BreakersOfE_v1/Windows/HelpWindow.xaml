@@ -1,0 +1,63 @@
+﻿<Window x:Class="BreakersOfE.Windows.HelpWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Breakers of E — Help"
+        Width="900" Height="680"
+        MinWidth="700" MinHeight="500"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="True">
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220" MinWidth="160"/>
+            <ColumnDefinition Width="4"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ── LEFT: Topic tree ── -->
+        <Border Grid.Column="0"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,1,0"
+                Background="{DynamicResource SurfaceAltBrush}">
+            <DockPanel>
+                <TextBox DockPanel.Dock="Top"
+                         Name="TxtSearch"
+                         Margin="6,6,6,4"
+                         Height="26" Padding="4,0"
+                         VerticalContentAlignment="Center"
+                         TextChanged="TxtSearch_Changed"/>
+                <TreeView Name="TopicTree"
+                          BorderThickness="0"
+                          Background="Transparent"
+                          SelectedItemChanged="TopicTree_SelectionChanged"/>
+            </DockPanel>
+        </Border>
+
+        <GridSplitter Grid.Column="1" Width="4"
+                      HorizontalAlignment="Stretch"/>
+
+        <!-- ── RIGHT: Content ── -->
+        <DockPanel Grid.Column="2">
+            <!-- Header -->
+            <Border DockPanel.Dock="Top"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,0,1"
+                    Padding="16,10">
+                <StackPanel>
+                    <TextBlock Name="TopicTitle"
+                               FontSize="18" FontWeight="Bold"
+                               Foreground="{DynamicResource AccentBrush}"/>
+                    <TextBlock Name="TopicSubtitle"
+                               FontSize="11" Foreground="Gray"
+                               Margin="0,2,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Content scroll -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          Padding="16,12">
+                <StackPanel Name="ContentPanel"/>
+            </ScrollViewer>
+        </DockPanel>
+    </Grid>
+</Window>

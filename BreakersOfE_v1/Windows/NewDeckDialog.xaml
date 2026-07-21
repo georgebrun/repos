@@ -1,0 +1,75 @@
+﻿<Window x:Class="BreakersOfE.Windows.NewDeckDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="New Deck"
+        Width="560" Height="220"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Deck Name -->
+        <TextBlock Grid.Row="0"
+                   Text="Deck Name:"
+                   FontSize="13"
+                   Margin="0,0,0,4"/>
+
+        <TextBox Grid.Row="1"
+                 Name="TxtDeckName"
+                 Height="28"
+                 FontSize="13"
+                 Padding="4,0"
+                 VerticalContentAlignment="Center"
+                 Margin="0,0,0,16"
+                 Text="New Deck"/>
+
+        <!-- Deck Type -->
+        <TextBlock Grid.Row="2"
+                   Text="Deck Type:"
+                   FontSize="13"
+                   Margin="0,0,0,8"/>
+
+        <StackPanel Grid.Row="3"
+                    Orientation="Horizontal"
+                    Margin="0,0,0,16">
+            <RadioButton Name="RadioStandard"
+                         Content="Standard  (4 of each, no minimum)"
+                         IsChecked="True"
+                         FontSize="12"
+                         Margin="0,0,20,0"
+                         VerticalAlignment="Center"/>
+            <RadioButton Name="RadioCommander"
+                         Content="Commander  (100 cards, 1 of each)"
+                         FontSize="12"
+                         VerticalAlignment="Center"/>
+        </StackPanel>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="5"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+            <Button Name="BtnCreate"
+                    Content="Create"
+                    Width="80" Height="28"
+                    FontSize="13"
+                    IsDefault="True"
+                    Margin="0,0,8,0"
+                    Click="BtnCreate_Click"/>
+            <Button Name="BtnCancel"
+                    Content="Cancel"
+                    Width="80" Height="28"
+                    FontSize="13"
+                    IsCancel="True"
+                    Click="BtnCancel_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

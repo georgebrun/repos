@@ -1,0 +1,377 @@
+﻿<Window x:Class="BreakersOfE.Windows.FilterWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Filter Card Pool — Breakers of E"
+        Width="820" Height="620"
+        MinWidth="700" MinHeight="500"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+    <Window.Resources>
+        <Style x:Key="ConditionButtonStyle" TargetType="Button">
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Padding"         Value="2,0"/>
+            <Setter Property="FontSize"        Value="13"/>
+        </Style>
+        <Style x:Key="GroupOpButtonStyle" TargetType="Button">
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="FontWeight"      Value="Bold"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="Foreground"      Value="#0078D4"/>
+            <Setter Property="Padding"         Value="2,0"/>
+        </Style>
+        <Style x:Key="FieldButtonStyle" TargetType="Button">
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="Foreground"      Value="#CC0000"/>
+            <Setter Property="Padding"         Value="2,0"/>
+        </Style>
+        <Style x:Key="OperatorButtonStyle" TargetType="Button">
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="Foreground"      Value="#006600"/>
+            <Setter Property="Padding"         Value="2,0"/>
+        </Style>
+        <Style x:Key="ValueButtonStyle" TargetType="Button">
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="Foreground"      Value="#0000CC"/>
+            <Setter Property="Padding"         Value="2,0"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ── TABS ──────────────────────────────────────────────────── -->
+        <TabControl Grid.Row="0" Name="MainTabControl"
+                    Margin="8,8,8,0">
+
+            <!-- ══════════════════════════════════════════════════════════
+                 TAB 1 — BLOCKS / FORMATS / EDITIONS
+            ══════════════════════════════════════════════════════════════ -->
+            <TabItem Header="Blocks / Formats / Editions">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="320" MinWidth="200"/>
+                        <ColumnDefinition Width="4"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Left — tree -->
+                    <Grid Grid.Column="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="32"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="36"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Radio buttons -->
+                        <StackPanel Grid.Row="0"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center"
+                                    Margin="6,0">
+                            <RadioButton Name="RadioBlocks"
+                                         Content="Blocks"
+                                         IsChecked="True"
+                                         Margin="0,0,12,0"
+                                         Checked="RadioView_Checked"/>
+                            <RadioButton Name="RadioFormats"
+                                         Content="Formats"
+                                         Margin="0,0,12,0"
+                                         Checked="RadioView_Checked"/>
+                            <RadioButton Name="RadioEditions"
+                                         Content="Editions"
+                                         Checked="RadioView_Checked"/>
+                        </StackPanel>
+
+                        <!-- Tree/List -->
+                        <Border Grid.Row="1"
+                                BorderBrush="#CCCCCC"
+                                BorderThickness="1"
+                                Margin="4,0">
+                            <TreeView Name="SetTreeView"
+                                      SelectedItemChanged="SetTreeView_SelectedItemChanged">
+                                <TreeView.ItemContainerStyle>
+                                    <Style TargetType="TreeViewItem">
+                                        <Setter Property="IsExpanded" Value="False"/>
+                                    </Style>
+                                </TreeView.ItemContainerStyle>
+                            </TreeView>
+                        </Border>
+
+                        <!-- All / None / Invert -->
+                        <StackPanel Grid.Row="2"
+                                    Orientation="Horizontal"
+                                    Margin="4,4">
+                            <Button Content="All"
+                                    Width="60" Height="26"
+                                    Margin="0,0,4,0"
+                                    Click="BtnAll_Click"/>
+                            <Button Content="None"
+                                    Width="60" Height="26"
+                                    Margin="0,0,4,0"
+                                    Click="BtnNone_Click"/>
+                            <Button Content="Invert"
+                                    Width="60" Height="26"
+                                    Click="BtnInvert_Click"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Splitter -->
+                    <GridSplitter Grid.Column="1"
+                                  Width="4"
+                                  HorizontalAlignment="Stretch"
+                                  Background="#CCCCCC"/>
+
+                    <!-- Right — detail panel -->
+                    <Border Grid.Column="2"
+                            BorderBrush="#CCCCCC"
+                            BorderThickness="1"
+                            Margin="4,4,4,4">
+                        <ScrollViewer>
+                            <StackPanel Name="SetDetailPanel"
+                                        Margin="10"/>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- ══════════════════════════════════════════════════════════
+                 TAB 2 — CONDITION BUILDER
+            ══════════════════════════════════════════════════════════════ -->
+            <TabItem Header="Cards">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="36"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Condition tree -->
+                    <Border Grid.Row="0"
+                            BorderBrush="#CCCCCC"
+                            BorderThickness="1"
+                            Margin="4,4,4,0">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Auto">
+                            <StackPanel Name="ConditionPanel"
+                                        Margin="4"/>
+                        </ScrollViewer>
+                    </Border>
+
+                    <!-- Add condition button -->
+                    <Border Grid.Row="1"
+                            Background="#F5F5F5"
+                            BorderBrush="#CCCCCC"
+                            BorderThickness="0,1,0,0"
+                            Margin="4,0,4,4">
+                        <Button Name="BtnAddCondition"
+                                Content="+ press the button to add a new condition"
+                                HorizontalAlignment="Left"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Foreground="#666666"
+                                FontSize="12"
+                                Cursor="Hand"
+                                Margin="8,4"
+                                Click="BtnAddCondition_Click"/>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- ══════════════════════════════════════════════════════════
+                 TAB 3 — OPTIONS
+            ══════════════════════════════════════════════════════════════ -->
+            <TabItem Header="Options">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="16">
+                        <TextBlock Text="Search Options"
+                               FontWeight="Bold"
+                               FontSize="14"
+                               Margin="0,0,0,12"/>
+
+                        <CheckBox Name="ChkCaseInsensitive"
+                              Content="Case insensitive"
+                              IsChecked="True"
+                              FontSize="13"
+                              Margin="0,0,0,8"/>
+
+                        <CheckBox Name="ChkIncludeUnpriced"
+                              Content="Include cards with no price when filtering by price"
+                              IsChecked="True"
+                              FontSize="13"
+                              Margin="0,0,0,8"/>
+
+                        <CheckBox Name="ChkMatchPartialWords"
+                              Content="Match partial words (e.g. 'fire' matches 'fireball')"
+                              IsChecked="True"
+                              FontSize="13"
+                              Margin="0,0,0,8"/>
+
+                        <Separator Margin="0,12"/>
+
+                        <!-- Color Identity Quick Filter -->
+                        <TextBlock Text="Color Identity Filter"
+                               FontWeight="Bold" FontSize="14"
+                               Margin="0,0,0,8"/>
+                        <TextBlock Text="Quick color filter applied on top of any Card conditions."
+                               FontSize="11" Foreground="Gray" Margin="0,0,0,8"
+                               TextWrapping="Wrap"/>
+
+                        <!-- Color buttons -->
+                        <WrapPanel Margin="0,0,0,8">
+                            <ToggleButton Name="FwBtnW" Content="W" Width="30" Height="30"
+                                      FontWeight="Bold" Margin="2,0"
+                                      Background="#F9FAF1" Foreground="#444"
+                                      BorderBrush="#C8B87A" BorderThickness="2"
+                                      Checked="ColorQuick_Changed" Unchecked="ColorQuick_Changed"/>
+                            <ToggleButton Name="FwBtnU" Content="U" Width="30" Height="30"
+                                      FontWeight="Bold" Margin="2,0"
+                                      Background="#B3CEEA" Foreground="#003"
+                                      BorderBrush="#5588AA" BorderThickness="2"
+                                      Checked="ColorQuick_Changed" Unchecked="ColorQuick_Changed"/>
+                            <ToggleButton Name="FwBtnB" Content="B" Width="30" Height="30"
+                                      FontWeight="Bold" Margin="2,0"
+                                      Background="#3A3A3A" Foreground="#EEE"
+                                      BorderBrush="#888" BorderThickness="2"
+                                      Checked="ColorQuick_Changed" Unchecked="ColorQuick_Changed"/>
+                            <ToggleButton Name="FwBtnR" Content="R" Width="30" Height="30"
+                                      FontWeight="Bold" Margin="2,0"
+                                      Background="#E87040" Foreground="#FFF"
+                                      BorderBrush="#AA3310" BorderThickness="2"
+                                      Checked="ColorQuick_Changed" Unchecked="ColorQuick_Changed"/>
+                            <ToggleButton Name="FwBtnG" Content="G" Width="30" Height="30"
+                                      FontWeight="Bold" Margin="2,0"
+                                      Background="#4A8A4A" Foreground="#FFF"
+                                      BorderBrush="#226622" BorderThickness="2"
+                                      Checked="ColorQuick_Changed" Unchecked="ColorQuick_Changed"/>
+                            <ToggleButton Name="FwBtnC" Content="C" Width="30" Height="30"
+                                      FontWeight="Bold" Margin="2,0"
+                                      Background="#999" Foreground="#FFF"
+                                      BorderBrush="#555" BorderThickness="2"
+                                      ToolTip="Colorless"
+                                      Checked="ColorQuick_Changed" Unchecked="ColorQuick_Changed"/>
+                        </WrapPanel>
+
+                        <!-- Color mode -->
+                        <StackPanel Margin="0,0,0,8">
+                            <RadioButton Name="FwRbAtMost"
+                                     Content="At most these colors (Commander)"
+                                     IsChecked="True" FontSize="12" Margin="0,2"
+                                     Checked="ColorQuick_Changed"
+                                     ToolTip="Cards whose color identity fits within the selected colors — best for Commander deck building"/>
+                            <RadioButton Name="FwRbIncludes"
+                                     Content="Includes these colors"
+                                     FontSize="12" Margin="0,2"
+                                     Checked="ColorQuick_Changed"
+                                     ToolTip="Cards that contain at least these colors"/>
+                            <RadioButton Name="FwRbExact"
+                                     Content="Exactly these colors"
+                                     FontSize="12" Margin="0,2"
+                                     Checked="ColorQuick_Changed"
+                                     ToolTip="Cards that are exactly these colors, no more"/>
+                            <RadioButton Name="FwRbAny"
+                                     Content="Any of these colors"
+                                     FontSize="12" Margin="0,2"
+                                     Checked="ColorQuick_Changed"
+                                     ToolTip="Cards that contain any of the selected colors"/>
+                        </StackPanel>
+
+                        <Separator Margin="0,12"/>
+
+                        <TextBlock Text="Price Filter"
+                               FontWeight="Bold"
+                               FontSize="14"
+                               Margin="0,0,0,12"/>
+
+                        <StackPanel Orientation="Horizontal"
+                                Margin="0,0,0,8">
+                            <RadioButton Name="RadioPriceNonFoil"
+                                     Content="Filter on Non-Foil (USD) price"
+                                     IsChecked="True"
+                                     FontSize="13"
+                                     Margin="0,0,16,0"/>
+                            <RadioButton Name="RadioPriceFoil"
+                                     Content="Filter on Foil (USD Foil) price"
+                                     FontSize="13"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <!-- ── BOTTOM BUTTON BAR ────────────────────────────────────── -->
+        <Border Grid.Row="1"
+                Background="#F0F0F0"
+                BorderBrush="#CCCCCC"
+                BorderThickness="0,1,0,0"
+                Padding="8,6">
+            <DockPanel>
+                <!-- Left — Open / Save -->
+                <StackPanel Orientation="Horizontal"
+                            DockPanel.Dock="Left">
+                    <Button Name="BtnOpen"
+                            Content="Open..."
+                            Width="80" Height="28"
+                            Margin="0,0,4,0"
+                            Click="BtnOpen_Click"/>
+                    <Button Name="BtnSaveAs"
+                            Content="Save As..."
+                            Width="80" Height="28"
+                            Margin="0,0,4,0"
+                            Click="BtnSaveAs_Click"/>
+                </StackPanel>
+
+                <!-- Middle — Clear / Help -->
+                <StackPanel Orientation="Horizontal"
+                            DockPanel.Dock="Left"
+                            Margin="16,0,0,0">
+                    <Button Name="BtnClear"
+                            Content="Clear"
+                            Width="70" Height="28"
+                            Margin="0,0,4,0"
+                            Click="BtnClear_Click"/>
+                    <Button Name="BtnHelp"
+                            Content="Help"
+                            Width="70" Height="28"
+                            Click="BtnHelp_Click"/>
+                </StackPanel>
+
+                <!-- Right — OK / Cancel / Apply -->
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            DockPanel.Dock="Right">
+                    <Button Name="BtnOK"
+                            Content="OK"
+                            Width="75" Height="28"
+                            Margin="0,0,4,0"
+                            IsDefault="True"
+                            Click="BtnOK_Click"/>
+                    <Button Name="BtnCancel"
+                            Content="Cancel"
+                            Width="75" Height="28"
+                            Margin="0,0,4,0"
+                            IsCancel="True"
+                            Click="BtnCancel_Click"/>
+                    <Button Name="BtnApply"
+                            Content="Apply"
+                            Width="75" Height="28"
+                            Click="BtnApply_Click"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

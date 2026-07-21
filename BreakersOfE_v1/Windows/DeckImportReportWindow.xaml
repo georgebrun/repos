@@ -1,0 +1,87 @@
+﻿<Window x:Class="BreakersOfE.Windows.DeckImportReportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Import Report — Breakers of E"
+        Width="860" Height="520"
+        MinWidth="600" MinHeight="360"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0"
+                   Name="LblHeader"
+                   FontSize="14" FontWeight="SemiBold"
+                   Margin="0,0,0,8"/>
+
+        <!-- Report grid -->
+        <DataGrid Grid.Row="1"
+                  Name="ReportGrid"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  SelectionMode="Single"
+                  SelectionUnit="FullRow"
+                  HeadersVisibility="Column"
+                  GridLinesVisibility="Horizontal"
+                  RowHeight="26"
+                  FontSize="12"
+                  BorderThickness="1"
+                  BorderBrush="#CCCCCC">
+
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Name"         Binding="{Binding Name}"         Width="190"/>
+                <DataGridTextColumn Header="Ed."          Binding="{Binding SetCode}"       Width="45"/>
+                <DataGridTextColumn Header="Category"     Binding="{Binding Category}"      Width="90"/>
+                <DataGridTextColumn Header="NF Added"     Binding="{Binding NonFoilAdded}"  Width="70"/>
+                <DataGridTextColumn Header="Foil Added"   Binding="{Binding FoilAdded}"     Width="75"/>
+                <DataGridTextColumn Header="Prev NF"      Binding="{Binding PrevNonFoil}"   Width="65"/>
+                <DataGridTextColumn Header="Prev Foil"    Binding="{Binding PrevFoil}"      Width="70"/>
+                <DataGridTextColumn Header="New NF"       Binding="{Binding NewNonFoil}"    Width="65"/>
+                <DataGridTextColumn Header="New Foil"     Binding="{Binding NewFoil}"       Width="70"/>
+                <DataGridTextColumn Header="Status"       Binding="{Binding Status}"        Width="80"/>
+            </DataGrid.Columns>
+
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Status}" Value="New Row">
+                            <Setter Property="Foreground" Value="#0078D4"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Status}" Value="Merged">
+                            <Setter Property="Foreground" Value="#107C10"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
+        </DataGrid>
+
+        <!-- Summary -->
+        <TextBlock Grid.Row="2"
+                   Name="LblSummary"
+                   FontSize="12"
+                   Foreground="#555555"
+                   Margin="0,8,0,8"/>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="3"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+            <Button Name="BtnClose"
+                    Content="Close"
+                    Width="80" Height="28"
+                    FontSize="13"
+                    IsDefault="True"
+                    IsCancel="True"
+                    Click="BtnClose_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

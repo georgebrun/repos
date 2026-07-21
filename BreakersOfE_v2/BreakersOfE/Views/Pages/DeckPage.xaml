@@ -1,0 +1,24 @@
+<Page x:Class="BreakersOfE.Views.Pages.DeckPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+
+    <!-- Placeholder content — will be replaced with real UI in later phases -->
+    <Grid Margin="24">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+            <ui:SymbolIcon Symbol="DocumentBulletList24"
+                           FontSize="64"
+                           Margin="0,0,0,16" />
+            <TextBlock Text="Deck Editor"
+                       FontSize="32" FontWeight="SemiBold"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,8" />
+            <TextBlock Text="Build and edit your Commander decks with multi-tab support."
+                       FontSize="14" Opacity="0.6"
+                       HorizontalAlignment="Center"
+                       TextWrapping="Wrap"
+                       MaxWidth="400" />
+        </StackPanel>
+    </Grid>
+
+</Page>

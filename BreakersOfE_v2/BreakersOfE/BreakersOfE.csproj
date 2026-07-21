@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>BreakersOfE</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ApplicationIcon>Installer\BreakersOfE.ico</ApplicationIcon>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <FileVersion>2.0.0.0</FileVersion>
+    <Version>2.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Reference the shared Core library -->
+    <ProjectReference Include="..\BreakersOfE.Core\BreakersOfE.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Modern Windows 11 Fluent UI controls -->
+    <PackageReference Include="WPF-UI" Version="3.*" />
+    <!-- MVVM helpers: ObservableObject, RelayCommand, [ObservableProperty] etc. -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.*" />
+    <!-- SVG rendering for mana symbols -->
+    <PackageReference Include="SharpVectors.Reloaded" Version="1.*" />
+    <!-- Jitsi video embed for playtest (Phase 9, but include now so it resolves) -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.*" />
+  </ItemGroup>
+
+</Project>

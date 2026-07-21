@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- Need UseWPF because existing Models use System.Windows.Media.Brush
+         and System.Windows.Visibility for display properties.
+         In a future cleanup these could be separated from pure data models. -->
+    <UseWPF>true</UseWPF>
+    <!-- Keep root namespace as BreakersOfE so all existing Models/Data/Services
+         keep their original namespaces without changes -->
+    <RootNamespace>BreakersOfE</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Database: SQLite via Entity Framework Core -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.*" />
+    <!-- Migrations tooling: lets you run Add-Migration in Package Manager Console -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.*">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

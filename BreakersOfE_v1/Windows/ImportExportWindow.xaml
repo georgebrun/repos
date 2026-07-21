@@ -1,0 +1,237 @@
+﻿<Window x:Class="BreakersOfE.Windows.ImportExportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Import / Export — Breakers of E"
+        Width="660" Height="720"
+        MinWidth="580" MinHeight="600"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+    <Window.Resources>
+        <Style x:Key="SectionLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Margin" Value="0,12,0,4"/>
+        </Style>
+        <Style x:Key="HintText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="Gray"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <Style x:Key="FormatBtn" TargetType="RadioButton">
+            <Setter Property="Margin" Value="0,3"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="120"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Mode tabs -->
+        <TabControl Grid.Row="0" Name="ModeTab" SelectionChanged="ModeTab_Changed">
+
+            <!-- ══ IMPORT TAB ══ -->
+            <TabItem Header="⬇  Import">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="10,12">
+
+                        <!-- Step 1: What -->
+                        <TextBlock Style="{StaticResource SectionLabel}" Text="STEP 1 — WHAT ARE YOU IMPORTING?"/>
+                        <TextBlock Style="{StaticResource HintText}"
+                                   Text="Choose what you want to add to Breakers of E."/>
+                        <RadioButton Name="RbImportCollection" Content="Collection  (cards you own)"
+                                     IsChecked="True" Style="{StaticResource FormatBtn}"
+                                     Checked="ImportTarget_Changed"/>
+                        <RadioButton Name="RbImportDeck"       Content="Deck  (plain text, or CSV from Moxfield / TCGPlayer / Deckbox / Dragon Shield / ManaBox / Archidekt)"
+                                     Style="{StaticResource FormatBtn}"
+                                     Checked="ImportTarget_Changed"/>
+                        <RadioButton Name="RbImportWantList"   Content="Want List  (cards you are looking for)"
+                                     Style="{StaticResource FormatBtn}"
+                                     Checked="ImportTarget_Changed"/>
+
+                        <!-- Step 2: Format -->
+                        <TextBlock Style="{StaticResource SectionLabel}" Text="STEP 2 — WHERE IS THE FILE FROM?"/>
+                        <TextBlock Style="{StaticResource HintText}"
+                                   Text="Not sure? Leave it on Auto-detect — it will figure it out from the file."/>
+                        <RadioButton Name="RbFmtAutoDetect"    Content="Auto-detect  (recommended)"
+                                     IsChecked="True" Style="{StaticResource FormatBtn}"
+                                     GroupName="ImportFmt"/>
+                        <RadioButton Name="RbFmtMoxfield"      Content="Moxfield  (.csv export)"
+                                     Style="{StaticResource FormatBtn}" GroupName="ImportFmt"/>
+                        <RadioButton Name="RbFmtTcgPlayer"     Content="TCGPlayer  (.csv export)"
+                                     Style="{StaticResource FormatBtn}" GroupName="ImportFmt"/>
+                        <RadioButton Name="RbFmtDeckbox"       Content="Deckbox  (.csv export)"
+                                     Style="{StaticResource FormatBtn}" GroupName="ImportFmt"/>
+                        <RadioButton Name="RbFmtDragonShield"  Content="Dragon Shield  (.csv export)"
+                                     Style="{StaticResource FormatBtn}" GroupName="ImportFmt"/>
+
+                        <!-- Step 3: Conflict -->
+                        <StackPanel Name="ConflictPanel">
+                            <TextBlock Style="{StaticResource SectionLabel}"
+                                       Text="STEP 3 — IF A CARD ALREADY EXISTS IN YOUR COLLECTION..."/>
+                            <TextBlock Style="{StaticResource HintText}"
+                                       Text="Merge adds to your existing quantities. Replace overwrites them."/>
+                            <RadioButton Name="RbMerge"   Content="Merge — keep the higher quantity (safe to re-import without doubling)"
+                                         IsChecked="True" Style="{StaticResource FormatBtn}"
+                                         GroupName="Conflict"/>
+                            <RadioButton Name="RbReplace" Content="Replace — overwrite my existing quantities with the imported ones"
+                                         Style="{StaticResource FormatBtn}"
+                                         GroupName="Conflict"/>
+                        </StackPanel>
+
+                        <!-- Step 4: File -->
+                        <TextBlock Style="{StaticResource SectionLabel}" Text="STEP 4 — SELECT THE FILE TO IMPORT"/>
+                        <TextBlock Style="{StaticResource HintText}" Text="Click Browse to find your file."/>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Name="TxtImportPath"
+                                     Height="28" Padding="6,0"
+                                     VerticalContentAlignment="Center"
+                                     Text="(no file selected — click Browse)"/>
+                            <Button Grid.Column="1" Content="Browse…"
+                                    Margin="6,0,0,0" Padding="12,4" Height="28"
+                                    Click="BtnBrowseImport_Click"/>
+                        </Grid>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ══ EXPORT TAB ══ -->
+            <TabItem Header="⬆  Export">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="10,12">
+
+                        <!-- Step 1: What -->
+                        <TextBlock Style="{StaticResource SectionLabel}" Text="STEP 1 — WHAT DO YOU WANT TO EXPORT?"/>
+                        <TextBlock Style="{StaticResource HintText}"
+                                   Text="Choose what to export from Breakers of E."/>
+                        <RadioButton Name="RbExportCollection"  Content="Collection  (all cards you own)"
+                                     IsChecked="True" Style="{StaticResource FormatBtn}"
+                                     GroupName="ExportTarget" Click="ExportTarget_Changed"/>
+                        <RadioButton Name="RbExportDeck"        Content="Deck  (a specific deck)"
+                                     Style="{StaticResource FormatBtn}"
+                                     GroupName="ExportTarget" Click="ExportTarget_Changed"/>
+                        <RadioButton Name="RbExportWantList"    Content="Want List  (cards you are looking for)"
+                                     Style="{StaticResource FormatBtn}"
+                                     GroupName="ExportTarget" Click="ExportTarget_Changed"/>
+                        <RadioButton Name="RbExportTradeBinder" Content="Trade Binder  (cards you want to trade away)"
+                                     Style="{StaticResource FormatBtn}"
+                                     GroupName="ExportTarget" Click="ExportTarget_Changed"/>
+
+                        <!-- Deck file picker -->
+                        <Grid Name="DeckFileRow" Visibility="Collapsed" Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Name="TxtDeckPath"
+                                     Height="28" Padding="6,0"
+                                     VerticalContentAlignment="Center"
+                                     Text="(browse for deck file — or leave blank to use active deck)"/>
+                            <Button Grid.Column="1" Content="Browse…"
+                                    Margin="6,0,0,0" Padding="12,4" Height="28"
+                                    Click="BtnBrowseDeckFile_Click"/>
+                        </Grid>
+
+                        <!-- Step 2: Format -->
+                        <TextBlock Style="{StaticResource SectionLabel}" Text="STEP 2 — WHICH APP ARE YOU EXPORTING FOR?"/>
+                        <TextBlock Style="{StaticResource HintText}"
+                                   Text="Choose the format that matches the app you want to import into."/>
+                        <RadioButton Name="RbExpMoxfield"      Content="Moxfield  (.csv)"
+                                     IsChecked="True" Style="{StaticResource FormatBtn}" GroupName="ExportFmt"/>
+                        <RadioButton Name="RbExpTcgPlayer"     Content="TCGPlayer  (.csv)"
+                                     Style="{StaticResource FormatBtn}" GroupName="ExportFmt"/>
+                        <RadioButton Name="RbExpDeckbox"       Content="Deckbox  (.csv)"
+                                     Style="{StaticResource FormatBtn}" GroupName="ExportFmt"/>
+                        <RadioButton Name="RbExpDragonShield"  Content="Dragon Shield  (.csv)"
+                                     Style="{StaticResource FormatBtn}" GroupName="ExportFmt"/>
+                        <RadioButton Name="RbExpManaBox"       Content="ManaBox  (.csv)"
+                                     Style="{StaticResource FormatBtn}" GroupName="ExportFmt"/>
+                        <RadioButton Name="RbExpArchidekt"     Content="Archidekt  (.csv)"
+                                     Style="{StaticResource FormatBtn}" GroupName="ExportFmt"/>
+                        <RadioButton Name="RbExpPlainText"     Content="Plain Text Decklist  (.txt — universal)"
+                                     Style="{StaticResource FormatBtn}" GroupName="ExportFmt"/>
+                        <RadioButton Name="RbExpNative"        Content="Breakers of E  (.json — full backup)"
+                                     Style="{StaticResource FormatBtn}" GroupName="ExportFmt"/>
+                        <RadioButton Name="RbExpFullCsv"       Content="Full Collection  (.csv — every column, every row)"
+                                     Style="{StaticResource FormatBtn}" GroupName="ExportFmt"/>
+                        <RadioButton Name="RbExpAvailableCsv"  Content="Available List  (.csv — Available, Name, Set Code)"
+                                     Style="{StaticResource FormatBtn}" GroupName="ExportFmt"/>
+
+                        <!-- Step 3: Save to -->
+                        <TextBlock Style="{StaticResource SectionLabel}" Text="STEP 3 — WHERE DO YOU WANT TO SAVE THE FILE?"/>
+                        <TextBlock Style="{StaticResource HintText}"
+                                   Text="Click Browse to choose a save location and filename."/>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Name="TxtExportPath"
+                                     Height="28" Padding="6,0"
+                                     VerticalContentAlignment="Center"/>
+                            <Button Grid.Column="1" Content="Browse…"
+                                    Margin="6,0,0,0" Padding="12,4" Height="28"
+                                    Click="BtnBrowseExport_Click"/>
+                        </Grid>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <!-- Results log -->
+        <Border Grid.Row="1" BorderThickness="1"
+                BorderBrush="{DynamicResource BorderBrush}"
+                Margin="0,8,0,0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <TextBox Name="LogBox" IsReadOnly="True"
+                         TextWrapping="Wrap" BorderThickness="0"
+                         FontFamily="Consolas" FontSize="11"
+                         AcceptsReturn="True" Padding="6"
+                         Text="Ready. Select your options above and click Import or Export."/>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Bottom buttons -->
+        <Grid Grid.Row="2" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Name="StatusText"
+                       VerticalAlignment="Center" FontSize="11" Foreground="Gray"/>
+            <Button Grid.Column="1" Content="📋 Copy Log"
+                    Width="110" Height="34" FontSize="12"
+                    ToolTip="Copy the log to clipboard"
+                    Click="BtnCopyLog_Click"/>
+            <Button Grid.Column="3" Content="💾 Save Log"
+                    Width="110" Height="34" FontSize="12"
+                    ToolTip="Save the log to a text file"
+                    Click="BtnSaveLog_Click"/>
+            <Button Grid.Column="5" Name="BtnAction"
+                    Content="⬇  Import"
+                    Width="130" Height="34" FontSize="13" FontWeight="SemiBold"
+                    Click="BtnAction_Click"/>
+            <Button Grid.Column="7" Content="Close"
+                    Width="90" Height="34" FontSize="13"
+                    IsCancel="True" Click="BtnClose_Click"/>
+        </Grid>
+    </Grid>
+</Window>
