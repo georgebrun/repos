@@ -1,10 +1,10 @@
 @echo off
 echo ============================================================
-echo  Breakers of E — Build and Publish
+echo  Breakers of E v1 — Build and Publish
 echo ============================================================
 echo.
 
-set PROJECT=..\BreakersOfE\BreakersOfE.csproj
+set PROJECT=..\BreakersOfE_v1\BreakersOfE.csproj
 set OUT_X64=publish\x64
 set OUT_X86=publish\x86
 
@@ -40,6 +40,6 @@ if %ERRORLEVEL% neq 0 (
 echo.
 echo ============================================================
 echo  Publish complete!
-echo  Now open BreakersOfE_Setup.iss in Inno Setup and compile.
+echo  Now open BreakersOfE_Setup_v1.iss in Inno Setup and compile.
 echo ============================================================
 pause

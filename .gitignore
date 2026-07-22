@@ -24,3 +24,10 @@ packages/
 CardImages/
 SetSymbols/
 ManaSymbols/
+
+# Installer publish output (built binaries, too large for GitHub)
+Installer/publish/
+Installer/Output/
+
+# Image cache (v2 agent cached card images)
+ImageCache/
