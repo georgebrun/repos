@@ -67,11 +67,24 @@ namespace BreakersOfE.Services
 
         /// <summary>
         /// Check if the agent is currently running an update.
+        /// If the status has been non-idle for more than 15 minutes,
+        /// assume the process crashed and treat it as idle.
         /// </summary>
         public bool IsAgentUpdating()
         {
             var status = ReadStatus();
-            return status.Status != "idle";
+            if (status.Status == "idle") return false;
+
+            // If updating started more than 15 minutes ago, it's stale
+            if (status.UpdateStartedAt.HasValue &&
+                (DateTime.UtcNow - status.UpdateStartedAt.Value).TotalMinutes > 15)
+            {
+                // Reset stale status
+                SetIdle();
+                return false;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -81,6 +94,7 @@ namespace BreakersOfE.Services
         {
             var status = ReadStatus();
             status.Status = task;
+            status.UpdateStartedAt = DateTime.UtcNow;
             WriteStatus(status);
         }
 
@@ -148,6 +162,9 @@ namespace BreakersOfE.Services
         /// Current status: "idle", "updating_pool", "updating_prices", "backing_up"
         /// </summary>
         public string Status { get; set; } = "idle";
+
+        /// <summary>When the current non-idle status started. Used for staleness detection.</summary>
+        public DateTime? UpdateStartedAt { get; set; }
 
         /// <summary>When the pool database was last fully updated.</summary>
         public DateTime? LastPoolUpdate { get; set; }

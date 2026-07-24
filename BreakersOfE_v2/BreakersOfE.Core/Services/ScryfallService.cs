@@ -498,6 +498,7 @@ namespace BreakersOfE.Services
 
             bool isGzip = jsonFile.EndsWith(".gz", StringComparison.OrdinalIgnoreCase);
             int i = 0;
+            bool schemaValidated = false;
 
             // Use an async helper that yields JsonElements one at a time
             // from either JSONL (.jsonl.gz) or legacy JSON array format
@@ -505,6 +506,21 @@ namespace BreakersOfE.Services
             {
                 ct.ThrowIfCancellationRequested();
                 i++;
+
+                // Validate schema on the first card
+                if (!schemaValidated)
+                {
+                    var (isValid, missingFields) = Validation.SchemaValidator.CheckCard(cardEl);
+                    if (!isValid)
+                    {
+                        result.Success = false;
+                        result.ErrorMessage =
+                            $"Scryfall schema validation failed. Missing fields: {string.Join(", ", missingFields)}. " +
+                            "Scryfall may have changed their data format. Check scryfall.com/blog for announcements.";
+                        return;
+                    }
+                    schemaValidated = true;
+                }
 
                 // Skip digital-only cards (MTGO/Arena exclusives)
                 if (cardEl.TryGetProperty("games", out var gamesEl))

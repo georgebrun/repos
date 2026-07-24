@@ -15,83 +15,28 @@ namespace BreakersOfE.Data
         public DbSet<ArtSeriesCard> ArtSeriesCards { get; set; }
         public DbSet<ConspiracyCard> ConspiracyCards { get; set; }
 
-        // ── Collection Tables ───────────────────────────────────────────────
-
         // ── Other Tables ────────────────────────────────────────────────────
         public DbSet<AppSetting> AppSettings { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            // Always store the database next to the executable
             string dbPath = Services.AppFolderService.DatabasePath;
-
             optionsBuilder.UseSqlite($"Data Source={dbPath}");
         }
 
-        // ── Schema migration for new columns ─────────────────────────────────────
-        public void MigrateSchema()
+        /// <summary>
+        /// Ensures the pool database exists with the current schema.
+        /// The pool is wiped and rebuilt on every full update, so we don't
+        /// need incremental migrations — just ensure the tables exist.
+        /// 
+        /// Replaces the old MigrateSchema() which used ALTER TABLE ADD COLUMN
+        /// wrapped in try/catch blocks, causing hundreds of "duplicate column"
+        /// exceptions on every startup.
+        /// </summary>
+        public void EnsureSchema()
         {
-            // Create ConspiracyCards table if it doesn't exist yet
-            try
-            {
-#pragma warning disable EF1002
-                Database.ExecuteSqlRaw(@"
-                    CREATE TABLE IF NOT EXISTS ConspiracyCards (
-                        ConspiracyId        INTEGER PRIMARY KEY AUTOINCREMENT,
-                        ScryfallId          TEXT NOT NULL DEFAULT '',
-                        OracleId            TEXT NOT NULL DEFAULT '',
-                        Name                TEXT NOT NULL DEFAULT '',
-                        TypeLine            TEXT NOT NULL DEFAULT '',
-                        OracleText          TEXT NOT NULL DEFAULT '',
-                        FlavorText          TEXT NOT NULL DEFAULT '',
-                        SetCode             TEXT NOT NULL DEFAULT '',
-                        SetName             TEXT NOT NULL DEFAULT '',
-                        SetType             TEXT NOT NULL DEFAULT '',
-                        CollectorNumber     TEXT NOT NULL DEFAULT '',
-                        Rarity              TEXT NOT NULL DEFAULT '',
-                        Artist              TEXT NOT NULL DEFAULT '',
-                        ManaCost            TEXT NOT NULL DEFAULT '',
-                        ManaValue           REAL NOT NULL DEFAULT 0,
-                        ColorIdentity       TEXT NOT NULL DEFAULT '',
-                        Colors              TEXT NOT NULL DEFAULT '',
-                        ImageSmallUrl       TEXT NOT NULL DEFAULT '',
-                        ImageNormalUrl      TEXT NOT NULL DEFAULT '',
-                        Layout              TEXT NOT NULL DEFAULT '',
-                        IsFoil              INTEGER NOT NULL DEFAULT 0,
-                        IsNonFoil           INTEGER NOT NULL DEFAULT 1,
-                        ReleasedAt          TEXT NOT NULL DEFAULT '',
-                        LocalImagePath      TEXT NOT NULL DEFAULT '',
-                        IsFavorite          INTEGER NOT NULL DEFAULT 0
-                    )");
-                Database.ExecuteSqlRaw(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS IX_ConspiracyCards_ScryfallId ON ConspiracyCards (ScryfallId)");
-                Database.ExecuteSqlRaw(
-                    "CREATE INDEX IF NOT EXISTS IX_ConspiracyCards_Name ON ConspiracyCards (Name)");
-#pragma warning restore EF1002
-            }
-            catch { }
-
-            // DFC back face image columns for PoolCards
-            var dfcColumns = new[]
-            {
-                ("PoolCards", "ImageBackUrl",       "TEXT NOT NULL DEFAULT ''"),
-                ("PoolCards", "LocalImageBackPath", "TEXT NOT NULL DEFAULT ''"),
-                ("PoolCards", "Keywords",           "TEXT NOT NULL DEFAULT ''"),
-            };
-            foreach (var (table, col, def) in dfcColumns)
-            {
-                try
-                {
-#pragma warning disable EF1002
-                    Database.ExecuteSqlRaw(
-                        $"ALTER TABLE {table} ADD COLUMN `{col}` {def}");
-#pragma warning restore EF1002
-                }
-                catch { /* Column already exists — ignore */ }
-            }
+            Database.EnsureCreated();
         }
-
-
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

@@ -243,7 +243,7 @@ namespace BreakersOfE.Data
                 ("ScryfallId",         "TEXT NOT NULL DEFAULT ''"),
             };
             foreach (var (col, def) in ceCardCols)
-                AddColumn("CollectionEntries", col, def);
+                AddColumnIfMissing("CollectionEntries", col, def);
 
             // Special collection shared card-data columns
             var specialCardCols = new (string col, string def)[]
@@ -281,23 +281,23 @@ namespace BreakersOfE.Data
             };
             foreach (var table in specialTables)
                 foreach (var (col, def) in specialCardCols)
-                    AddColumn(table, col, def);
+                    AddColumnIfMissing(table, col, def);
 
             // Token-specific extra fields
-            AddColumn("TokenCollectionEntries", "Power", "TEXT NOT NULL DEFAULT ''");
-            AddColumn("TokenCollectionEntries", "Toughness", "TEXT NOT NULL DEFAULT ''");
-            AddColumn("TokenCollectionEntries", "Colors", "TEXT NOT NULL DEFAULT ''");
-            AddColumn("TokenCollectionEntries", "ColorIdentity", "TEXT NOT NULL DEFAULT ''");
+            AddColumnIfMissing("TokenCollectionEntries", "Power", "TEXT NOT NULL DEFAULT ''");
+            AddColumnIfMissing("TokenCollectionEntries", "Toughness", "TEXT NOT NULL DEFAULT ''");
+            AddColumnIfMissing("TokenCollectionEntries", "Colors", "TEXT NOT NULL DEFAULT ''");
+            AddColumnIfMissing("TokenCollectionEntries", "ColorIdentity", "TEXT NOT NULL DEFAULT ''");
 
             // Vanguard-specific extra fields
-            AddColumn("VanguardCollectionEntries", "HandModifier", "TEXT NOT NULL DEFAULT ''");
-            AddColumn("VanguardCollectionEntries", "LifeModifier", "TEXT NOT NULL DEFAULT ''");
+            AddColumnIfMissing("VanguardCollectionEntries", "HandModifier", "TEXT NOT NULL DEFAULT ''");
+            AddColumnIfMissing("VanguardCollectionEntries", "LifeModifier", "TEXT NOT NULL DEFAULT ''");
 
             // Conspiracy-specific extra fields
-            AddColumn("ConspiracyCollectionEntries", "ManaCost", "TEXT NOT NULL DEFAULT ''");
-            AddColumn("ConspiracyCollectionEntries", "ManaValue", "REAL NOT NULL DEFAULT 0");
-            AddColumn("ConspiracyCollectionEntries", "ColorIdentity", "TEXT NOT NULL DEFAULT ''");
-            AddColumn("ConspiracyCollectionEntries", "Colors", "TEXT NOT NULL DEFAULT ''");
+            AddColumnIfMissing("ConspiracyCollectionEntries", "ManaCost", "TEXT NOT NULL DEFAULT ''");
+            AddColumnIfMissing("ConspiracyCollectionEntries", "ManaValue", "REAL NOT NULL DEFAULT 0");
+            AddColumnIfMissing("ConspiracyCollectionEntries", "ColorIdentity", "TEXT NOT NULL DEFAULT ''");
+            AddColumnIfMissing("ConspiracyCollectionEntries", "Colors", "TEXT NOT NULL DEFAULT ''");
 
             // Trade Binder & Want List — card data columns
             var binderWantCols = new (string col, string def)[]
@@ -329,8 +329,8 @@ namespace BreakersOfE.Data
             };
             foreach (var (col, def) in binderWantCols)
             {
-                AddColumn("TradeBinderEntries", col, def);
-                AddColumn("WantListEntries", col, def);
+                AddColumnIfMissing("TradeBinderEntries", col, def);
+                AddColumnIfMissing("WantListEntries", col, def);
             }
         }
 
@@ -595,16 +595,36 @@ namespace BreakersOfE.Data
         }
 
         // ── Helpers ────────────────────────────────────────────────────────
-        private void AddColumn(string table, string col, string def)
+
+        /// <summary>
+        /// Checks if a column exists on a table using SQLite's PRAGMA table_info.
+        /// If the column doesn't exist, adds it. No exceptions thrown for duplicates.
+        /// 
+        /// This replaces the old try/catch pattern that generated hundreds of
+        /// "duplicate column name" exceptions on every startup.
+        /// </summary>
+        private void AddColumnIfMissing(string table, string col, string def)
         {
-            try
-            {
 #pragma warning disable EF1002
+            // Query SQLite for the table's column list
+            using var cmd = Database.GetDbConnection().CreateCommand();
+            Database.OpenConnection();
+            cmd.CommandText = $"PRAGMA table_info({table})";
+            using var reader = cmd.ExecuteReader();
+
+            var existingColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            while (reader.Read())
+            {
+                existingColumns.Add(reader.GetString(1)); // Column 1 = name
+            }
+            reader.Close();
+
+            if (!existingColumns.Contains(col))
+            {
                 Database.ExecuteSqlRaw(
                     $"ALTER TABLE {table} ADD COLUMN `{col}` {def}");
-#pragma warning restore EF1002
             }
-            catch { /* Column already exists — ignore */ }
+#pragma warning restore EF1002
         }
 
         private void CreateTableIfMissing(string sql)
