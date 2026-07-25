@@ -198,7 +198,8 @@ namespace BreakersOfE.ViewModels
         /// <summary>
         /// Runs all database queries on a background thread,
         /// then pushes results to the UI thread.
-        /// This prevents the UI from freezing.
+        /// Uses BeginInvoke (non-blocking) to avoid deadlocking
+        /// with the UI thread during page initialization.
         /// </summary>
         private void RunQueryInBackground()
         {
@@ -206,34 +207,62 @@ namespace BreakersOfE.ViewModels
             {
                 try
                 {
+                    System.Diagnostics.Debug.WriteLine("CollectionVM: Starting background query...");
+
                     // All DB work happens here — background thread
                     _ownedIds = CollectionService.GetOwnedScryfallIds();
+                    System.Diagnostics.Debug.WriteLine($"CollectionVM: Owned IDs loaded: {_ownedIds.Count}");
+
                     var sets = LoadPoolSetsBackground();
+                    System.Diagnostics.Debug.WriteLine($"CollectionVM: Sets loaded: {sets.Count}");
+
                     var poolRows = BuildPoolRows();
+                    System.Diagnostics.Debug.WriteLine($"CollectionVM: Pool rows built: {poolRows.Count}");
+
                     var collRows = BuildCollectionRows();
+                    System.Diagnostics.Debug.WriteLine($"CollectionVM: Collection rows built: {collRows.Count}");
+
                     var poolStatus = BuildPoolStatus();
                     var collStatus = BuildCollectionStatus(collRows);
 
-                    // Push results to UI thread
-                    System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                    // Push results to UI thread — BeginInvoke (non-blocking)
+                    // Invoke would deadlock if the constructor hasn't returned yet
+                    System.Windows.Application.Current?.Dispatcher?.BeginInvoke(() =>
                     {
-                        AvailableSets = new ObservableCollection<string>(sets);
-                        PoolCards = new ObservableCollection<CollectionDisplayRow>(poolRows);
-                        CollectionCards = new ObservableCollection<CollectionDisplayRow>(collRows);
-                        PoolStatusText = poolStatus;
-                        CollectionStatusText = collStatus;
-                        IsLoading = false;
-                        LoadingText = string.Empty;
-                        _filterDirty = false;
+                        try
+                        {
+                            AvailableSets = new ObservableCollection<string>(sets);
+                            PoolCards = new ObservableCollection<CollectionDisplayRow>(poolRows);
+                            CollectionCards = new ObservableCollection<CollectionDisplayRow>(collRows);
+                            PoolStatusText = poolStatus;
+                            CollectionStatusText = collStatus;
+                            IsLoading = false;
+                            LoadingText = string.Empty;
+                            _filterDirty = false;
+                            System.Diagnostics.Debug.WriteLine("CollectionVM: UI updated successfully.");
+                        }
+                        catch (Exception uiEx)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"CollectionVM UI error: {uiEx.Message}");
+                            PoolStatusText = $"UI Error: {uiEx.Message}";
+                            IsLoading = false;
+                        }
                     });
                 }
                 catch (Exception ex)
                 {
-                    System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                    System.Diagnostics.Debug.WriteLine($"CollectionVM background error: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"CollectionVM stack: {ex.StackTrace}");
+
+                    try
                     {
-                        PoolStatusText = $"Error: {ex.Message}";
-                        IsLoading = false;
-                    });
+                        System.Windows.Application.Current?.Dispatcher?.BeginInvoke(() =>
+                        {
+                            PoolStatusText = $"Error: {ex.Message}";
+                            IsLoading = false;
+                        });
+                    }
+                    catch { /* App may be shutting down */ }
                 }
             });
         }

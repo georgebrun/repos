@@ -168,6 +168,7 @@
                       HorizontalScrollBarVisibility="Auto"
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling"
+                      EnableRowVirtualization="True"
                       Margin="4,0,4,0"
                       MouseDoubleClick="PoolGrid_DoubleClick">
 
@@ -203,6 +204,8 @@
                       HorizontalScrollBarVisibility="Auto"
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling"
+                      EnableRowVirtualization="True"
+                      RowDetailsVisibilityMode="Collapsed"
                       Margin="4,0,4,0">
 
                 <DataGrid.Columns>
