@@ -2,7 +2,7 @@
 
 namespace BreakersOfE.Services
 {
-    public enum TableType { Pool, Collection, Deck }
+    public enum TableType { Pool, Collection, Deck, TradeBinder, WantList }
 
     public static class CardColorService
     {

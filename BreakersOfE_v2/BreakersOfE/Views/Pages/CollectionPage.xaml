@@ -1,24 +1,395 @@
 <Page x:Class="BreakersOfE.Views.Pages.CollectionPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:vm="clr-namespace:BreakersOfE.ViewModels">
 
-    <!-- Placeholder content — will be replaced with real UI in later phases -->
-    <Grid Margin="24">
-        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-            <ui:SymbolIcon Symbol="Library24"
-                           FontSize="64"
-                           Margin="0,0,0,16" />
-            <TextBlock Text="Collection"
-                       FontSize="32" FontWeight="SemiBold"
-                       HorizontalAlignment="Center"
-                       Margin="0,0,0,8" />
-            <TextBlock Text="Browse, filter, and manage your card collection."
-                       FontSize="14" Opacity="0.6"
-                       HorizontalAlignment="Center"
-                       TextWrapping="Wrap"
-                       MaxWidth="400" />
-        </StackPanel>
+    <!--
+    ═══════════════════════════════════════════════════════════════
+    COLLECTION PAGE — Split-view pool browser + collection manager
+
+    Layout:
+    ┌──────────┬──────────────────────────────┬──────────────────┐
+    │          │  Mode + Search Bar           │                  │
+    │  FILTER  ├──────────────────────────────┤  CARD DETAIL     │
+    │  PANEL   │  POOL GRID (top)             │  PANEL           │
+    │          ├──────────────────────────────┤                  │
+    │          │  COLLECTION GRID (bottom)    │  Image + Info    │
+    │          ├──────────────────────────────┤                  │
+    │          │  STATUS BAR                  │                  │
+    └──────────┴──────────────────────────────┴──────────────────┘
+    ═══════════════════════════════════════════════════════════════
+    -->
+
+    <Page.DataContext>
+        <vm:CollectionViewModel />
+    </Page.DataContext>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <!-- Filter panel -->
+            <ColumnDefinition Width="200" />
+            <!-- Grids -->
+            <ColumnDefinition Width="*" />
+            <!-- Card detail panel -->
+            <ColumnDefinition Width="240" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ═══ LEFT: FILTER PANEL ═══ -->
+        <Border Grid.Column="0" BorderThickness="0,0,1,0"
+                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="8">
+                <StackPanel>
+
+                    <TextBlock Text="Filters" FontSize="16" FontWeight="SemiBold"
+                               Margin="0,0,0,12" />
+
+                    <!-- Name -->
+                    <TextBlock Text="Name" FontSize="12" Opacity="0.6" Margin="0,0,0,4" />
+                    <ui:TextBox PlaceholderText="Filter by name..."
+                                Text="{Binding FilterName, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,12" />
+
+                    <!-- Color Identity -->
+                    <TextBlock Text="Color" FontSize="12" Opacity="0.6" Margin="0,0,0,4" />
+                    <WrapPanel Margin="0,0,0,12">
+                        <ToggleButton Content="W" Width="32" Height="32" Margin="2"
+                                      IsChecked="{Binding FilterWhite}"
+                                      Background="#FFF9E0" Foreground="Black" />
+                        <ToggleButton Content="U" Width="32" Height="32" Margin="2"
+                                      IsChecked="{Binding FilterBlue}"
+                                      Background="#0E68AB" Foreground="White" />
+                        <ToggleButton Content="B" Width="32" Height="32" Margin="2"
+                                      IsChecked="{Binding FilterBlack}"
+                                      Background="#2B2B2B" Foreground="White" />
+                        <ToggleButton Content="R" Width="32" Height="32" Margin="2"
+                                      IsChecked="{Binding FilterRed}"
+                                      Background="#D32029" Foreground="White" />
+                        <ToggleButton Content="G" Width="32" Height="32" Margin="2"
+                                      IsChecked="{Binding FilterGreen}"
+                                      Background="#00733E" Foreground="White" />
+                        <ToggleButton Content="C" Width="32" Height="32" Margin="2"
+                                      IsChecked="{Binding FilterColorless}" />
+                    </WrapPanel>
+
+                    <!-- Type -->
+                    <TextBlock Text="Type" FontSize="12" Opacity="0.6" Margin="0,0,0,4" />
+                    <ui:TextBox PlaceholderText="Creature, Instant..."
+                                Text="{Binding FilterType, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,12" />
+
+                    <!-- Set -->
+                    <TextBlock Text="Set" FontSize="12" Opacity="0.6" Margin="0,0,0,4" />
+                    <ComboBox ItemsSource="{Binding AvailableSets}"
+                              SelectedItem="{Binding FilterSetCode}"
+                              IsEditable="True"
+                              Margin="0,0,0,12" />
+
+                    <!-- Rarity -->
+                    <TextBlock Text="Rarity" FontSize="12" Opacity="0.6" Margin="0,0,0,4" />
+                    <ComboBox SelectedItem="{Binding FilterRarity}"
+                              Margin="0,0,0,12">
+                        <ComboBoxItem Content="" />
+                        <ComboBoxItem Content="common" />
+                        <ComboBoxItem Content="uncommon" />
+                        <ComboBoxItem Content="rare" />
+                        <ComboBoxItem Content="mythic" />
+                    </ComboBox>
+
+                    <!-- Oracle Text -->
+                    <TextBlock Text="Oracle Text" FontSize="12" Opacity="0.6" Margin="0,0,0,4" />
+                    <ui:TextBox PlaceholderText="Search card text..."
+                                Text="{Binding FilterOracleText, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,12" />
+
+                    <!-- Keyword -->
+                    <TextBlock Text="Keyword" FontSize="12" Opacity="0.6" Margin="0,0,0,4" />
+                    <ui:TextBox PlaceholderText="Flying, Trample..."
+                                Text="{Binding FilterKeyword, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,12" />
+
+                    <!-- Artist -->
+                    <TextBlock Text="Artist" FontSize="12" Opacity="0.6" Margin="0,0,0,4" />
+                    <ui:TextBox PlaceholderText="Artist name..."
+                                Text="{Binding FilterArtist, UpdateSourceTrigger=PropertyChanged}"
+                                Margin="0,0,0,12" />
+
+                    <!-- Clear Filters -->
+                    <ui:Button Content="Clear Filters"
+                               Command="{Binding ClearFiltersCommand}"
+                               HorizontalAlignment="Stretch"
+                               Margin="0,8,0,0" />
+
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- ═══ CENTER: GRIDS ═══ -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <!-- Mode + Search bar -->
+                <RowDefinition Height="Auto" />
+                <!-- Pool grid -->
+                <RowDefinition Height="*" />
+                <!-- Splitter -->
+                <RowDefinition Height="Auto" />
+                <!-- Collection grid -->
+                <RowDefinition Height="*" />
+                <!-- Status bar -->
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- ── Mode + Search ── -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="8,8,8,4">
+                <TextBlock Text="Mode:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <ComboBox ItemsSource="{Binding AvailableModes}"
+                          SelectedItem="{Binding SelectedMode}"
+                          Width="200" Margin="0,0,16,0" />
+
+                <TextBlock Text="Search:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <ui:TextBox x:Name="SearchBox"
+                            PlaceholderText="Type to scroll to card..."
+                            Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                            Width="250"
+                            TextChanged="SearchBox_TextChanged" />
+            </StackPanel>
+
+            <!-- ── Pool Grid (top) ── -->
+            <DataGrid Grid.Row="1" x:Name="PoolGrid"
+                      ItemsSource="{Binding PoolCards}"
+                      SelectedItem="{Binding SelectedPoolCard}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      CanUserSortColumns="True"
+                      SelectionMode="Single"
+                      GridLinesVisibility="None"
+                      HeadersVisibility="Column"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Auto"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      Margin="4,0,4,0"
+                      MouseDoubleClick="PoolGrid_DoubleClick">
+
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" />
+                    <DataGridTextColumn Header="Set" Binding="{Binding SetCode}" Width="50" />
+                    <DataGridTextColumn Header="C" Binding="{Binding ColorDisplay}" Width="30" />
+                    <DataGridTextColumn Header="R" Binding="{Binding RarityCode}" Width="30" />
+                    <DataGridTextColumn Header="Type" Binding="{Binding TypeLine}" Width="200" />
+                    <DataGridTextColumn Header="Cost" Binding="{Binding ManaCost}" Width="80" />
+                    <DataGridTextColumn Header="P/T" Binding="{Binding PowerToughness}" Width="50" />
+                    <DataGridTextColumn Header="USD" Binding="{Binding PriceUsdDisplay}" Width="60" />
+                    <DataGridTextColumn Header="Set Name" Binding="{Binding SetName}" Width="180" />
+                    <DataGridTextColumn Header="#" Binding="{Binding CollectorNumber}" Width="50" />
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <!-- ── Splitter ── -->
+            <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch"
+                          Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
+
+            <!-- ── Collection Grid (bottom) ── -->
+            <DataGrid Grid.Row="3" x:Name="CollectionGrid"
+                      ItemsSource="{Binding CollectionCards}"
+                      SelectedItem="{Binding SelectedCollectionCard}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      CanUserSortColumns="True"
+                      SelectionMode="Single"
+                      GridLinesVisibility="None"
+                      HeadersVisibility="Column"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Auto"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      Margin="4,0,4,0">
+
+                <DataGrid.Columns>
+                    <!-- Expand/Collapse button for deck usage -->
+                    <DataGridTemplateColumn Header="" Width="30">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Content="{Binding ExpandGlyph}"
+                                        Visibility="{Binding ExpandButtonVisibility}"
+                                        Command="{Binding DataContext.ExpandDeckUsageCommand,
+                                            RelativeSource={RelativeSource AncestorType=Page}}"
+                                        CommandParameter="{Binding}"
+                                        Background="Transparent" BorderThickness="0"
+                                        Padding="4,0" FontWeight="Bold" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" />
+                    <DataGridTextColumn Header="Set" Binding="{Binding SetCode}" Width="50" />
+                    <DataGridTextColumn Header="C" Binding="{Binding ColorDisplay}" Width="30" />
+                    <DataGridTextColumn Header="R" Binding="{Binding RarityCode}" Width="30" />
+                    <DataGridTextColumn Header="Edition" Binding="{Binding SetName}" Width="180" />
+                    <DataGridTextColumn Header="Qty" Binding="{Binding Quantity}" Width="40" />
+                    <DataGridTextColumn Header="Foil" Binding="{Binding FoilQuantity}" Width="40" />
+                    <DataGridTextColumn Header="Used" Binding="{Binding UsedCount}" Width="45" />
+                    <DataGridTextColumn Header="Avail" Binding="{Binding AvailableCount}" Width="45" />
+                    <DataGridTextColumn Header="USD" Binding="{Binding PriceUsdDisplay}" Width="60" />
+                    <DataGridTextColumn Header="Foil$" Binding="{Binding PriceUsdFoilDisplay}" Width="60" />
+                    <DataGridTextColumn Header="Total" Binding="{Binding TotalValueDisplay}" Width="70" />
+                    <DataGridTextColumn Header="Type" Binding="{Binding TypeLine}" Width="180" />
+                    <DataGridTextColumn Header="P/T" Binding="{Binding PowerToughness}" Width="50" />
+                    <DataGridTextColumn Header="Cond." Binding="{Binding Condition}" Width="70" />
+                </DataGrid.Columns>
+
+                <!-- ── Row Details: Deck Usage nested table ── -->
+                <DataGrid.RowDetailsTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="30,4,4,4"
+                                    Visibility="{Binding IsExpanded,
+                                        Converter={StaticResource BoolToVisibilityConverter}}">
+
+                            <TextBlock Text="USED IN DECKS" FontWeight="SemiBold"
+                                       FontSize="11" Margin="0,0,0,4" />
+
+                            <DataGrid ItemsSource="{Binding DeckUsageRows}"
+                                      AutoGenerateColumns="False"
+                                      IsReadOnly="True"
+                                      HeadersVisibility="Column"
+                                      GridLinesVisibility="Horizontal"
+                                      CanUserSortColumns="False"
+                                      MaxHeight="150"
+                                      BorderThickness="1"
+                                      Margin="0,0,0,4">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Deck Name" Binding="{Binding DeckName}" Width="200" />
+                                    <DataGridTextColumn Header="Type" Binding="{Binding DeckType}" Width="100" />
+                                    <DataGridTextColumn Header="Qty" Binding="{Binding Quantity}" Width="50" />
+                                    <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="100" />
+                                    <DataGridTextColumn Header="Foil" Binding="{Binding IsFoil}" Width="50" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </StackPanel>
+                    </DataTemplate>
+                </DataGrid.RowDetailsTemplate>
+            </DataGrid>
+
+            <!-- ── Status Bar ── -->
+            <Border Grid.Row="4"
+                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                    Padding="8,4">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="{Binding PoolStatusText}"
+                               FontSize="12" Opacity="0.7" />
+                    <TextBlock Grid.Column="1" Text="{Binding CollectionStatusText}"
+                               FontSize="12" Opacity="0.7"
+                               HorizontalAlignment="Right" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ═══ RIGHT: CARD DETAIL PANEL ═══ -->
+        <Border Grid.Column="2" BorderThickness="1,0,0,0"
+                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="8">
+                <StackPanel>
+
+                    <!-- Card Image -->
+                    <Border Background="Black" CornerRadius="8"
+                            HorizontalAlignment="Center"
+                            Margin="0,0,0,12" MaxWidth="220">
+                        <Image x:Name="CardImage"
+                               Stretch="Uniform"
+                               MaxHeight="310"
+                               RenderOptions.BitmapScalingMode="HighQuality" />
+                    </Border>
+
+                    <!-- Card Name -->
+                    <TextBlock Text="{Binding SelectedCardName}"
+                               FontSize="16" FontWeight="SemiBold"
+                               TextWrapping="Wrap" Margin="0,0,0,4" />
+
+                    <!-- Mana Cost -->
+                    <TextBlock Text="{Binding SelectedCardManaCost}"
+                               FontSize="13" Opacity="0.7" Margin="0,0,0,8" />
+
+                    <!-- Type -->
+                    <TextBlock Text="TYPE" FontSize="10" Opacity="0.4" />
+                    <TextBlock Text="{Binding SelectedCardType}"
+                               FontSize="13" TextWrapping="Wrap" Margin="0,0,0,8" />
+
+                    <!-- Set -->
+                    <TextBlock Text="SET" FontSize="10" Opacity="0.4" />
+                    <TextBlock Text="{Binding SelectedCardSet}"
+                               FontSize="13" Margin="0,0,0,2" />
+                    <TextBlock FontSize="12" Opacity="0.6" Margin="0,0,0,8">
+                        <Run Text="#" /><Run Text="{Binding SelectedCardCollectorNumber}" />
+                        <Run Text=" · " /><Run Text="{Binding SelectedCardRarity}" />
+                    </TextBlock>
+
+                    <!-- P/T -->
+                    <TextBlock Text="POWER / TOUGHNESS" FontSize="10" Opacity="0.4"
+                               Visibility="{Binding SelectedCardPowerToughness,
+                                   Converter={StaticResource StringToVisibilityConverter}}" />
+                    <TextBlock Text="{Binding SelectedCardPowerToughness}"
+                               FontSize="13" Margin="0,0,0,8"
+                               Visibility="{Binding SelectedCardPowerToughness,
+                                   Converter={StaticResource StringToVisibilityConverter}}" />
+
+                    <!-- Oracle Text -->
+                    <TextBlock Text="ORACLE TEXT" FontSize="10" Opacity="0.4" />
+                    <TextBlock Text="{Binding SelectedCardOracleText}"
+                               FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8" />
+
+                    <!-- Flavor Text -->
+                    <TextBlock Text="{Binding SelectedCardFlavorText}"
+                               FontSize="11" FontStyle="Italic" Opacity="0.6"
+                               TextWrapping="Wrap" Margin="0,0,0,8"
+                               Visibility="{Binding SelectedCardFlavorText,
+                                   Converter={StaticResource StringToVisibilityConverter}}" />
+
+                    <!-- Artist -->
+                    <TextBlock Text="ARTIST" FontSize="10" Opacity="0.4" />
+                    <TextBlock Text="{Binding SelectedCardArtist}"
+                               FontSize="12" Margin="0,0,0,8" />
+
+                    <!-- Available As -->
+                    <TextBlock Text="AVAILABLE AS" FontSize="10" Opacity="0.4" />
+                    <TextBlock Text="{Binding SelectedCardAvailableAs}"
+                               FontSize="12" Margin="0,0,0,8" />
+
+                    <!-- Prices -->
+                    <TextBlock Text="PRICES" FontSize="10" Opacity="0.4" />
+                    <TextBlock Text="{Binding SelectedCardPriceUsd}" FontSize="12" />
+                    <TextBlock Text="{Binding SelectedCardPriceFoil}"
+                               FontSize="12" Margin="0,0,0,8" />
+
+                    <!-- Keywords -->
+                    <TextBlock Text="KEYWORDS" FontSize="10" Opacity="0.4"
+                               Visibility="{Binding SelectedCardKeywords,
+                                   Converter={StaticResource StringToVisibilityConverter}}" />
+                    <TextBlock Text="{Binding SelectedCardKeywords}"
+                               FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"
+                               Visibility="{Binding SelectedCardKeywords,
+                                   Converter={StaticResource StringToVisibilityConverter}}" />
+
+                    <!-- Deck Usage -->
+                    <TextBlock Text="USED IN" FontSize="10" Opacity="0.4"
+                               Margin="0,4,0,4" />
+                    <ItemsControl ItemsSource="{Binding SelectedCardDeckUsage}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock FontSize="11" Margin="0,1">
+                                    <Run Text="{Binding DeckName}" FontWeight="Medium" />
+                                    <Run Text=" (" /><Run Text="{Binding DeckType}" />
+                                    <Run Text=") x" /><Run Text="{Binding Quantity}" />
+                                </TextBlock>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
     </Grid>
 
 </Page>
