@@ -1,140 +1,100 @@
-using System.IO;
+﻿using BreakersOfE.Models;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media.Imaging;
-using BreakersOfE.Models;
-using BreakersOfE.ViewModels;
+using System.Windows.Media;
 
 namespace BreakersOfE.Views.Pages
 {
-    /// <summary>
-    /// Collection page code-behind.
-    /// 
-    /// Minimal logic — only things that require direct control access:
-    ///   - Search bar scroll-to-match (needs DataGrid.ScrollIntoView)
-    ///   - Card image loading (needs Image.Source)
-    ///   - Double-click to add (needs DataGrid event)
-    /// 
-    /// Everything else is in CollectionViewModel via data binding.
-    /// </summary>
     public partial class CollectionPage : Page
     {
+        // ── Search state ───────────────────────────────────────────────
+        private string _lastSearchTerm = string.Empty;
+        private int _searchMatchIndex = -1;
+        private List<int> _searchMatchIndices = new();
+
         public CollectionPage()
         {
             InitializeComponent();
-
-            // Listen for card selection changes to update the image
-            DataContextChanged += (s, e) =>
-            {
-                if (DataContext is CollectionViewModel vm)
-                {
-                    vm.PropertyChanged += ViewModel_PropertyChanged;
-                }
-            };
+            Loaded += CollectionPage_Loaded;
         }
 
-        // ══════════════════════════════════════════════════════════════════
-        // SEARCH — begins-with, scroll-to-match, NEVER filters rows
-        // ══════════════════════════════════════════════════════════════════
+        /// <summary>
+        /// Wpf.Ui's NavigationView wraps page content in an internal ScrollViewer.
+        /// This gives the DataGrid infinite height, defeating row virtualization
+        /// and causing it to render all 100k+ rows at once (instant freeze).
+        /// 
+        /// Fix: walk up the visual tree, find that ScrollViewer, disable its
+        /// vertical scrolling. The DataGrid has its own internal ScrollViewer
+        /// for scrolling through rows — the outer one is not needed.
+        /// </summary>
+        private void CollectionPage_Loaded(object sender, RoutedEventArgs e)
+        {
+            DisableParentScrollViewers();
+        }
 
+        private void DisableParentScrollViewers()
+        {
+            DependencyObject current = this;
+            while (current != null)
+            {
+                current = VisualTreeHelper.GetParent(current);
+                if (current is ScrollViewer sv)
+                {
+                    sv.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+                    sv.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+                    System.Diagnostics.Debug.WriteLine(
+                        $"CollectionPage: Disabled parent ScrollViewer ({sv.Name})");
+                    break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Search bar handler — begins-with matching, scroll-to, NEVER filters.
+        /// Typing a new term finds the first match.
+        /// Typing the same term again cycles to the next match.
+        /// </summary>
         private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            if (DataContext is not CollectionViewModel vm) return;
-
-            string search = vm.SearchText?.Trim() ?? string.Empty;
-            if (string.IsNullOrEmpty(search)) return;
-
-            // Search the active grid (whichever was last interacted with)
-            // Default to pool grid
-            DataGrid targetGrid = PoolGrid;
-            var items = vm.PoolCards;
-
-            // Find first item whose name begins with the search text
-            var match = items.FirstOrDefault(c =>
-                c.Name.StartsWith(search, StringComparison.OrdinalIgnoreCase));
-
-            if (match != null)
+            var text = SearchBox.Text?.Trim();
+            if (string.IsNullOrEmpty(text) || PoolGrid.Items.Count == 0)
             {
-                targetGrid.SelectedItem = match;
-                targetGrid.ScrollIntoView(match);
+                _lastSearchTerm = string.Empty;
+                _searchMatchIndex = -1;
+                _searchMatchIndices.Clear();
+                return;
             }
 
-            // Also search collection grid
-            var collMatch = vm.CollectionCards.FirstOrDefault(c =>
-                c.Name.StartsWith(search, StringComparison.OrdinalIgnoreCase));
-
-            if (collMatch != null)
+            // If the search term changed, rebuild match list
+            if (!text.Equals(_lastSearchTerm, StringComparison.OrdinalIgnoreCase))
             {
-                CollectionGrid.SelectedItem = collMatch;
-                CollectionGrid.ScrollIntoView(collMatch);
-            }
-        }
+                _lastSearchTerm = text;
+                _searchMatchIndices.Clear();
+                _searchMatchIndex = -1;
 
-        // ══════════════════════════════════════════════════════════════════
-        // CARD IMAGE LOADING
-        // ══════════════════════════════════════════════════════════════════
-
-        private void ViewModel_PropertyChanged(object? sender,
-            System.ComponentModel.PropertyChangedEventArgs e)
-        {
-            if (e.PropertyName == nameof(CollectionViewModel.SelectedCardLocalImagePath) ||
-                e.PropertyName == nameof(CollectionViewModel.SelectedCardImageUrl))
-            {
-                LoadCardImage();
-            }
-        }
-
-        private void LoadCardImage()
-        {
-            if (DataContext is not CollectionViewModel vm) return;
-
-            try
-            {
-                // Priority 1: Local cached image
-                if (!string.IsNullOrEmpty(vm.SelectedCardLocalImagePath) &&
-                    File.Exists(vm.SelectedCardLocalImagePath))
+                for (int i = 0; i < PoolGrid.Items.Count; i++)
                 {
-                    var bitmap = new BitmapImage();
-                    bitmap.BeginInit();
-                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmap.UriSource = new Uri(vm.SelectedCardLocalImagePath);
-                    bitmap.EndInit();
-                    bitmap.Freeze();
-                    CardImage.Source = bitmap;
-                    return;
+                    if (PoolGrid.Items[i] is PoolCard card &&
+                        card.Name.StartsWith(text, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _searchMatchIndices.Add(i);
+                    }
                 }
-
-                // Priority 2: Scryfall URL
-                if (!string.IsNullOrEmpty(vm.SelectedCardImageUrl))
-                {
-                    var bitmap = new BitmapImage();
-                    bitmap.BeginInit();
-                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmap.UriSource = new Uri(vm.SelectedCardImageUrl);
-                    bitmap.EndInit();
-                    CardImage.Source = bitmap;
-                    return;
-                }
-
-                // Priority 3: No image
-                CardImage.Source = null;
             }
-            catch
-            {
-                CardImage.Source = null;
-            }
-        }
 
-        // ══════════════════════════════════════════════════════════════════
-        // DOUBLE-CLICK TO ADD
-        // ══════════════════════════════════════════════════════════════════
+            if (_searchMatchIndices.Count == 0)
+                return;
 
-        private void PoolGrid_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            if (DataContext is CollectionViewModel vm)
-            {
-                vm.AddToCollectionCommand.Execute(null);
-            }
+            // Advance to next match (wraps around)
+            _searchMatchIndex++;
+            if (_searchMatchIndex >= _searchMatchIndices.Count)
+                _searchMatchIndex = 0;
+
+            // Scroll to and select the match
+            int matchIdx = _searchMatchIndices[_searchMatchIndex];
+            var matchItem = PoolGrid.Items[matchIdx];
+            PoolGrid.ScrollIntoView(matchItem);
+            PoolGrid.SelectedItem = matchItem;
         }
     }
 }

@@ -303,31 +303,62 @@ namespace BreakersOfE.Services
         // ════════════════════════════════════════════════════════════════════
         private async Task<string> GetBulkDataUrlAsync(CancellationToken ct)
         {
-            string json = await _http.GetStringAsync(
+            // ── Try direct type endpoint first (bypasses list iteration) ──
+            try
+            {
+                string json = await _http.GetStringAsync(
+                    "https://api.scryfall.com/bulk-data/default_cards", ct);
+
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                // Post July 20 2026: only jsonl_download_uri exists
+                if (root.TryGetProperty("jsonl_download_uri", out var jdl))
+                {
+                    string? url = jdl.GetString();
+                    if (!string.IsNullOrEmpty(url)) return url;
+                }
+
+                // Pre July 20 2026 fallback
+                if (root.TryGetProperty("download_uri", out var dl))
+                {
+                    string? url = dl.GetString();
+                    if (!string.IsNullOrEmpty(url)) return url;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"Direct bulk-data endpoint failed: {ex.Message}");
+            }
+
+            // ── Fallback: iterate all bulk data types ────────────────────
+            string listJson = await _http.GetStringAsync(
                 "https://api.scryfall.com/bulk-data", ct);
 
-            using var doc = JsonDocument.Parse(json);
+            using var listDoc = JsonDocument.Parse(listJson);
 
-            JsonElement dataElement = doc.RootElement.TryGetProperty(
-                "data", out var arr) ? arr : doc.RootElement;
+            JsonElement dataElement = listDoc.RootElement.TryGetProperty(
+                "data", out var arr) ? arr : listDoc.RootElement;
 
             foreach (var item in dataElement.EnumerateArray())
             {
                 string? type = item.TryGetProperty("type", out var t)
                     ? t.GetString() : null;
 
+                System.Diagnostics.Debug.WriteLine(
+                    $"Scryfall bulk type found: '{type}'");
+
                 if (type != "default_cards") continue;
 
-                // Prefer JSONL format (Scryfall is retiring JSON on July 20 2026)
-                if (item.TryGetProperty("jsonl_download_uri", out var jdl))
+                if (item.TryGetProperty("jsonl_download_uri", out var jdl2))
                 {
-                    string? url = jdl.GetString();
+                    string? url = jdl2.GetString();
                     if (!string.IsNullOrEmpty(url)) return url;
                 }
 
-                // Fall back to legacy JSON if JSONL not yet available
-                if (item.TryGetProperty("download_uri", out var dl))
-                    return dl.GetString()
+                if (item.TryGetProperty("download_uri", out var dl2))
+                    return dl2.GetString()
                         ?? throw new Exception("download_uri was null.");
 
                 if (item.TryGetProperty("uri", out var uri))
@@ -336,14 +367,14 @@ namespace BreakersOfE.Services
                         uri.GetString()!, ct);
                     using var md = JsonDocument.Parse(meta);
                     if (md.RootElement.TryGetProperty(
-                            "jsonl_download_uri", out var jdl2))
+                            "jsonl_download_uri", out var jdl3))
                     {
-                        string? url = jdl2.GetString();
+                        string? url = jdl3.GetString();
                         if (!string.IsNullOrEmpty(url)) return url;
                     }
                     if (md.RootElement.TryGetProperty(
-                            "download_uri", out var dl2))
-                        return dl2.GetString()
+                            "download_uri", out var dl3))
+                        return dl3.GetString()
                             ?? throw new Exception("download_uri was null.");
                 }
             }

@@ -23,6 +23,8 @@
     <PackageReference Include="WPF-UI" Version="3.*" />
     <!-- MVVM helpers: ObservableObject, RelayCommand, [ObservableProperty] etc. -->
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.*" />
+    <!-- Excel-like auto-filter on DataGrid column headers -->
+    <PackageReference Include="DataGridExtensions" Version="2.*" />
     <!-- SVG rendering for mana symbols -->
     <PackageReference Include="SharpVectors.Reloaded" Version="1.*" />
     <!-- Jitsi video embed for playtest (Phase 9, but include now so it resolves) -->
