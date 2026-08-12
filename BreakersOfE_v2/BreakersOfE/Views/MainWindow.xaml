@@ -10,25 +10,23 @@
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica">
 
-    <!-- 
+    <!--
     ═══════════════════════════════════════════════════════════
-    MAIN WINDOW LAYOUT
-    
-    This is the "app shell" — it holds the navigation sidebar
-    on the left and loads pages into the content area on the 
-    right. Think of it like an HMI with a menu that switches
-    between different screens.
-    
-    The NavigationView from Wpf.Ui handles:
-      - Sidebar with icons and labels
-      - Page switching when you click a menu item
-      - Responsive collapse on narrow windows
+    MAIN WINDOW — fresh minimal shell.
+
+    Left nav has one expandable "Card Pool" item. Clicking it
+    reveals the seven pool tables as sub-items (bullets). Each
+    sub-item navigates to the same PoolPage but passes a Tag
+    identifying which table to load.
+
+    "Update Database" is pinned to the footer so we can build
+    a pool DB on first run.
     ═══════════════════════════════════════════════════════════
     -->
 
     <Grid>
-        <!-- Title bar area at the top -->
-        <ui:TitleBar x:Name="TitleBar" 
+        <!-- Title bar -->
+        <ui:TitleBar x:Name="TitleBar"
                      Grid.Row="0"
                      Title="Breakers of E"
                      ShowMaximize="True"
@@ -38,87 +36,65 @@
         <ui:NavigationView x:Name="RootNavigation"
                            PaneDisplayMode="Left"
                            IsBackButtonVisible="Collapsed"
+                           IsPaneToggleVisible="True"
+                           OpenPaneLength="220"
                            Margin="0,40,0,0">
 
-            <!-- ═══ TOP MENU ITEMS ═══ -->
             <ui:NavigationView.MenuItems>
 
-                <!-- Dashboard — collection insights landing page -->
-                <ui:NavigationViewItem Content="Dashboard"
-                                       TargetPageType="{x:Type pages:DashboardPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Home24" />
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
+                <!-- ═══ CARD POOL (expandable) ═══ -->
+                <ui:NavigationViewItem Content="Card Pool"
+                                       Icon="{ui:SymbolIcon Library24}"
+                                       IsExpanded="True">
 
-                <!-- Collection — browse and filter your cards -->
-                <ui:NavigationViewItem Content="Collection"
-                                       TargetPageType="{x:Type pages:CollectionPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Library24" />
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
+                    <ui:NavigationViewItem.MenuItems>
 
-                <!-- Deck Editor — build and edit decks -->
-                <ui:NavigationViewItem Content="Decks"
-                                       TargetPageType="{x:Type pages:DeckPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="DocumentBulletList24" />
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
+                        <ui:NavigationViewItem Content="Cards"
+                                               Tag="Cards"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Grid24}" />
 
-                <!-- Deck Builder — AI-assisted deckbuilding -->
-                <ui:NavigationViewItem Content="Deck Builder"
-                                       TargetPageType="{x:Type pages:DeckBuilderPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Wand24" />
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
+                        <ui:NavigationViewItem Content="Tokens"
+                                               Tag="Tokens"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Star24}" />
 
-                <!-- Trade Binder -->
-                <ui:NavigationViewItem Content="Trade Binder"
-                                       TargetPageType="{x:Type pages:TradeBinderPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="ArrowSwap24" />
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
+                        <ui:NavigationViewItem Content="Planes"
+                                               Tag="Planes"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Globe24}" />
 
-                <!-- Want List -->
-                <ui:NavigationViewItem Content="Want List"
-                                       TargetPageType="{x:Type pages:WantListPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Heart24" />
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
+                        <ui:NavigationViewItem Content="Schemes"
+                                               Tag="Schemes"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Flowchart24}" />
 
-                <!-- Playtest — tabletop simulator -->
-                <ui:NavigationViewItem Content="Playtest"
-                                       TargetPageType="{x:Type pages:PlaytestPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Play24" />
-                    </ui:NavigationViewItem.Icon>
+                        <ui:NavigationViewItem Content="Vanguards"
+                                               Tag="Vanguards"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Person24}" />
+
+                        <ui:NavigationViewItem Content="Art Series"
+                                               Tag="ArtSeries"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Image24}" />
+
+                        <ui:NavigationViewItem Content="Conspiracies"
+                                               Tag="Conspiracies"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon EyeTracking24}" />
+
+                    </ui:NavigationViewItem.MenuItems>
                 </ui:NavigationViewItem>
 
             </ui:NavigationView.MenuItems>
 
-            <!-- ═══ BOTTOM MENU ITEMS (pinned to bottom of sidebar) ═══ -->
+            <!-- ═══ FOOTER ═══ -->
             <ui:NavigationView.FooterMenuItems>
 
-                <!-- Database Update -->
                 <ui:NavigationViewItem Content="Update Database"
-                                       TargetPageType="{x:Type pages:DatabaseUpdatePage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="ArrowDownload24" />
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
-
-                <!-- Settings / Preferences -->
-                <ui:NavigationViewItem Content="Settings"
-                                       TargetPageType="{x:Type pages:PreferencesPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Settings24" />
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
+                                       TargetPageType="{x:Type pages:DatabaseUpdatePage}"
+                                       Icon="{ui:SymbolIcon ArrowDownload24}" />
 
             </ui:NavigationView.FooterMenuItems>
 

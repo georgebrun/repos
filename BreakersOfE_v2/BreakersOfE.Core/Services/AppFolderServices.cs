@@ -4,18 +4,20 @@ using System.IO;
 namespace BreakersOfE.Services
 {
     /// <summary>
-    /// Centralized service for all user-facing file paths.
-    /// All user data lives under My Documents\Breakers of E\
-    /// Program data (DB, symbols) stays next to the executable.
+    /// Centralized service for all user-facing file paths (v2).
+    ///
+    /// All v2 user data lives under My Documents\BoE_V2\ — completely
+    /// separate from v1's "Breakers of E" folder, so the two versions
+    /// never touch each other's databases, decks, or images.
     /// </summary>
     public static class AppFolderService
     {
-        // ── Root folder ───────────────────────────────────────────────────────
+        // ── Root folder — v2 uses its own isolated folder ──────────────────────
         public static string RootFolder =>
             EnsureFolder(Path.Combine(
                 Environment.GetFolderPath(
                     Environment.SpecialFolder.MyDocuments),
-                "Breakers of E"));
+                "BoE_V2"));
 
         // ── User data folders ─────────────────────────────────────────────────
         public static string DecksFolder =>

@@ -1,15 +1,18 @@
 using System.Windows;
 using BreakersOfE.Data;
+using BreakersOfE.Services;
 
 namespace BreakersOfE
 {
     /// <summary>
-    /// App.xaml.cs — the very first code that runs when the application starts.
-    /// 
-    /// Handles:
-    ///   - Database schema initialization (pool + collection)
-    ///   - Future: DI container setup
-    ///   - Future: Agent status check
+    /// App.xaml.cs — first code that runs on startup.
+    ///
+    /// For this fresh v2 build we keep it minimal:
+    ///   - Ensure the BoE_V2 folder tree exists
+    ///   - Ensure the pool database exists (EnsureCreated via EnsureSchema)
+    ///
+    /// Collection/deck initialization will be added back when we rebuild
+    /// those features. Right now the goal is: create a pool DB and show it.
     /// </summary>
     public partial class App : Application
     {
@@ -17,43 +20,21 @@ namespace BreakersOfE
         {
             base.OnStartup(e);
 
-            // Ensure databases exist with current schema
-            InitializeDatabases();
+            // Make sure My Documents\BoE_V2\ and its subfolders exist
+            AppFolderService.EnsureAllFolders();
 
-            // Future: DI container setup goes here
-            // Future: Agent status check goes here
-        }
-
-        /// <summary>
-        /// Initializes both databases on startup.
-        /// 
-        /// AppDbContext (pool): Uses EnsureCreated() — pool is wiped and
-        /// rebuilt on every full update anyway, so no incremental migrations.
-        /// 
-        /// CollectionDbContext (user data): Uses MigrateSchema() which
-        /// checks each column with PRAGMA table_info before adding — no
-        /// duplicate column exceptions, handles v1→v2 migration cleanly.
-        /// </summary>
-        private static void InitializeDatabases()
-        {
+            // Ensure the pool database file exists with the current schema.
+            // If it's the very first run, this creates an empty breakersofe.db
+            // that the user then fills via Database Update.
             try
             {
-                // Pool database — create if missing, schema comes from model
-                using (var pool = new AppDbContext())
-                {
-                    pool.EnsureSchema();
-                }
-
-                // Collection database — create if missing, migrate schema if needed
-                using (var col = new CollectionDbContext())
-                {
-                    col.MigrateSchema();
-                }
+                using var pool = new AppDbContext();
+                pool.EnsureSchema();
             }
             catch
             {
-                // Don't crash on startup if databases can't be initialized
-                // The user can still run a database update to fix things
+                // Don't crash on startup if the DB can't be initialized —
+                // the user can still run a database update to fix things.
             }
         }
     }

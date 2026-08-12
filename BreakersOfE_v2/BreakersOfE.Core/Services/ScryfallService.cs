@@ -309,6 +309,39 @@ namespace BreakersOfE.Services
         // ════════════════════════════════════════════════════════════════════
         private async Task<string> GetBulkDataUrlAsync(CancellationToken ct)
         {
+            // ── Try the direct type endpoint first ───────────────────────
+            // Scryfall exposes each bulk type at /bulk-data/{type}, returning
+            // a single object — no list iteration needed. This is more robust
+            // against changes to the list response shape.
+            try
+            {
+                string direct = await _http.GetStringAsync(
+                    "https://api.scryfall.com/bulk-data/default_cards", ct);
+
+                using var ddoc = JsonDocument.Parse(direct);
+                var root = ddoc.RootElement;
+
+                // Post July 20 2026: only jsonl_download_uri exists
+                if (root.TryGetProperty("jsonl_download_uri", out var djdl))
+                {
+                    string? url = djdl.GetString();
+                    if (!string.IsNullOrEmpty(url)) return url;
+                }
+
+                // Pre July 20 2026 fallback
+                if (root.TryGetProperty("download_uri", out var ddl))
+                {
+                    string? url = ddl.GetString();
+                    if (!string.IsNullOrEmpty(url)) return url;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"Direct bulk-data endpoint failed, falling back to list: {ex.Message}");
+            }
+
+            // ── Fallback: iterate the full bulk-data list ────────────────
             string json = await _http.GetStringAsync(
                 "https://api.scryfall.com/bulk-data", ct);
 
@@ -321,6 +354,9 @@ namespace BreakersOfE.Services
             {
                 string? type = item.TryGetProperty("type", out var t)
                     ? t.GetString() : null;
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Scryfall bulk type found: '{type}'");
 
                 if (type != "default_cards") continue;
 

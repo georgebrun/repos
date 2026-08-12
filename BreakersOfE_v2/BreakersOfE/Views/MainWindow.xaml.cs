@@ -1,32 +1,43 @@
+using System.Windows;
+using BreakersOfE.Views.Pages;
 using Wpf.Ui.Controls;
 
 namespace BreakersOfE.Views
 {
-    /// <summary>
-    /// MainWindow — the app shell.
-    /// 
-    /// In v1 this file was 10,000+ lines handling everything.
-    /// In v2 it's tiny — just the window frame. All logic lives
-    /// in ViewModels and Services.
-    /// 
-    /// The NavigationView in the XAML handles page switching
-    /// automatically based on which menu item is clicked.
-    /// </summary>
     public partial class MainWindow : FluentWindow
     {
         public MainWindow()
         {
             InitializeComponent();
 
-            // Wait until the window is fully loaded before navigating —
-            // the NavigationView isn't ready during the constructor
-            Loaded += MainWindow_Loaded;
+            // When a pool sub-item is clicked, hand its Tag to the PoolPage
+            // so the page knows which table to load.
+            RootNavigation.Navigated += RootNavigation_Navigated;
+
+            // Land on the main Cards pool by default.
+            Loaded += (_, _) =>
+                RootNavigation.Navigate(typeof(PoolPage));
         }
 
-        private void MainWindow_Loaded(object sender, System.Windows.RoutedEventArgs e)
+        private void RootNavigation_Navigated(
+            NavigationView sender, NavigatedEventArgs args)
         {
-            // Navigate to Dashboard on startup
-            RootNavigation.Navigate(typeof(Pages.DashboardPage));
+            // The page instance we just navigated to
+            if (args.Page is not PoolPage page)
+                return;
+
+            // Find the selected nav item and read its Tag ("Cards", "Tokens", …)
+            if (sender.SelectedItem is NavigationViewItem item &&
+                item.Tag is string poolTag &&
+                !string.IsNullOrEmpty(poolTag))
+            {
+                page.LoadPool(poolTag);
+            }
+            else
+            {
+                // Default when the parent "Card Pool" item itself is hit
+                page.LoadPool("Cards");
+            }
         }
     }
 }

@@ -7,7 +7,7 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <!-- Wpf.Ui base theme resources — this gives us all the Fluent controls -->
+                <!-- Wpf.Ui base theme resources — gives us all the Fluent controls -->
                 <ui:ThemesDictionary Theme="Dark" />
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
