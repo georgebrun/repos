@@ -1177,29 +1177,6 @@
                                 <DataGridTextColumn Header="Added"         Binding="{Binding DateAdded, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" Width="130" IsReadOnly="True"/>
                                 <DataGridTextColumn Header="USD"   Binding="{Binding PriceUsdDisplay}"  Width="90"  IsReadOnly="True"/>
                                 <DataGridTextColumn Header="Price Low"      Binding="{Binding PriceLowDisplay}"  Width="80"  IsReadOnly="True"/>
-                                <DataGridTemplateColumn Header="Legal" Width="100" IsReadOnly="True">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0">
-                                                <Border CornerRadius="3" Margin="1,0" Padding="3,1" Background="{Binding IsLegalStandard, Converter={StaticResource BoolToGreenRedConverter}}">
-                                                    <TextBlock Text="S" FontSize="10" FontWeight="Bold" Foreground="White"/>
-                                                </Border>
-                                                <Border CornerRadius="3" Margin="1,0" Padding="3,1" Background="{Binding IsLegalModern,   Converter={StaticResource BoolToGreenRedConverter}}">
-                                                    <TextBlock Text="M" FontSize="10" FontWeight="Bold" Foreground="White"/>
-                                                </Border>
-                                                <Border CornerRadius="3" Margin="1,0" Padding="3,1" Background="{Binding IsLegalPioneer,  Converter={StaticResource BoolToGreenRedConverter}}">
-                                                    <TextBlock Text="P" FontSize="10" FontWeight="Bold" Foreground="White"/>
-                                                </Border>
-                                                <Border CornerRadius="3" Margin="1,0" Padding="3,1" Background="{Binding IsLegalLegacy,   Converter={StaticResource BoolToGreenRedConverter}}">
-                                                    <TextBlock Text="L" FontSize="10" FontWeight="Bold" Foreground="White"/>
-                                                </Border>
-                                                <Border CornerRadius="3" Margin="1,0" Padding="3,1" Background="{Binding IsLegalVintage,  Converter={StaticResource BoolToGreenRedConverter}}">
-                                                    <TextBlock Text="V" FontSize="10" FontWeight="Bold" Foreground="White"/>
-                                                </Border>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
                                 <DataGridTextColumn Header="Color"         Binding="{Binding ColorDisplay}"      Width="50"  IsReadOnly="True"/>
                                 <DataGridTextColumn Header="Type"          Binding="{Binding TypeLine}"          Width="160" IsReadOnly="True"/>
                                 <DataGridTextColumn Header="Rarity"        Binding="{Binding RarityCode}"        Width="50"  IsReadOnly="True"/>

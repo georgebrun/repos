@@ -7,6 +7,7 @@ using SharpVectors.Converters;
 using SharpVectors.Renderers.Wpf;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -53,7 +54,7 @@ namespace BreakersOfE
         private const string ColVisPrefix = "ColVis_";
         private const string ColOrderPrefix = "ColOrder_";
         private const string ColLayoutVersion = "ColLayoutVer";
-        private const string CurrentColLayoutVersion = "5"; // bump to force resize
+        private const string CurrentColLayoutVersion = "6"; // bump to force resize (v1.2.3: per-format legality columns)
         private const string RecentDecksKey = "RecentDecks";
         private const int MaxRecentDecks = 8;
 
@@ -1386,6 +1387,101 @@ namespace BreakersOfE
             }
 
             return new DataTemplate { VisualTree = panel };
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        // PER-FORMAT LEGALITY COLUMNS (collection grid)
+        // Built inside EnsureCollectionColumns (the dynamic collection column
+        // builder). Each column shows a colored status chip, sorts by severity
+        // (banned → restricted → not legal → legal), and toggles/moves through
+        // the existing column chooser like any other column.
+        // ════════════════════════════════════════════════════════════════════
+
+        // Marker prefix on a legality column's SortMemberPath, e.g.
+        // "__legalitysort__commander". Detected in LegalityGrid_Sorting.
+        private const string LegalitySortMarker = "__legalitysort__";
+
+        /// <summary>Builds the colored status-chip cell template for one format.</summary>
+        private DataTemplate CreateLegalityCellTemplate(string formatKey)
+        {
+            var border = new FrameworkElementFactory(typeof(Border));
+            border.SetValue(Border.CornerRadiusProperty, new CornerRadius(4));
+            border.SetValue(Border.MarginProperty, new Thickness(3, 1, 3, 1));
+            border.SetValue(Border.PaddingProperty, new Thickness(6, 1, 6, 1));
+            border.SetValue(Border.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            border.SetBinding(Border.BackgroundProperty,
+                new System.Windows.Data.Binding($"Legality[{formatKey}].Background"));
+
+            var text = new FrameworkElementFactory(typeof(TextBlock));
+            text.SetBinding(TextBlock.TextProperty,
+                new System.Windows.Data.Binding($"Legality[{formatKey}].Text"));
+            text.SetBinding(TextBlock.ForegroundProperty,
+                new System.Windows.Data.Binding($"Legality[{formatKey}].Foreground"));
+            text.SetValue(TextBlock.FontSizeProperty, 11.0);
+            text.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
+            text.SetValue(TextBlock.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+
+            border.AppendChild(text);
+            return new DataTemplate { VisualTree = border };
+        }
+
+        /// <summary>
+        /// Custom sort for legality columns: sorts by status severity
+        /// (banned → restricted → not legal → legal) rather than chip text,
+        /// so sorting a format's column groups the "problem" cards together.
+        /// Indexer paths can't sort through the default SortMemberPath route,
+        /// so we intercept here and apply a CustomSort comparer.
+        /// </summary>
+        private void LegalityGrid_Sorting(object sender, DataGridSortingEventArgs e)
+        {
+            string path = e.Column.SortMemberPath ?? string.Empty;
+            if (!path.StartsWith(LegalitySortMarker)) return; // not ours
+
+            e.Handled = true;
+            string formatKey = path.Substring(LegalitySortMarker.Length);
+
+            var grid = (DataGrid)sender;
+            var view = System.Windows.Data.CollectionViewSource
+                .GetDefaultView(grid.ItemsSource) as System.ComponentModel.ICollectionView;
+            if (view is not System.Windows.Data.ListCollectionView lcv) return;
+
+            // Toggle direction
+            var direction = e.Column.SortDirection != ListSortDirection.Ascending
+                ? ListSortDirection.Ascending
+                : ListSortDirection.Descending;
+            e.Column.SortDirection = direction;
+
+            // Clear sort arrows on other columns
+            foreach (var col in grid.Columns)
+                if (col != e.Column) col.SortDirection = null;
+
+            lcv.CustomSort = new LegalitySeverityComparer(formatKey, direction);
+        }
+
+        /// <summary>Compares two CollectionDisplayRows by one format's status rank.</summary>
+        private sealed class LegalitySeverityComparer : System.Collections.IComparer
+        {
+            private readonly string _formatKey;
+            private readonly int _dir;
+            public LegalitySeverityComparer(string formatKey, ListSortDirection dir)
+            { _formatKey = formatKey; _dir = dir == ListSortDirection.Ascending ? 1 : -1; }
+
+            public int Compare(object? x, object? y)
+            {
+                int rx = RankOf(x), ry = RankOf(y);
+                if (rx != ry) return _dir * rx.CompareTo(ry);
+                // Tie-break by name so equal-status rows stay stable/readable
+                string nx = (x as CollectionDisplayRow)?.Name ?? string.Empty;
+                string ny = (y as CollectionDisplayRow)?.Name ?? string.Empty;
+                return string.Compare(nx, ny, StringComparison.OrdinalIgnoreCase);
+            }
+
+            private int RankOf(object? o)
+            {
+                if (o is CollectionDisplayRow row)
+                    return row.Legality[_formatKey].SortRank;
+                return 99;
+            }
         }
 
         // ── Refresh deck grid ─────────────────────────────────────────────────────
@@ -4118,6 +4214,30 @@ namespace BreakersOfE
             grid.Columns.Add(MakeText("Color", "ColorDisplay", 50, true));
             grid.Columns.Add(MakeText("Type", "TypeLine", 160, true));
             grid.Columns.Add(MakeText("Rarity", "RarityCode", 50, true));
+
+            // ── Per-format legality columns (replaces the old S/M/P/L/V pill) ──
+            // One column per Magic format, driven by LegalityInfo.Formats.
+            // Colored status chip, severity sort, toggle/move via column chooser.
+            foreach (var fmt in Models.LegalityInfo.Formats)
+            {
+                var legalCol = new DataGridTemplateColumn
+                {
+                    Header = fmt.Header,
+                    IsReadOnly = true,
+                    Width = new DataGridLength(74),
+                    CellTemplate = CreateLegalityCellTemplate(fmt.Key),
+                    SortMemberPath = LegalitySortMarker + fmt.Key,
+                    CanUserSort = true,
+                    Visibility = fmt.DefaultVisible
+                        ? Visibility.Visible
+                        : Visibility.Collapsed
+                };
+                grid.Columns.Add(legalCol);
+            }
+            // Custom severity sort for those columns
+            grid.Sorting -= LegalityGrid_Sorting;
+            grid.Sorting += LegalityGrid_Sorting;
+
             grid.Columns.Add(MakeText("P/T", "PowerToughness", 55, true, sortBinding: "PowerToughnessSort"));
             grid.Columns.Add(MakeText("Text", "OracleText", 220, true));
             grid.Columns.Add(MakeText("Flavor", "FlavorText", 160, true));
@@ -7823,7 +7943,7 @@ namespace BreakersOfE
             DetailPrices.Text = FormatCollectionPrices(c.PriceUsd, c.PriceUsdFoil);
             RenderManaCost(c.ManaCost);
             LoadSetSymbol(c.SetCode);
-            DetailLegalityPanel.Children.Clear();
+            RenderLegality(c.LegalitiesJson);
         }
 
         private void ClearDetailPanel()
@@ -7916,49 +8036,53 @@ namespace BreakersOfE
         {
             DetailLegalityPanel.Children.Clear();
             if (string.IsNullOrWhiteSpace(json)) return;
-            try
+
+            // All formats, in the same order as the grid columns. Each row shows
+            // a colored status chip so banned/restricted read distinctly from
+            // not-legal — matching the collection grid.
+            foreach (var fmt in Models.LegalityInfo.Formats)
             {
-                using var doc = System.Text.Json.JsonDocument.Parse(json);
-                var formats = new[]
+                string status = Models.LegalityInfo.RawStatus(json, fmt.Key);
+                if (string.IsNullOrEmpty(status)) continue; // format not reported
+
+                var row = new StackPanel
                 {
-                    "standard", "pioneer", "modern",
-                    "legacy", "vintage", "commander", "pauper"
+                    Orientation = Orientation.Horizontal,
+                    Margin = new Thickness(0, 1, 0, 1)
                 };
-                foreach (var fmt in formats)
+
+                // Colored status chip
+                var chip = new Border
                 {
-                    if (!doc.RootElement.TryGetProperty(fmt, out var val))
-                        continue;
-                    string status = val.GetString() ?? "not_legal";
-                    string icon = status switch
-                    {
-                        "legal" => "✅",
-                        "restricted" => "🔵",
-                        _ => "❌"
-                    };
-                    var row = new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Margin = new Thickness(0, 1, 0, 1)
-                    };
-                    row.Children.Add(new TextBlock
-                    {
-                        Text = icon,
-                        FontSize = 10,
-                        Width = 18,
-                        VerticalAlignment = VerticalAlignment.Center
-                    });
-                    row.Children.Add(new TextBlock
-                    {
-                        Text = CapFirst(fmt),
-                        FontSize = 12,
-                        Foreground = (System.Windows.Media.Brush)
-                            Application.Current.Resources["PrimaryTextBrush"],
-                        VerticalAlignment = VerticalAlignment.Center
-                    });
-                    DetailLegalityPanel.Children.Add(row);
-                }
+                    CornerRadius = new CornerRadius(4),
+                    Padding = new Thickness(6, 0, 6, 0),
+                    Margin = new Thickness(0, 0, 8, 0),
+                    MinWidth = 42,
+                    Background = Models.LegalityInfo.BackgroundBrush(status),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                chip.Child = new TextBlock
+                {
+                    Text = Models.LegalityInfo.ChipText(status),
+                    FontSize = 11,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = Models.LegalityInfo.ForegroundBrush(status),
+                    HorizontalAlignment = HorizontalAlignment.Center
+                };
+                row.Children.Add(chip);
+
+                // Format name
+                row.Children.Add(new TextBlock
+                {
+                    Text = fmt.Header,
+                    FontSize = 12,
+                    Foreground = (System.Windows.Media.Brush)
+                        Application.Current.Resources["PrimaryTextBrush"],
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+
+                DetailLegalityPanel.Children.Add(row);
             }
-            catch { }
         }
 
         // ════════════════════════════════════════════════════════════════════
@@ -8903,7 +9027,6 @@ namespace BreakersOfE
             if (otherFilters.Count > 0)
             {
                 // Apply only the OTHER column filters to get the cascaded source
-                System.Reflection.PropertyInfo? cachedProp = null;
                 var propCacheOther = new Dictionary<string, System.Reflection.PropertyInfo?>();
                 var source = (grid.ItemsSource as System.Collections.IEnumerable)?
                     .Cast<object>().ToList() ?? new List<object>();
@@ -8929,9 +9052,7 @@ namespace BreakersOfE
                 {
                     foreach (var f in otherFilters)
                     {
-                        if (!propCacheOther.TryGetValue(f.PropertyName, out var p) || p == null)
-                            continue;
-                        string? val = p.GetValue(item)?.ToString();
+                        string? val = GetFilterValue(item, f.PropertyName, propCacheOther);
                         if (!f.Matches(val)) return false;
                     }
                     return true;
@@ -8940,13 +9061,7 @@ namespace BreakersOfE
                 // Get unique values of THIS column from the cascaded data
                 var valSet = new HashSet<string>();
                 foreach (var item in cascaded)
-                {
-                    cachedProp ??= item.GetType().GetProperty(propName,
-                        System.Reflection.BindingFlags.Public |
-                        System.Reflection.BindingFlags.Instance |
-                        System.Reflection.BindingFlags.IgnoreCase);
-                    valSet.Add(cachedProp?.GetValue(item)?.ToString() ?? string.Empty);
-                }
+                    valSet.Add(GetFilterValue(item, propName) ?? string.Empty);
                 values = valSet.OrderBy(v => v,
                     Comparer<string>.Create(ColumnFilterState.CompareNatural)).ToList();
             }
@@ -9135,16 +9250,9 @@ namespace BreakersOfE
             }
 
             var values = new HashSet<string>();
-            System.Reflection.PropertyInfo? cachedProp = null;
+            var pc = new Dictionary<string, System.Reflection.PropertyInfo?>();
             foreach (var item in source)
-            {
-                cachedProp ??= item.GetType().GetProperty(propName,
-                    System.Reflection.BindingFlags.Public |
-                    System.Reflection.BindingFlags.Instance |
-                    System.Reflection.BindingFlags.IgnoreCase);
-                string? val = cachedProp?.GetValue(item)?.ToString();
-                values.Add(val ?? string.Empty);
-            }
+                values.Add(GetFilterValue(item, propName, pc) ?? string.Empty);
             return values.OrderBy(v => v, Comparer<string>.Create(ColumnFilterState.CompareNatural)).ToList();
         }
 
@@ -9154,18 +9262,10 @@ namespace BreakersOfE
             var values = new System.Collections.Generic.HashSet<string>();
             if (grid.ItemsSource == null) return new List<string>();
 
-            System.Reflection.PropertyInfo? cachedProp = null;
+            var pc = new Dictionary<string, System.Reflection.PropertyInfo?>();
             foreach (var item in
                 (System.Collections.IEnumerable)grid.ItemsSource)
-            {
-                cachedProp ??= item.GetType().GetProperty(propName,
-                    System.Reflection.BindingFlags.Public |
-                    System.Reflection.BindingFlags.Instance |
-                    System.Reflection.BindingFlags.IgnoreCase);
-
-                string? val = cachedProp?.GetValue(item)?.ToString();
-                values.Add(val ?? string.Empty);
-            }
+                values.Add(GetFilterValue(item, propName, pc) ?? string.Empty);
 
             return values.OrderBy(v => v, Comparer<string>.Create(ColumnFilterState.CompareNatural)).ToList();
         }
@@ -9173,6 +9273,12 @@ namespace BreakersOfE
         private static string GetPropertyNameForColumn(
             string columnName, bool isTop)
         {
+            // Per-format legality columns → a marker the filter resolver
+            // (GetFilterValue) turns into a Legality[key].Text lookup.
+            foreach (var fmt in Models.LegalityInfo.Formats)
+                if (columnName == fmt.Header)
+                    return LegalityFilterMarker + fmt.Key;
+
             return columnName switch
             {
                 "Name" => "Name",
@@ -9206,6 +9312,52 @@ namespace BreakersOfE
             };
         }
 
+        // Marker prefix distinguishing a legality "property" from a real one.
+        private const string LegalityFilterMarker = "__legalfilter__";
+
+        /// <summary>
+        /// Resolves a filter value for an item + property name, transparently
+        /// handling the per-format legality columns (whose "property" is the
+        /// marker + format key, read via the Legality indexer) as well as
+        /// ordinary reflected properties. Used by both value-gathering and
+        /// filter-application so legality columns filter like any other.
+        /// </summary>
+        private static string? GetFilterValue(
+            object item, string propName,
+            Dictionary<string, System.Reflection.PropertyInfo?>? propCache = null)
+        {
+            if (propName.StartsWith(LegalityFilterMarker))
+            {
+                if (item is CollectionDisplayRow row)
+                {
+                    string key = propName.Substring(LegalityFilterMarker.Length);
+                    return row.Legality[key].Text;
+                }
+                return null;
+            }
+
+            System.Reflection.PropertyInfo? prop;
+            if (propCache != null)
+            {
+                if (!propCache.TryGetValue(propName, out prop))
+                {
+                    prop = item.GetType().GetProperty(propName,
+                        System.Reflection.BindingFlags.Public |
+                        System.Reflection.BindingFlags.Instance |
+                        System.Reflection.BindingFlags.IgnoreCase);
+                    propCache[propName] = prop;
+                }
+            }
+            else
+            {
+                prop = item.GetType().GetProperty(propName,
+                    System.Reflection.BindingFlags.Public |
+                    System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.IgnoreCase);
+            }
+            return prop?.GetValue(item)?.ToString();
+        }
+
         private void ApplyTopColumnFilters()
         {
             var view = System.Windows.Data.CollectionViewSource
@@ -9215,25 +9367,14 @@ namespace BreakersOfE
 
             if (_topColumnFilters.HasActiveFilters)
             {
-                // Cache reflection per active filter
                 var activeFilters = _topColumnFilters.GetActiveFilters();
                 var propCache = new Dictionary<string, System.Reflection.PropertyInfo?>();
-                foreach (var f in activeFilters)
-                    if (!propCache.ContainsKey(f.PropertyName))
-                        propCache[f.PropertyName] = view.SourceCollection
-                            .Cast<object>().FirstOrDefault()?.GetType()
-                            .GetProperty(f.PropertyName,
-                                System.Reflection.BindingFlags.Public |
-                                System.Reflection.BindingFlags.Instance |
-                                System.Reflection.BindingFlags.IgnoreCase);
 
                 view.Filter = item =>
                 {
                     foreach (var filter in activeFilters)
                     {
-                        if (!propCache.TryGetValue(filter.PropertyName, out var prop) || prop == null)
-                            continue;
-                        string? val = prop.GetValue(item)?.ToString();
+                        string? val = GetFilterValue(item, filter.PropertyName, propCache);
                         if (!filter.Matches(val)) return false;
                     }
                     return true;
@@ -9288,22 +9429,12 @@ namespace BreakersOfE
             {
                 var activeFilters = _bottomColumnFilters.GetActiveFilters();
                 var propCache = new Dictionary<string, System.Reflection.PropertyInfo?>();
-                foreach (var f in activeFilters)
-                    if (!propCache.ContainsKey(f.PropertyName))
-                        propCache[f.PropertyName] = view.SourceCollection
-                            .Cast<object>().FirstOrDefault()?.GetType()
-                            .GetProperty(f.PropertyName,
-                                System.Reflection.BindingFlags.Public |
-                                System.Reflection.BindingFlags.Instance |
-                                System.Reflection.BindingFlags.IgnoreCase);
 
                 view.Filter = item =>
                 {
                     foreach (var filter in activeFilters)
                     {
-                        if (!propCache.TryGetValue(filter.PropertyName, out var prop) || prop == null)
-                            continue;
-                        string? val = prop.GetValue(item)?.ToString();
+                        string? val = GetFilterValue(item, filter.PropertyName, propCache);
                         if (!filter.Matches(val)) return false;
                     }
                     return true;

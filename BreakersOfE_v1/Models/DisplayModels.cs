@@ -1,5 +1,6 @@
 ﻿using BreakersOfE.Services;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
@@ -102,7 +103,11 @@ namespace BreakersOfE.Models
         public string MarketValueDisplay => MarketValue.HasValue ? $"${MarketValue.Value:F2}" : string.Empty;
         public string PriceLowDisplay => PriceLow.HasValue ? $"${PriceLow.Value:F2}" : string.Empty;
 
-        // Legality — stored as bools populated from PoolCard during load
+        // Legality — stored as bools populated from PoolCard during load.
+        // Kept for the pool-grid pill column and KeywordSearchWindow, which
+        // bind/read these directly. The collection grid now uses the richer
+        // per-format columns below (Legality[...]), but these stay so nothing
+        // else breaks.
         public bool IsLegalStandard { get; set; }
         public bool IsLegalModern { get; set; }
         public bool IsLegalPioneer { get; set; }
@@ -110,6 +115,44 @@ namespace BreakersOfE.Models
         public bool IsLegalVintage { get; set; }
         public string LegalitiesJson { get; set; } = string.Empty;
         public string Keywords { get; set; } = string.Empty;
+
+        // ── Per-format legality accessor (drives the new collection columns) ──
+        // Bindable indexer: {Binding Legality[commander].Status} etc.
+        // Reads straight from LegalitiesJson so no extra storage is needed.
+        private LegalityAccessor? _legality;
+        public LegalityAccessor Legality => _legality ??= new LegalityAccessor(this);
+
+        public sealed class LegalityAccessor
+        {
+            private readonly CollectionDisplayRow _row;
+            private readonly Dictionary<string, LegalityCell> _cache = new();
+            public LegalityAccessor(CollectionDisplayRow row) => _row = row;
+
+            public LegalityCell this[string formatKey]
+            {
+                get
+                {
+                    if (!_cache.TryGetValue(formatKey, out var cell))
+                    {
+                        string status = LegalityInfo.RawStatus(_row.LegalitiesJson, formatKey);
+                        cell = new LegalityCell(status);
+                        _cache[formatKey] = cell;
+                    }
+                    return cell;
+                }
+            }
+        }
+
+        // One cell's display data — bound by the grid column's cell template.
+        public sealed class LegalityCell
+        {
+            public LegalityCell(string status) => Status = status;
+            public string Status { get; }
+            public string Text => LegalityInfo.ChipText(Status);
+            public int SortRank => LegalityInfo.SortRank(Status);
+            public System.Windows.Media.Brush Background => LegalityInfo.BackgroundBrush(Status);
+            public System.Windows.Media.Brush Foreground => LegalityInfo.ForegroundBrush(Status);
+        }
 
         public bool IsExpanded { get; set; } = false;
         public bool IsFooter { get; set; } = false;

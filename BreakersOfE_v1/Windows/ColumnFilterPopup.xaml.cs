@@ -142,10 +142,16 @@ namespace BreakersOfE.Windows
 
         private void SyncSelectAllCheckbox()
         {
-            if (_allItems.Count == 0) { ChkSelectAll.IsChecked = false; return; }
-            // State reflects ALL items, not just visible search results
-            bool all = _allItems.All(x => x.IsChecked);
-            bool none = _allItems.All(x => !x.IsChecked);
+            // Reflect the same scope Select All acts on: the currently visible
+            // (search-filtered) items. Previously this checked ALL items while
+            // Select All only toggled visible ones, so the indicator could show
+            // indeterminate right after a Select All on a filtered view.
+            var scope = ValuesListBox.ItemsSource as IEnumerable<ValueItem>
+                        ?? _allItems;
+            var list = scope.ToList();
+            if (list.Count == 0) { ChkSelectAll.IsChecked = false; return; }
+            bool all = list.All(x => x.IsChecked);
+            bool none = list.All(x => !x.IsChecked);
             ChkSelectAll.IsChecked = all ? true : none ? false : null;
         }
 
@@ -165,18 +171,21 @@ namespace BreakersOfE.Windows
 
         private void CommitState()
         {
-            if (MainTabControl.SelectedIndex == 1)
-            {
-                _state.TextValue = TextFilterBox.Text;
-                _state.UseTextFilter = !string.IsNullOrEmpty(_state.TextValue) ||
-                    _state.TextOperator == ColumnFilterOperator.IsBlank ||
-                    _state.TextOperator == ColumnFilterOperator.IsNotBlank;
-                return;
-            }
+            // Commit based on stored intent, NOT which tab happens to be visible.
+            // The previous version branched on MainTabControl.SelectedIndex, so
+            // committing from the "wrong" tab could leave the other mode's state
+            // stale (the clear-filter desync bug).
 
-            _state.UseTextFilter = false;
-            _state.SelectedValues.Clear();
+            // Always capture the current text-filter fields.
+            _state.TextValue = TextFilterBox.Text;
+            bool textActive =
+                !string.IsNullOrEmpty(_state.TextValue) ||
+                _state.TextOperator == ColumnFilterOperator.IsBlank ||
+                _state.TextOperator == ColumnFilterOperator.IsNotBlank;
+
+            // Always capture the current checkbox selection.
             bool allChecked = _allItems.All(x => x.IsChecked);
+            _state.SelectedValues.Clear();
             if (allChecked)
             {
                 _state.AllSelected = true;
@@ -187,6 +196,10 @@ namespace BreakersOfE.Windows
                 foreach (var item in _allItems.Where(x => x.IsChecked))
                     _state.SelectedValues.Add(item.ActualValue);
             }
+
+            // A text filter takes precedence only when the user actually has one.
+            // Otherwise the column filters by checked values (or nothing).
+            _state.UseTextFilter = textActive;
         }
 
         // ── Cancel — revert to snapshot, close ──────────────────────────
@@ -257,10 +270,22 @@ namespace BreakersOfE.Windows
 
         private void BtnClearTextFilter_Click(object sender, RoutedEventArgs e)
         {
+            // Clear the text-filter portion of the stored state — not just the
+            // textbox — and refresh so the grid updates immediately. Previously
+            // this only blanked the textbox, leaving the real filter active and
+            // giving false "cleared" feedback.
             _busy = true;
             TextFilterBox.Text = string.Empty;
             OperatorCombo.SelectedIndex = 0;
             _busy = false;
+
+            _state.UseTextFilter = false;
+            _state.TextValue = string.Empty;
+            _state.TextOperator = ColumnFilterOperator.Contains;
+
+            // If no value-checkbox filter is active either, the column is now
+            // fully clear. Reflect that and refresh the grid live.
+            FilterChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 }

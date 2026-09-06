@@ -8,7 +8,7 @@
 ; ============================================================
 
 #define AppName      "Breakers of E"
-#define AppVersion   "1.2.2"
+#define AppVersion   "1.2.3"
 #define AppPublisher "Breakers Of E"
 #define AppExeName   "BreakersOfE.exe"
 #define AppURL       ""
@@ -88,7 +88,7 @@ begin
   DownloadCheckBox.Top := 16;
   DownloadCheckBox.Width := DownloadPage.SurfaceWidth;
   DownloadCheckBox.Height := 24;
-  DownloadCheckBox.Caption := 'Download card database on first launch (~100,000 cards from Scryfall)';
+  DownloadCheckBox.Caption := 'Download card database on first launch (~98,000 cards from Scryfall)';
   DownloadCheckBox.Checked := True;
 
   with TNewStaticText.Create(WizardForm) do
