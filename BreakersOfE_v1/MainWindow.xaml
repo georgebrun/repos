@@ -331,7 +331,6 @@
                 <!-- GROUP 4: FILTER & SEARCH -->
                 <Button Name="BtnFilter"         Style="{DynamicResource ToolbarButtonStyle}" Content="&#xE16E;" ToolTip="Filter Cards"                  Click="BtnFilter_Click"         Margin="2,2"/>
                 <Button Name="BtnAdvancedFilter" Style="{DynamicResource ToolbarButtonStyle}" Content="&#xE16F;" ToolTip="Advanced Filter"               Click="BtnAdvancedFilter_Click" Margin="2,2"/>
-                <Button Name="BtnSearch"         Style="{DynamicResource ToolbarButtonStyle}" Content="&#xE11A;" ToolTip="Search for Card"               Click="BtnSearch_Click"         Margin="2,2"/>
                 <TextBox Name="SearchBox"
                          PreviewKeyDown="SearchBox_PreviewKeyDown"
                          Style="{DynamicResource BaseTextBoxStyle}"

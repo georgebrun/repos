@@ -2486,6 +2486,47 @@ namespace BreakersOfE
             e.Handled = true;
         }
 
+        /// <summary>
+        /// Does a deck card refer to the same card as this collection row?
+        ///
+        /// Identity-first matching to prevent the over-match bug where every
+        /// deck appeared under every card:
+        ///   1. If both have a ScryfallId, they must be equal (definitive).
+        ///   2. Else if both have a real PoolId (>0), they must be equal.
+        ///   3. Name is only a fallback when there is NO usable identity on
+        ///      either side, and only when the name is actually present.
+        /// A blank/absent field never counts as a match.
+        /// </summary>
+        private static bool DeckCardMatchesRow(
+            Models.DeckCard c, CollectionDisplayRow row)
+        {
+            bool rowHasSf = !string.IsNullOrWhiteSpace(row.ScryfallId);
+            bool cardHasSf = !string.IsNullOrWhiteSpace(c.ScryfallId);
+
+            // 1. ScryfallId is the definitive key when available on both sides.
+            if (rowHasSf && cardHasSf)
+                return string.Equals(c.ScryfallId, row.ScryfallId,
+                    StringComparison.OrdinalIgnoreCase);
+
+            // 2. Fall back to PoolId only when both are real (>0).
+            bool rowHasPool = row.PoolId > 0;
+            bool cardHasPool = c.PoolId > 0;
+            if (rowHasPool && cardHasPool)
+                return c.PoolId == row.PoolId;
+
+            // 3. Last resort: name match, only when neither side has ANY
+            //    usable identity key and the name is genuinely present.
+            //    (Prevents blank-vs-blank and identity-mismatch false hits.)
+            bool anyIdentity = rowHasSf || cardHasSf || rowHasPool || cardHasPool;
+            if (!anyIdentity &&
+                !string.IsNullOrWhiteSpace(row.Name) &&
+                !string.IsNullOrWhiteSpace(c.Name))
+                return string.Equals(c.Name, row.Name,
+                    StringComparison.OrdinalIgnoreCase);
+
+            return false;
+        }
+
         private void LoadDeckUsageForRow(CollectionDisplayRow row)
         {
             row.DeckUsageRows.Clear();
@@ -2497,11 +2538,7 @@ namespace BreakersOfE
             {
                 checkedNames.Add(deck.Name);
 
-                var matches = deck.Cards.Where(c =>
-                    (!string.IsNullOrEmpty(row.ScryfallId) && c.ScryfallId == row.ScryfallId) ||
-                    c.Name.Equals(row.Name,
-                        StringComparison.OrdinalIgnoreCase) ||
-                    (row.PoolId > 0 && c.PoolId == row.PoolId))
+                var matches = deck.Cards.Where(c => DeckCardMatchesRow(c, row))
                     .ToList();
 
                 foreach (var card in matches)
@@ -2541,11 +2578,7 @@ namespace BreakersOfE
                         // Skip if already covered by open deck
                         if (checkedNames.Contains(deck.Name)) continue;
 
-                        var matches = deck.Cards.Where(c =>
-                            (!string.IsNullOrEmpty(row.ScryfallId) && c.ScryfallId == row.ScryfallId) ||
-                            c.Name.Equals(row.Name,
-                                StringComparison.OrdinalIgnoreCase) ||
-                            (row.PoolId > 0 && c.PoolId == row.PoolId))
+                        var matches = deck.Cards.Where(c => DeckCardMatchesRow(c, row))
                             .ToList();
 
                         foreach (var card in matches)
@@ -6135,46 +6168,64 @@ namespace BreakersOfE
         private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key != Key.Enter) return;
-            if (TopDataGrid.SelectedItem == null) return;
-
-            // Enter adds the selected card to collection or deck
-            bool isDeckMode = _currentMode == "PoolToDeck" ||
-                              _currentMode == "CollectionToDeck" ||
-                              _currentMode == "DeckToCollection";
-
-            if (isDeckMode)
-                AddFromTopSelectionToDeck(foil: false);
-            else
-                AddFromTopSelection(foil: false, qty: 1);
-
             e.Handled = true;
 
-            RestoreFocus();
-        }
+            var grid = _bottomTableHasFocus ? BottomDataGrid : TopDataGrid;
 
-        private void BtnSearch_Click(object sender, RoutedEventArgs e)
-        {
-            var win = new BreakersOfE.Windows.SearchForCardWindow
-            { Owner = this };
-
-            if (win.ShowDialog() != true) return;
-
-            string name = win.CardName;
-            bool pool = win.SearchInPool;
-            var grid = pool ? TopDataGrid : BottomDataGrid;
-
-            // Drive the same search path as the inline search box so matches
-            // follow the table's current sort order and land under the headers.
-            _bottomTableHasFocus = !pool;
-            SearchBox.Text = name;          // also updates _lastSearchTerm via handler
-            RunTableSearch(grid);
-
-            if (_searchMatches.Count == 0)
+            // If the debounce timer hasn't fired yet (fast type-then-Enter),
+            // run the search now so we have matches to land on.
+            if (_searchDebounceTimer != null && _searchDebounceTimer.IsEnabled)
             {
-                MessageBox.Show($"Card '{name}' not found.",
-                    "Search", MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                _searchDebounceTimer.Stop();
+                RunTableSearch(grid);
             }
+            else if (_lastSearchTerm != SearchBox.Text.Trim())
+            {
+                RunTableSearch(grid);
+            }
+
+            // Prefer the current search match; fall back to whatever's selected.
+            object? target = null;
+            if (_searchMatches.Count > 0 &&
+                _searchMatchIndex >= 0 && _searchMatchIndex < _searchMatches.Count)
+                target = _searchMatches[_searchMatchIndex];
+            target ??= grid.SelectedItem;
+
+            if (target == null) return; // no match — nothing to focus
+
+            grid.SelectedItem = target;
+            grid.ScrollIntoView(target);
+
+            // Hand keyboard control to the grid. Arrow-key navigation in a
+            // DataGrid requires a focused CELL and a set CurrentCell — focusing
+            // the row alone is not enough. Do it after layout so the (possibly
+            // virtualized) container exists.
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                grid.UpdateLayout();
+                grid.ScrollIntoView(target);
+
+                if (grid.ItemContainerGenerator.ContainerFromItem(target)
+                        is not System.Windows.Controls.DataGridRow dgRow)
+                {
+                    grid.Focus();
+                    return;
+                }
+
+                // Find the first focusable cell in the row and make it current.
+                var cell = GetFirstCell(dgRow);
+                if (cell != null)
+                {
+                    grid.CurrentCell = new DataGridCellInfo(cell);
+                    cell.Focus();
+                    Keyboard.Focus(cell);
+                }
+                else
+                {
+                    dgRow.Focus();
+                    Keyboard.Focus(dgRow);
+                }
+            }), System.Windows.Threading.DispatcherPriority.ContextIdle);
         }
 
         private void NavigateMatch(bool forward)
@@ -6201,7 +6252,9 @@ namespace BreakersOfE
         {
             if (string.IsNullOrEmpty(_lastSearchTerm))
             {
-                BtnSearch_Click(sender, e);
+                // No active search — put the cursor in the search box so the
+                // user can type (the standalone search popup was removed).
+                SearchBox.Focus();
                 return;
             }
             NavigateMatch(forward: true);
@@ -8434,7 +8487,7 @@ namespace BreakersOfE
                 http.Timeout = TimeSpan.FromSeconds(5);
 
                 var json = await http.GetStringAsync(
-                    "https://api.github.com/repos/georgebrun/BreakersOfE/releases/latest");
+                    "https://api.github.com/repos/georgebrun/repos/releases/latest");
 
                 var doc = System.Text.Json.JsonDocument.Parse(json);
                 string tag = doc.RootElement
@@ -8471,10 +8524,24 @@ namespace BreakersOfE
                         MessageBoxImage.Information);
                 }
             }
-            catch
+            catch (System.Net.Http.HttpRequestException hex)
+            {
+                // Show the actual reason so update-check failures are diagnosable
+                // (404 = wrong/private repo or no releases; 403 = rate-limited).
+                MessageBox.Show(
+                    "Could not check for updates.\n\n" +
+                    $"GitHub returned: {(int?)hex.StatusCode} {hex.StatusCode}\n\n" +
+                    "If this says 404, the release feed URL or repository may be " +
+                    "wrong or private, or there are no published releases yet.",
+                    "Update Check Failed",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+            catch (Exception ex)
             {
                 MessageBox.Show(
-                    "Could not check for updates. Please check your internet connection.",
+                    "Could not check for updates.\n\n" +
+                    $"{ex.GetType().Name}: {ex.Message}",
                     "Update Check Failed",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
@@ -8494,7 +8561,7 @@ namespace BreakersOfE
                 http.Timeout = TimeSpan.FromSeconds(5);
 
                 var json = await http.GetStringAsync(
-                    "https://api.github.com/repos/georgebrun/BreakersOfE/releases/latest");
+                    "https://api.github.com/repos/georgebrun/repos/releases/latest");
 
                 var doc = System.Text.Json.JsonDocument.Parse(json);
                 string tag = doc.RootElement

@@ -14,6 +14,7 @@ namespace BreakersOfE.Windows
         private CancellationTokenSource? _cts;
         private bool _isRunning = false;
         private bool _priceOnly = false;
+        private bool _autoStart = false;
 
         // Animation storyboards
         private Storyboard? _dot1;
@@ -26,7 +27,7 @@ namespace BreakersOfE.Windows
 
         public ImportResult? Result { get; private set; }
 
-        public UpdateDatabaseWindow(bool priceOnly = false)
+        public UpdateDatabaseWindow(bool priceOnly = false, bool autoStart = false)
         {
             InitializeComponent();
             _priceOnly = priceOnly;
@@ -42,6 +43,12 @@ namespace BreakersOfE.Windows
             _dot1 = (Storyboard)Resources["PulseDot1"];
             _dot2 = (Storyboard)Resources["PulseDot2"];
             _dot3 = (Storyboard)Resources["PulseDot3"];
+
+            // When launched by the installer (--update-db), run automatically
+            // instead of waiting for the user to click Start.
+            _autoStart = autoStart;
+            if (_autoStart)
+                Loaded += (_, _) => StartButton_Click(this, new RoutedEventArgs());
         }
 
         // ── Animation ─────────────────────────────────────────────────────────
@@ -142,9 +149,14 @@ namespace BreakersOfE.Windows
                 }
                 else
                 {
-                    var report = new VerificationReportWindow(Result)
-                    { Owner = this };
-                    report.ShowDialog();
+                    // In installer auto-start mode, skip the modal verification
+                    // report so the unattended flow can complete on its own.
+                    if (!_autoStart)
+                    {
+                        var report = new VerificationReportWindow(Result)
+                        { Owner = this };
+                        report.ShowDialog();
+                    }
                     DialogResult = true;
                     Close();
                 }

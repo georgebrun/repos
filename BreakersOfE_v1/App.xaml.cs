@@ -30,7 +30,7 @@ namespace BreakersOfE
             if (e.Args != null && e.Args.Any(a =>
                 a.Equals("--update-db", System.StringComparison.OrdinalIgnoreCase)))
             {
-                var win = new UpdateDatabaseWindow();
+                var win = new UpdateDatabaseWindow(autoStart: true);
                 win.ShowDialog();
                 Shutdown();
                 return;
