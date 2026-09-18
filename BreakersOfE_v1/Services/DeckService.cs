@@ -21,10 +21,24 @@ namespace BreakersOfE.Services
             if (string.IsNullOrEmpty(deck.FilePath))
                 deck.FilePath = AppFolderService.DeckFilePath(deck.Name);
 
+            deck.EnsureDeckId();          // stamp a stable GUID if missing
             deck.Modified = DateTime.Now;
             string json = JsonSerializer.Serialize(deck, _jsonOptions);
             File.WriteAllText(deck.FilePath, json);
             deck.IsModified = false;
+
+            // Re-sync deck usage ONLY if this deck already has usage records
+            // (i.e. it was previously entered into the collection). This keeps a
+            // tracked deck's usage + used-counts correct no matter HOW it was
+            // edited (add, remove, qty change, any code path) — the save is the
+            // universal chokepoint. A pool-only deck that was never entered has
+            // no usage rows, so it stays untouched and never falsely appears.
+            try
+            {
+                if (DeckUsageService.HasUsage(deck.EnsureDeckId()))
+                    DeckUsageService.SyncDeck(deck);
+            }
+            catch { /* never let usage sync block saving the deck */ }
         }
 
         public static void SaveAs(Deck deck, string filePath)
@@ -37,6 +51,39 @@ namespace BreakersOfE.Services
         {
             foreach (var deck in decks.Where(d => d.IsModified))
                 Save(deck);
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        // FIND BY DECK ID
+        // ════════════════════════════════════════════════════════════════════
+        /// <summary>
+        /// Searches the Decks folder (recursively, to include the user's "Added"
+        /// subfolder and any nesting) for a .deck file whose internal DeckId
+        /// matches. Returns the file path, or null if no file with that id exists.
+        /// Used by Reconcile Deck Usage to tell whether a deck referenced by the
+        /// collection still exists on disk. This verifies EXISTENCE of a known
+        /// deck — it does not derive usage from files.
+        /// </summary>
+        public static string? FindDeckFileById(string deckId)
+        {
+            if (string.IsNullOrWhiteSpace(deckId)) return null;
+            string folder = AppFolderService.DecksFolder;
+            if (!Directory.Exists(folder)) return null;
+
+            foreach (var file in Directory.EnumerateFiles(
+                folder, "*.deck", SearchOption.AllDirectories))
+            {
+                try
+                {
+                    string json = File.ReadAllText(file);
+                    var deck = JsonSerializer.Deserialize<Deck>(json);
+                    if (deck != null &&
+                        string.Equals(deck.DeckId, deckId, StringComparison.OrdinalIgnoreCase))
+                        return file;
+                }
+                catch { /* skip unreadable file */ }
+            }
+            return null;
         }
 
         // ════════════════════════════════════════════════════════════════════

@@ -208,17 +208,33 @@ namespace BreakersOfE
 
         private void BtnAdd4ToDeck_Click(object sender, RoutedEventArgs e)
         {
-            if (_activeDeck?.DeckType != DeckType.Standard) return;
+            if (_activeDeck == null)
+            {
+                MessageBox.Show("No deck is open. Create or open a deck first.",
+                    "No Deck Open", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            if (_activeDeck.DeckType != DeckType.Standard)
+            {
+                MessageBox.Show(
+                    "\"Add 4\" only applies to Standard decks. Commander decks are " +
+                    "limited to a single copy of each card.",
+                    "Not a Standard Deck",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
 
             int added = 0;
             string lastError = string.Empty;
             for (int i = 0; i < 4; i++)
             {
-                // Always suppress internal errors — we show one at the end
+                // Suppress per-iteration errors — we show one summary at the end
                 bool success = AddFromTopSelectionToDeck(foil: false,
                     suppressError: true, out string error);
                 if (success)
+                {
                     added++;
+                }
                 else
                 {
                     lastError = error;
@@ -226,12 +242,14 @@ namespace BreakersOfE
                 }
             }
 
-            if (added > 0)
-
-                // Show one error if we stopped short
-                if (!string.IsNullOrEmpty(lastError))
-                    MessageBox.Show(lastError, "Cannot Add Card",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+            // Always report if we couldn't add all 4 (including when 0 were added).
+            if (added < 4 && !string.IsNullOrEmpty(lastError))
+            {
+                MessageBox.Show(
+                    $"Added {added} of 4 cop{(added == 1 ? "y" : "ies")}.\n\n{lastError}",
+                    "Could Not Add 4",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         private void BtnAddFoilToDeck_Click(object sender, RoutedEventArgs e)
@@ -242,14 +260,20 @@ namespace BreakersOfE
             if (_activeDeck == null) return;
             if (BottomDataGrid.SelectedItem is DeckCard card && !card.IsFooter)
             {
-                int qty = card.TotalQuantity;
-                DeckService.RemoveCard(_activeDeck, card, true);
-                RefreshActiveDeckGrid();
-                UpdateDeckTabTitle(_activeDeck!);
-                UpdateDeckSummary(_activeDeck);
-                UpdateUsedCount(card.PoolId, -qty);
-                AutoSaveDeck(_activeDeck!);
-                if (_currentMode == "CollectionToDeck") LoadTopTable_CollectionForDeck();
+                bool foil;
+                if (card.Quantity > 0 && card.FoilQuantity > 0)
+                {
+                    var pick = PickFinishToRemove(card.Name, card.Quantity, card.FoilQuantity, "Remove");
+                    if (pick == null) return;
+                    foil = pick.Value;
+                }
+                else
+                {
+                    foil = card.FoilQuantity > 0;
+                }
+
+                DeckService.RemoveCard(_activeDeck, card, foil, removeAll: false);
+                OnDeckCardChanged();
             }
         }
 
@@ -260,10 +284,7 @@ namespace BreakersOfE
             {
                 card.Quantity++;
                 _activeDeck.IsModified = true;
-                RefreshActiveDeckGrid();
-                UpdateDeckSummary(_activeDeck);
-                AutoSaveDeck(_activeDeck!);
-                if (_currentMode == "CollectionToDeck") LoadTopTable_CollectionForDeck();
+                OnDeckCardChanged();
             }
         }
 
@@ -273,16 +294,26 @@ namespace BreakersOfE
             if (GetActiveDeckGrid()?.SelectedItem is DeckCard card && !card.IsFooter)
             {
                 if (card.TotalQuantity <= 1)
+                {
+                    // Last copy — remove the card entirely
                     DeckService.RemoveCard(_activeDeck, card, true);
+                }
+                else if (card.Quantity > 0 && card.FoilQuantity > 0)
+                {
+                    var pick = PickFinishToRemove(card.Name, card.Quantity, card.FoilQuantity, "Decrease");
+                    if (pick == null) return;
+                    if (pick.Value)
+                        card.FoilQuantity--;
+                    else
+                        card.Quantity--;
+                }
                 else if (card.Quantity > 0)
                     card.Quantity--;
                 else if (card.FoilQuantity > 0)
                     card.FoilQuantity--;
+
                 _activeDeck.IsModified = true;
-                RefreshActiveDeckGrid();
-                UpdateDeckSummary(_activeDeck);
-                AutoSaveDeck(_activeDeck!);
-                if (_currentMode == "CollectionToDeck") LoadTopTable_CollectionForDeck();
+                OnDeckCardChanged();
             }
         }
 
@@ -444,9 +475,12 @@ namespace BreakersOfE
                     deckCard = DeckService.FromPoolCard(pc);
                     break;
                 case CollectionDisplayRow cr:
+                    // Physical-inventory availability, per finish, from DeckUsage
+                    // (owned − committed-across-all-decks). Queries DB for owned.
+                    var (nfAvail, fAvail) =
+                        Services.DeckUsageService.GetAvailableByFinish(cr.ScryfallId);
+
                     // Auto-switch to foil if non-foil requested but unavailable
-                    int nfAvail = Math.Max(0, cr.Quantity - cr.UsedCount);
-                    int fAvail = cr.FoilQuantity;
                     if (!foil && nfAvail == 0 && fAvail > 0) foil = true;
 
                     // Block if no copies available (foil or non-foil)
@@ -454,17 +488,44 @@ namespace BreakersOfE
                     {
                         errorMessage =
                             $"No available copies of '{cr.Name}' left in your collection.\n" +
-                            $"All {cr.Quantity + cr.FoilQuantity} cop{(cr.Quantity + cr.FoilQuantity == 1 ? "y is" : "ies are")} already used in decks.";
+                            "All copies are already used in decks.";
                         if (!suppressError)
                             MessageBox.Show(errorMessage, "No Copies Available",
                                 MessageBoxButton.OK, MessageBoxImage.Warning);
                         return false;
                     }
 
+                    // Per-finish physical block: refuse a finish you've run out
+                    // of even if the other finish still has copies (prevents
+                    // committing more foils / non-foils than you own).
+                    if (_currentMode == "CollectionToDeck")
+                    {
+                        if (foil && fAvail <= 0)
+                        {
+                            errorMessage =
+                                $"No available FOIL copies of '{cr.Name}' left — all foils used in decks.";
+                            if (!suppressError)
+                                MessageBox.Show(errorMessage, "No Foil Copies Available",
+                                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                            return false;
+                        }
+                        if (!foil && nfAvail <= 0)
+                        {
+                            errorMessage =
+                                $"No available non-foil copies of '{cr.Name}' left — all non-foils used in decks.";
+                            if (!suppressError)
+                                MessageBox.Show(errorMessage, "No Copies Available",
+                                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                            return false;
+                        }
+                    }
+
                     deckCard = DeckService.FromCollectionRow(cr);
 
-                    // Prompt if card already in deck
-                    if (_currentMode == "CollectionToDeck" && _activeDeck != null)
+                    // Prompt if card already in deck (skip during bulk/suppressed
+                    // adds like "Add 4" so it doesn't ask 3 times in a row).
+                    if (_currentMode == "CollectionToDeck" && _activeDeck != null
+                        && !suppressError)
                     {
                         var existing = _activeDeck.Cards.FirstOrDefault(c =>
                             c.PoolId == deckCard.PoolId &&
@@ -517,6 +578,22 @@ namespace BreakersOfE
             RefreshActiveDeckGrid();
             UpdateDeckTabTitle(_activeDeck!);
             UpdateDeckSummary(_activeDeck);
+
+            // Record deck usage ONLY when the collection is involved. In
+            // CollectionToDeck we pulled a copy from the collection, so this
+            // deck now uses it. In PoolToDeck the collection is NOT touched, so
+            // no usage is recorded (that's why pool-built decks never appear in
+            // a card's "Used in Decks").
+            if (_currentMode == "CollectionToDeck")
+            {
+                DeckUsageService.SyncDeck(_activeDeck!);
+                if (deckCard != null && !string.IsNullOrWhiteSpace(deckCard.ScryfallId))
+                {
+                    DeckUsageService.IncrementDeckEntry(
+                        _activeDeck!.EnsureDeckId(), deckCard.ScryfallId, foil);
+                    DeckUsageService.RecomputeUsedForCard(deckCard.ScryfallId);
+                }
+            }
 
             // Show the just-added card in the deck table (bottom) so its quantity
             // is visible without scrolling. Only when the deck is the bottom table
@@ -1082,10 +1159,12 @@ namespace BreakersOfE
                 SystemColors.InactiveSelectionHighlightBrushKey,
                 System.Windows.Media.Brushes.Transparent);
 
-            // Context menu
+            // Context menu — explicit per-finish removal
             var ctx = new ContextMenu();
-            var removeOne = new MenuItem { Header = "Remove 1 Copy" };
-            removeOne.Click += DeckCtxRemove1_Click;
+            var removeOneNF = new MenuItem { Header = "Remove 1 Non-Foil" };
+            removeOneNF.Click += DeckCtxRemove1NonFoil_Click;
+            var removeOneF = new MenuItem { Header = "Remove 1 Foil" };
+            removeOneF.Click += DeckCtxRemove1Foil_Click;
             var removeAll = new MenuItem { Header = "Remove All Copies" };
             removeAll.Click += DeckCtxRemoveAll_Click;
             var setCommander = new MenuItem { Header = "Set as Commander" };
@@ -1100,7 +1179,8 @@ namespace BreakersOfE
             setSideboard.Click += DeckCtxMoveSideboard_Click;
             var setMainboard = new MenuItem { Header = "Move to Mainboard" };
             setMainboard.Click += DeckCtxMoveMainboard_Click;
-            ctx.Items.Add(removeOne);
+            ctx.Items.Add(removeOneNF);
+            ctx.Items.Add(removeOneF);
             ctx.Items.Add(removeAll);
             ctx.Items.Add(new Separator());
             ctx.Items.Add(setCommander);
@@ -1663,7 +1743,8 @@ namespace BreakersOfE
         }
 
         private void AddCardToActiveDeck(CollectionDisplayRow row,
-            DeckCardCategory category = DeckCardCategory.Mainboard)
+            DeckCardCategory category = DeckCardCategory.Mainboard,
+            bool? requestFoil = null)
         {
             if (_activeDeck == null)
             {
@@ -1673,22 +1754,57 @@ namespace BreakersOfE
                 return;
             }
 
-            // Auto-foil if only foil copies available (non-foil used up)
-            int nonFoilAvail = Math.Max(0, row.Quantity - row.UsedCount);
-            int foilAvail = row.FoilQuantity; // foil copies aren't tracked via UsedCount
-            bool foil = nonFoilAvail == 0 && foilAvail > 0;
+            // Physical-inventory availability, per finish, from DeckUsage:
+            //   available = owned − committed-across-all-decks.
+            // Queries DB for total owned per finish across all per-finish rows.
+            var (nonFoilAvail, foilAvail) =
+                Services.DeckUsageService.GetAvailableByFinish(row.ScryfallId);
 
-            // Block if no copies available (neither foil nor non-foil)
+            // Foil decision:
+            //   • If the user explicitly requested a finish (Shift = foil),
+            //     honor it (the per-finish block below still enforces ownership).
+            //   • If the selected row IS a foil row, default to foil — the user
+            //     picked that row, so they mean that finish.
+            //   • Otherwise auto-foil only when non-foil is used up but foil remains.
+            bool rowIsFoil = row.Finish == Models.CardFinish.Foil;
+            bool foil = requestFoil ?? (rowIsFoil ? true : (nonFoilAvail == 0 && foilAvail > 0));
+
+            // Block if no copies of EITHER finish remain.
             if (_currentMode == "CollectionToDeck" && nonFoilAvail <= 0 && foilAvail <= 0)
             {
                 MessageBox.Show(
                     $"You have no available copies of '{row.Name}' left in your collection.\n" +
-                    $"All {row.Quantity + row.FoilQuantity} cop{(row.Quantity + row.FoilQuantity == 1 ? "y is" : "ies are")} already used in decks.",
+                    "All copies are already used in decks.",
                     "No Copies Available",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
                 RestoreFocus();
                 return;
+            }
+
+            // Per-finish physical block: refuse to commit a finish you've run
+            // out of, even if the OTHER finish still has copies. This is what
+            // prevents committing more foils (or non-foils) than you own.
+            if (_currentMode == "CollectionToDeck")
+            {
+                if (foil && foilAvail <= 0)
+                {
+                    MessageBox.Show(
+                        $"You have no available FOIL copies of '{row.Name}' left — all foils used in decks.",
+                        "No Foil Copies Available",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    RestoreFocus();
+                    return;
+                }
+                if (!foil && nonFoilAvail <= 0)
+                {
+                    MessageBox.Show(
+                        $"You have no available non-foil copies of '{row.Name}' left — all non-foils used in decks.",
+                        "No Copies Available",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    RestoreFocus();
+                    return;
+                }
             }
 
             var deckCard = DeckService.FromCollectionRow(row);
@@ -1736,6 +1852,20 @@ namespace BreakersOfE
             AutoSaveDeck(_activeDeck!);
             ScrollBottomToPoolId(row.PoolId);
 
+            // Record deck usage — collection is involved in CollectionToDeck.
+            if (_currentMode == "CollectionToDeck")
+            {
+                DeckUsageService.SyncDeck(_activeDeck!);
+                // SyncDeck rebuilds the deck's usage rows but doesn't touch
+                // the per-deck entered count. Increment it so UsedCount
+                // (derived from EnteredNonFoil/EnteredFoil) reflects the add.
+                if (!string.IsNullOrWhiteSpace(row.ScryfallId))
+                    DeckUsageService.IncrementDeckEntry(
+                        _activeDeck!.EnsureDeckId(), row.ScryfallId, foil);
+                // Recompute UsedCount from the now-updated entered counts.
+                DeckUsageService.RecomputeUsedForCard(row.ScryfallId);
+            }
+
             // Refresh both grids and restore bottom selection/image
             if (_currentMode == "CollectionToDeck")
             {
@@ -1743,29 +1873,42 @@ namespace BreakersOfE
                 // the entire collection (preserves column widths, scroll, etc.)
                 if (TopDataGrid.ItemsSource is List<CollectionDisplayRow> topRows)
                 {
-                    var updated = topRows.FirstOrDefault(r => r.PoolId == row.PoolId);
-                    if (updated != null)
-                    {
-                        // Re-read the used count from DB
-                        using var cdb = new Data.CollectionDbContext();
-                        var entry = cdb.CollectionEntries.AsNoTracking()
-                            .FirstOrDefault(e => e.PoolId == row.PoolId);
-                        if (entry != null)
-                        {
-                            updated.UsedCount = entry.UsedCount;
-                        }
-                        TopDataGrid.Items.Refresh();
-                        TopDataGrid.SelectedItem = updated;
-                        TopDataGrid.ScrollIntoView(updated);
-                        _ = HandleSelectionAsync(updated);
+                    // Per-finish: multiple rows may share the same ScryfallId
+                    // (one per finish). Update ALL of them so UsedCount and the
+                    // nested table stay correct regardless of which row was selected.
+                    var affectedRows = topRows
+                        .Where(r => r.ScryfallId == row.ScryfallId)
+                        .ToList();
 
-                        // Update summary
-                        UpdateTopSummary("Collection",
-                            nonFoil: topRows.Sum(r => r.Quantity),
-                            foil: topRows.Sum(r => r.FoilQuantity),
-                            total: topRows.Sum(r => r.Quantity + r.FoilQuantity),
-                            value: topRows.Sum(r => r.TotalValue));
+                    using var cdb = new Data.CollectionDbContext();
+                    foreach (var affected in affectedRows)
+                    {
+                        var entry = cdb.CollectionEntries.AsNoTracking()
+                            .FirstOrDefault(e => e.ScryfallId == affected.ScryfallId
+                                              && e.Finish == affected.Finish);
+                        if (entry != null)
+                            affected.UsedCount = entry.UsedCount;
+
+                        LoadDeckUsageForRow(affected);
                     }
+
+                    var selected = affectedRows.FirstOrDefault(r => r.Finish == row.Finish)
+                                ?? affectedRows.FirstOrDefault();
+
+                    TopDataGrid.Items.Refresh();
+                    if (selected != null)
+                    {
+                        TopDataGrid.SelectedItem = selected;
+                        TopDataGrid.ScrollIntoView(selected);
+                        _ = HandleSelectionAsync(selected);
+                    }
+
+                    // Update summary (per-finish: each row is one finish)
+                    UpdateTopSummary("Collection",
+                        nonFoil: topRows.Where(r => r.Finish == Models.CardFinish.NonFoil).Sum(r => r.Quantity),
+                        foil: topRows.Where(r => r.Finish != Models.CardFinish.NonFoil).Sum(r => r.Quantity),
+                        total: topRows.Sum(r => r.Quantity),
+                        value: topRows.Sum(r => r.RowValue));
                 }
                 RestoreFocus();
             }
@@ -1780,10 +1923,12 @@ namespace BreakersOfE
             BottomDataGrid.PreviewKeyDown += DeckGrid_PreviewKeyDown;
             BottomDataGrid.CellEditEnding += DeckGrid_CellEditEnding;
 
-            // Swap context menu to deck version
+            // Swap context menu to deck version — explicit per-finish removal
             var ctx = new ContextMenu();
-            var removeOne = new MenuItem { Header = "Remove 1 Copy" };
-            removeOne.Click += DeckCtxRemove1_Click;
+            var removeOneNF = new MenuItem { Header = "Remove 1 Non-Foil" };
+            removeOneNF.Click += DeckCtxRemove1NonFoil_Click;
+            var removeOneF = new MenuItem { Header = "Remove 1 Foil" };
+            removeOneF.Click += DeckCtxRemove1Foil_Click;
             var removeAll = new MenuItem { Header = "Remove All Copies" };
             removeAll.Click += DeckCtxRemoveAll_Click;
             var setSideboard = new MenuItem { Header = "Move to Sideboard" };
@@ -1796,7 +1941,8 @@ namespace BreakersOfE
             removeCommander.Click += DeckCtxRemoveCommander_Click;
             var toggleType = new MenuItem();
             toggleType.Click += DeckCtxToggleDeckType_Click;
-            ctx.Items.Add(removeOne);
+            ctx.Items.Add(removeOneNF);
+            ctx.Items.Add(removeOneF);
             ctx.Items.Add(removeAll);
             ctx.Items.Add(new Separator());
             ctx.Items.Add(setSideboard);
@@ -1837,34 +1983,45 @@ namespace BreakersOfE
 
             if (_currentMode == "CollectionToTradeBinder")
             {
-                var rem = new MenuItem { Header = "Remove from Trade Binder" };
-                rem.Click += (s, e) => {
+                var rem1 = new MenuItem { Header = "Remove 1 from Trade Binder" };
+                rem1.Click += (s, e) => {
                     if (BottomDataGrid.SelectedItem is CollectionDisplayRow r)
-                        RemoveFromTradeBinderRow(r);
+                        RemoveFromTradeBinderRow(r, 1, false);
                 };
-                ctx.Items.Add(rem);
+                var remAll = new MenuItem { Header = "Remove All from Trade Binder" };
+                remAll.Click += (s, e) => {
+                    if (BottomDataGrid.SelectedItem is CollectionDisplayRow r)
+                        RemoveFromTradeBinderRow(r, 0, true);
+                };
+                ctx.Items.Add(rem1);
+                ctx.Items.Add(new Separator());
+                ctx.Items.Add(remAll);
             }
             else if (_currentMode == "PoolToWantList")
             {
-                var rem = new MenuItem { Header = "Remove from Want List" };
-                rem.Click += (s, e) => {
+                var rem1 = new MenuItem { Header = "Remove 1 from Want List" };
+                rem1.Click += (s, e) => {
                     if (BottomDataGrid.SelectedItem is CollectionDisplayRow r)
-                        RemoveFromWantListRow(r);
+                        RemoveFromWantListRow(r, 1, false);
                 };
-                ctx.Items.Add(rem);
+                var remAll = new MenuItem { Header = "Remove All from Want List" };
+                remAll.Click += (s, e) => {
+                    if (BottomDataGrid.SelectedItem is CollectionDisplayRow r)
+                        RemoveFromWantListRow(r, 0, true);
+                };
+                ctx.Items.Add(rem1);
+                ctx.Items.Add(new Separator());
+                ctx.Items.Add(remAll);
             }
             else
             {
-                var r1nf = new MenuItem { Header = "Remove 1 Non-Foil" };
-                r1nf.Click += CtxRemove1NonFoil_Click;
-                var r1f = new MenuItem { Header = "Remove 1 Foil" };
-                r1f.Click += CtxRemove1Foil_Click;
+                var r1 = new MenuItem { Header = "Remove 1" };
+                r1.Click += CtxRemove1_Click;
                 var rAll = new MenuItem { Header = "Remove All Copies" };
                 rAll.Click += CtxRemoveAll_Click;
                 var usage = new MenuItem { Header = "Show Deck Usage" };
                 usage.Click += CtxShowDeckUsage_Click;
-                ctx.Items.Add(r1nf);
-                ctx.Items.Add(r1f);
+                ctx.Items.Add(r1);
                 ctx.Items.Add(new Separator());
                 ctx.Items.Add(rAll);
                 ctx.Items.Add(new Separator());
@@ -2051,41 +2208,58 @@ namespace BreakersOfE
 
 
         // ── Update used count ─────────────────────────────────────────────────────
+        // ── Used count (DERIVED from DeckUsage — no more drift) ─────────────
+        // UsedCount is now recomputed from the DeckUsage table rather than
+        // mutated by +/- deltas. Since DeckUsage records every deck a card is
+        // used in (across all decks), the sum is always correct — fixing the
+        // multi-deck drift where a card in N decks showed only one deck's qty.
+
         private void UpdateUsedCount(int poolId, int delta)
         {
-            if (poolId <= 0) return;
-            using var db = new Data.CollectionDbContext();
-            // Look up by ScryfallId if available, fallback to PoolId
-            using var pdb = new Data.AppDbContext();
-            var scryfallId = pdb.PoolCards
-                .Where(p => p.PoolId == poolId)
-                .Select(p => p.ScryfallId)
-                .FirstOrDefault() ?? string.Empty;
-            var entry = !string.IsNullOrEmpty(scryfallId)
-                ? db.CollectionEntries.FirstOrDefault(c => c.ScryfallId == scryfallId)
-                : db.CollectionEntries.FirstOrDefault(c => c.PoolId == poolId);
-            if (entry == null) return;
-
-            entry.UsedCount = Math.Max(0, entry.UsedCount + delta);
-            db.SaveChanges();
+            // delta is ignored now — we recompute from DeckUsage. Kept for
+            // call-site compatibility.
+            RecomputeUsedCountByPoolId(poolId);
         }
 
         private void SetUsedCount(int poolId, int count)
         {
-            if (poolId <= 0) return;
-            using var db = new Data.CollectionDbContext();
-            using var pdb = new Data.AppDbContext();
-            var scryfallId = pdb.PoolCards
-                .Where(p => p.PoolId == poolId)
-                .Select(p => p.ScryfallId)
-                .FirstOrDefault() ?? string.Empty;
-            var entry = !string.IsNullOrEmpty(scryfallId)
-                ? db.CollectionEntries.FirstOrDefault(c => c.ScryfallId == scryfallId)
-                : db.CollectionEntries.FirstOrDefault(c => c.PoolId == poolId);
-            if (entry == null) return;
+            // count is ignored now — recompute from DeckUsage (authoritative).
+            RecomputeUsedCountByPoolId(poolId);
+        }
 
-            entry.UsedCount = Math.Max(0, count);
-            db.SaveChanges();
+        /// <summary>
+        /// Recomputes a card's UsedCount from the DeckUsage table (the sum of
+        /// its usage across every deck), locating the collection entry by
+        /// ScryfallId. This is the single authoritative way to set UsedCount.
+        /// </summary>
+        private void SetUsedCountByScryfall(string scryfallId, int poolIdFallback, int count)
+        {
+            RecomputeUsedCountByScryfall(scryfallId, poolIdFallback);
+        }
+
+        /// <summary>Resolve a PoolId to its ScryfallId, then recompute.</summary>
+        private void RecomputeUsedCountByPoolId(int poolId)
+        {
+            if (poolId <= 0) return;
+            string scryfallId;
+            using (var pdb = new Data.AppDbContext())
+            {
+                scryfallId = pdb.PoolCards
+                    .Where(p => p.PoolId == poolId)
+                    .Select(p => p.ScryfallId)
+                    .FirstOrDefault() ?? string.Empty;
+            }
+            RecomputeUsedCountByScryfall(scryfallId, poolId);
+        }
+
+        /// <summary>
+        /// Recomputes a card's per-finish UsedCount (capped at owned) via the
+        /// DeckUsage service. Located by ScryfallId.
+        /// </summary>
+        private void RecomputeUsedCountByScryfall(string scryfallId, int poolIdFallback)
+        {
+            if (string.IsNullOrWhiteSpace(scryfallId)) return;
+            Services.DeckUsageService.RecomputeUsedForCard(scryfallId);
         }
 
         // ════════════════════════════════════════════════════════════════════
@@ -2099,18 +2273,112 @@ namespace BreakersOfE
                 _ = HandleSelectionAsync(card);
         }
 
+        private void DeckCtxRemove1NonFoil_Click(object sender, RoutedEventArgs e)
+        {
+            if (_activeDeck == null) return;
+            if (BottomDataGrid.SelectedItem is DeckCard card && !card.IsFooter)
+            {
+                if (card.Quantity <= 0)
+                {
+                    MessageBox.Show($"'{card.Name}' has no non-foil copies in this deck.",
+                        "No Non-Foil", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+                DeckService.RemoveCard(_activeDeck, card, foil: false, removeAll: false);
+                OnDeckCardChanged();
+            }
+        }
+
+        private void DeckCtxRemove1Foil_Click(object sender, RoutedEventArgs e)
+        {
+            if (_activeDeck == null) return;
+            if (BottomDataGrid.SelectedItem is DeckCard card && !card.IsFooter)
+            {
+                if (card.FoilQuantity <= 0)
+                {
+                    MessageBox.Show($"'{card.Name}' has no foil copies in this deck.",
+                        "No Foil", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+                DeckService.RemoveCard(_activeDeck, card, foil: true, removeAll: false);
+                OnDeckCardChanged();
+            }
+        }
+
+        /// <summary>
+        /// Shows a dialog with "Non-Foil" and "Foil" buttons (and Cancel).
+        /// Returns true = foil, false = non-foil, null = cancelled.
+        /// </summary>
+        private static bool? PickFinishToRemove(string cardName, int nonFoilQty, int foilQty, string action = "Remove")
+        {
+            var win = new Window
+            {
+                Title = $"{action} Non-Foil or Foil?",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                ResizeMode = ResizeMode.NoResize,
+                Owner = Application.Current.MainWindow
+            };
+
+            bool? result = null;
+
+            var msg = new TextBlock
+            {
+                Text = $"'{cardName}' has {nonFoilQty} non-foil and {foilQty} foil in this deck.\n\nWhich finish do you want to {action.ToLower()}?",
+                Margin = new Thickness(16, 16, 16, 8),
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 350
+            };
+
+            var btnNF = new Button { Content = "Non-Foil", Width = 90, Height = 28, Margin = new Thickness(4), IsDefault = true };
+            btnNF.Click += (s, e) => { result = false; win.Close(); };
+
+            var btnF = new Button { Content = "Foil", Width = 90, Height = 28, Margin = new Thickness(4) };
+            btnF.Click += (s, e) => { result = true; win.Close(); };
+
+            var btnCancel = new Button { Content = "Cancel", Width = 90, Height = 28, Margin = new Thickness(4), IsCancel = true };
+            btnCancel.Click += (s, e) => { result = null; win.Close(); };
+
+            var btnPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(8, 4, 8, 12)
+            };
+            btnPanel.Children.Add(btnNF);
+            btnPanel.Children.Add(btnF);
+            btnPanel.Children.Add(btnCancel);
+
+            var stack = new StackPanel();
+            stack.Children.Add(msg);
+            stack.Children.Add(btnPanel);
+            win.Content = stack;
+
+            win.ShowDialog();
+            return result;
+        }
+
         private void DeckCtxRemove1_Click(object sender, RoutedEventArgs e)
         {
             if (_activeDeck == null) return;
             if (BottomDataGrid.SelectedItem is DeckCard card && !card.IsFooter)
             {
-                DeckService.RemoveCard(_activeDeck, card, false);
-                RefreshActiveDeckGrid();
-                UpdateDeckTabTitle(_activeDeck!);
-                UpdateDeckSummary(_activeDeck);
-                UpdateUsedCount(card.PoolId, -1);
-                AutoSaveDeck(_activeDeck!);
-                if (_currentMode == "CollectionToDeck") LoadTopTable_CollectionForDeck();
+                // Deck cards keep both finishes in one row. If the card has both,
+                // ask which finish to remove; otherwise remove the one it has.
+                bool foil;
+                if (card.Quantity > 0 && card.FoilQuantity > 0)
+                {
+                    var pick = PickFinishToRemove(card.Name, card.Quantity, card.FoilQuantity, "Remove");
+                    if (pick == null) return;
+                    foil = pick.Value;
+                }
+                else
+                {
+                    foil = card.FoilQuantity > 0;   // only one finish present
+                }
+
+                DeckService.RemoveCard(_activeDeck, card, foil, removeAll: false);
+                OnDeckCardChanged();
             }
         }
 
@@ -2119,14 +2387,8 @@ namespace BreakersOfE
             if (_activeDeck == null) return;
             if (BottomDataGrid.SelectedItem is DeckCard card && !card.IsFooter)
             {
-                int qty = card.TotalQuantity;
                 DeckService.RemoveCard(_activeDeck, card, true);
-                RefreshActiveDeckGrid();
-                UpdateDeckTabTitle(_activeDeck!);
-                UpdateDeckSummary(_activeDeck);
-                UpdateUsedCount(card.PoolId, -qty);
-                AutoSaveDeck(_activeDeck!);
-                if (_currentMode == "CollectionToDeck") LoadTopTable_CollectionForDeck();
+                OnDeckCardChanged();
             }
         }
 
@@ -2254,6 +2516,46 @@ namespace BreakersOfE
             }
         }
 
+        // ════════════════════════════════════════════════════════════════════
+        // DECK CARD CHANGE — single consequence handler
+        // ════════════════════════════════════════════════════════════════════
+        /// <summary>
+        /// The ONE place that handles everything that must happen after a card
+        /// in the active deck is added, removed, or has its quantity changed —
+        /// no matter which UI gesture triggered it (button, +/- , context menu,
+        /// Delete key, cell edit, quantity text box, …).
+        ///
+        /// Every deck-card-mutating handler calls this instead of duplicating
+        /// the consequence block. That keeps the consequences from drifting out
+        /// of sync across handlers (the bug where context-menu/keyboard removes
+        /// forgot to sync deck usage). Add a new gesture later? It just calls
+        /// this — nothing to remember.
+        /// </summary>
+        private void OnDeckCardChanged()
+        {
+            if (_activeDeck == null) return;
+
+            RefreshActiveDeckGrid();
+            UpdateDeckTabTitle(_activeDeck);
+            UpdateDeckSummary(_activeDeck);
+            AutoSaveDeck(_activeDeck);   // Save re-syncs usage for tracked decks
+
+            // In CollectionToDeck the deck draws from the collection, so keep
+            // usage + the collection view current. SyncDeck is also invoked by
+            // AutoSaveDeck→Save for any already-tracked deck, so this is safe
+            // and idempotent; it also refreshes the on-screen collection table.
+            if (_currentMode == "CollectionToDeck")
+            {
+                DeckUsageService.SyncDeck(_activeDeck);
+                LoadTopTable_CollectionForDeck();
+            }
+            else if (_currentMode == "DeckToCollection")
+            {
+                // Deck is on top here; keep the collection (bottom) current.
+                LoadBottomTable_Collection();
+            }
+        }
+
         private void DeckGrid_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (_activeDeck == null) return;
@@ -2269,15 +2571,8 @@ namespace BreakersOfE
 
             if (result == MessageBoxResult.Yes)
             {
-                int qty = card.TotalQuantity;
                 DeckService.RemoveCard(_activeDeck, card, true);
-                RefreshActiveDeckGrid();
-                UpdateDeckTabTitle(_activeDeck!);
-                UpdateDeckSummary(_activeDeck);
-                UpdateUsedCount(card.PoolId, -qty);
-                AutoSaveDeck(_activeDeck!);
-                if (_currentMode == "CollectionToDeck")
-                    LoadTopTable_CollectionForDeck();
+                OnDeckCardChanged();
             }
 
             e.Handled = true;
@@ -2307,8 +2602,9 @@ namespace BreakersOfE
                 {
                     DeckService.RemoveCard(_activeDeck, card, true);
                     Dispatcher.BeginInvoke(new Action(() =>
-                        RefreshActiveDeckGrid()),
+                        OnDeckCardChanged()),
                         System.Windows.Threading.DispatcherPriority.ContextIdle);
+                    return;
                 }
                 else
                 {
@@ -2331,8 +2627,7 @@ namespace BreakersOfE
                 }
 
                 _activeDeck.IsModified = true;
-                UpdateDeckTabTitle(_activeDeck!);
-                UpdateDeckSummary(_activeDeck);
+                OnDeckCardChanged();
             }
         }
 
@@ -2377,9 +2672,7 @@ namespace BreakersOfE
                 _activeDeck.IsModified = true;
             }
 
-            RefreshActiveDeckGrid();
-            UpdateDeckTabTitle(_activeDeck!);
-            UpdateDeckSummary(_activeDeck);
+            OnDeckCardChanged();
         }
 
         // ── Shared qty validation ─────────────────────────────────────────────
@@ -2486,120 +2779,44 @@ namespace BreakersOfE
             e.Handled = true;
         }
 
-        /// <summary>
-        /// Does a deck card refer to the same card as this collection row?
-        ///
-        /// Identity-first matching to prevent the over-match bug where every
-        /// deck appeared under every card:
-        ///   1. If both have a ScryfallId, they must be equal (definitive).
-        ///   2. Else if both have a real PoolId (>0), they must be equal.
-        ///   3. Name is only a fallback when there is NO usable identity on
-        ///      either side, and only when the name is actually present.
-        /// A blank/absent field never counts as a match.
-        /// </summary>
-        private static bool DeckCardMatchesRow(
-            Models.DeckCard c, CollectionDisplayRow row)
-        {
-            bool rowHasSf = !string.IsNullOrWhiteSpace(row.ScryfallId);
-            bool cardHasSf = !string.IsNullOrWhiteSpace(c.ScryfallId);
-
-            // 1. ScryfallId is the definitive key when available on both sides.
-            if (rowHasSf && cardHasSf)
-                return string.Equals(c.ScryfallId, row.ScryfallId,
-                    StringComparison.OrdinalIgnoreCase);
-
-            // 2. Fall back to PoolId only when both are real (>0).
-            bool rowHasPool = row.PoolId > 0;
-            bool cardHasPool = c.PoolId > 0;
-            if (rowHasPool && cardHasPool)
-                return c.PoolId == row.PoolId;
-
-            // 3. Last resort: name match, only when neither side has ANY
-            //    usable identity key and the name is genuinely present.
-            //    (Prevents blank-vs-blank and identity-mismatch false hits.)
-            bool anyIdentity = rowHasSf || cardHasSf || rowHasPool || cardHasPool;
-            if (!anyIdentity &&
-                !string.IsNullOrWhiteSpace(row.Name) &&
-                !string.IsNullOrWhiteSpace(c.Name))
-                return string.Equals(c.Name, row.Name,
-                    StringComparison.OrdinalIgnoreCase);
-
-            return false;
-        }
-
         private void LoadDeckUsageForRow(CollectionDisplayRow row)
         {
             row.DeckUsageRows.Clear();
 
-            // Check all open (possibly unsaved) decks first
-            var checkedNames = new HashSet<string>();
-
-            foreach (var deck in _openDecks)
+            // Read usage straight from the DeckUsage table (recorded when the
+            // card was entered via Collection↔Deck), keyed on ScryfallId. This
+            // replaces the old deck-file folder scan, so:
+            //   • only decks the user actually entered appear (no pool-built
+            //     decks like the old "Mardu Surge" false positive), and
+            //   • it works no matter where the deck file lives (or if it's
+            //     been moved to an "Added" folder / deleted).
+            if (!string.IsNullOrWhiteSpace(row.ScryfallId))
             {
-                checkedNames.Add(deck.Name);
-
-                var matches = deck.Cards.Where(c => DeckCardMatchesRow(c, row))
-                    .ToList();
-
-                foreach (var card in matches)
+                var usage = Services.DeckUsageService.GetUsageForCard(row.ScryfallId);
+                foreach (var u in usage)
                 {
+                    // Per-finish: this collection row is ONE finish, so show only
+                    // that finish's usage in each deck. A foil row shows each
+                    // deck's foil count; a non-foil row shows the non-foil count.
+                    int finishQty = row.Finish == Models.CardFinish.Foil
+                        ? u.FoilQuantity
+                        : u.Quantity;   // etched isn't deck-tracked → uses non-foil bucket = 0 effect
+
+                    if (finishQty <= 0) continue;   // this deck uses none of this finish
+
                     row.DeckUsageRows.Add(new Models.DeckUsageRow
                     {
-                        DeckName = deck.Name,
-                        DeckType = deck.DeckType.ToString(),
-                        Quantity = card.TotalQuantity,
-                        Category = card.CategoryDisplay,
-                        IsFoil = card.FoilQuantity > 0
-                            ? (card.Quantity > 0 ? "Mixed" : "Yes")
-                            : "No"
+                        DeckName = u.DeckName,
+                        DeckType = u.DeckType,
+                        Quantity = finishQty,
+                        Category = u.Category,
+                        IsFoil = row.Finish == Models.CardFinish.Foil ? "Yes" : "No"
                     });
                 }
             }
 
-            // Then check saved deck files that aren't already open
-            string folder = Services.AppFolderService.DecksFolder;
-            if (Directory.Exists(folder))
-            {
-                var options = new System.Text.Json.JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                };
-
-                foreach (var file in Directory.GetFiles(folder, "*.deck",
-                    SearchOption.TopDirectoryOnly))
-                {
-                    try
-                    {
-                        string json = File.ReadAllText(file);
-                        var deck = System.Text.Json.JsonSerializer
-                            .Deserialize<Models.Deck>(json, options);
-                        if (deck == null) continue;
-
-                        // Skip if already covered by open deck
-                        if (checkedNames.Contains(deck.Name)) continue;
-
-                        var matches = deck.Cards.Where(c => DeckCardMatchesRow(c, row))
-                            .ToList();
-
-                        foreach (var card in matches)
-                        {
-                            row.DeckUsageRows.Add(new Models.DeckUsageRow
-                            {
-                                DeckName = deck.Name,
-                                DeckType = deck.DeckType.ToString(),
-                                Quantity = card.TotalQuantity,
-                                Category = card.CategoryDisplay,
-                                IsFoil = card.FoilQuantity > 0
-                                    ? (card.Quantity > 0 ? "Mixed" : "Yes")
-                                    : "No"
-                            });
-                        }
-                    }
-                    catch { }
-                }
-            }
-
-            // If nothing found, collapse the row and reset expand state
+            // If nothing found, collapse the row (the card isn't used in any
+            // entered deck). This is now correct rather than a false negative.
             if (row.DeckUsageRows.Count == 0)
             {
                 row.IsExpanded = false;
@@ -3849,7 +4066,8 @@ namespace BreakersOfE
                     ImageNormalUrl = ce.ImageNormalUrl,
                     LocalImagePath = ce.LocalImagePath,
                     Quantity = ce.Quantity,
-                    FoilQuantity = ce.FoilQuantity,
+                    Finish = ce.Finish,
+                    Price = ce.Price,
                     Condition = ce.Condition,
                     Language = ce.Language,
                     StorageLocation = ce.StorageLocation,
@@ -3871,51 +4089,51 @@ namespace BreakersOfE
             var entries = cdb.TradeBinderEntries.AsNoTracking().ToList();
             if (entries.Count == 0) { BottomDataGrid.ItemsSource = null; return; }
 
-            // Group by ScryfallId — merge foil + non-foil into one display row
-            var grouped = entries.GroupBy(e => e.ScryfallId);
-            var rows = new List<CollectionDisplayRow>();
-            foreach (var grp in grouped)
+            // Per-finish: one row per entry (each entry is one finish)
+            var rows = new List<CollectionDisplayRow>(entries.Count);
+            foreach (var e in entries)
             {
-                var nonFoil = grp.FirstOrDefault(e => !e.IsFoil);
-                var foil = grp.FirstOrDefault(e => e.IsFoil);
-                var primary = nonFoil ?? foil!;
                 rows.Add(new CollectionDisplayRow
                 {
-                    CollectionEntryId = primary.TradeBinderEntryId,
-                    PoolId = primary.PoolId,
-                    ScryfallId = primary.ScryfallId,
-                    Name = primary.Name,
-                    SetCode = primary.SetCode,
-                    SetName = primary.SetName,
-                    CollectorNumber = primary.CollectorNumber,
-                    TypeLine = primary.TypeLine,
-                    OracleText = primary.OracleText,
-                    FlavorText = primary.FlavorText,
-                    ManaCost = primary.ManaCost,
-                    ManaValue = primary.ManaValue,
-                    ColorIdentity = primary.ColorIdentity,
-                    Rarity = primary.Rarity,
-                    Artist = primary.Artist,
-                    Power = primary.Power,
-                    Toughness = primary.Toughness,
-                    IsFoil = primary.IsFoilAvailable,
-                    IsNonFoil = primary.IsNonFoilAvailable,
-                    PriceUsd = primary.PriceUsd,
-                    PriceUsdFoil = primary.PriceUsdFoil,
-                    ImageNormalUrl = primary.ImageNormalUrl,
-                    LocalImagePath = primary.LocalImagePath,
-                    LegalitiesJson = primary.LegalitiesJson,
-                    Quantity = nonFoil?.Quantity ?? 0,
-                    FoilQuantity = foil?.Quantity ?? 0,
-                    Condition = primary.Condition,
-                    SellAt = primary.AskingPrice,
-                    Notes = primary.Notes,
-                    MarketValue = primary.PriceUsd,
-                    DateAdded = primary.DateAdded
+                    CollectionEntryId = e.TradeBinderEntryId,
+                    PoolId = e.PoolId,
+                    ScryfallId = e.ScryfallId,
+                    Name = e.Name,
+                    SetCode = e.SetCode,
+                    SetName = e.SetName,
+                    CollectorNumber = e.CollectorNumber,
+                    TypeLine = e.TypeLine,
+                    OracleText = e.OracleText,
+                    FlavorText = e.FlavorText,
+                    ManaCost = e.ManaCost,
+                    ManaValue = e.ManaValue,
+                    ColorIdentity = e.ColorIdentity,
+                    Rarity = e.Rarity,
+                    Artist = e.Artist,
+                    Power = e.Power,
+                    Toughness = e.Toughness,
+                    IsFoil = e.IsFoilAvailable,
+                    IsNonFoil = e.IsNonFoilAvailable,
+                    PriceUsd = e.PriceUsd,
+                    PriceUsdFoil = e.PriceUsdFoil,
+                    ImageNormalUrl = e.ImageNormalUrl,
+                    LocalImagePath = e.LocalImagePath,
+                    LegalitiesJson = e.LegalitiesJson,
+                    Quantity = e.Quantity,
+                    Finish = e.Finish,
+                    Price = e.Price,
+                    Condition = e.Condition,
+                    SellAt = e.AskingPrice,
+                    Notes = e.Notes,
+                    MarketValue = e.PriceUsd,
+                    DateAdded = e.DateAdded
                 });
             }
-            rows.Sort((a, b) => string.Compare(
-                a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+            rows.Sort((a, b) =>
+            {
+                int c = string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+                return c != 0 ? c : string.Compare(a.Finish, b.Finish, StringComparison.Ordinal);
+            });
             for (int i = 0; i < rows.Count; i++) rows[i].RowIndex = i;
             BottomDataGrid.ItemsSource = rows;
             UpdateSummaryRow(rows);
@@ -3928,50 +4146,50 @@ namespace BreakersOfE
             var entries = cdb.WantListEntries.AsNoTracking().ToList();
             if (entries.Count == 0) { BottomDataGrid.ItemsSource = null; return; }
 
-            // Group by ScryfallId — merge foil + non-foil into one display row
-            var grouped = entries.GroupBy(e => e.ScryfallId);
-            var rows = new List<CollectionDisplayRow>();
-            foreach (var grp in grouped)
+            // Per-finish: one row per entry (each entry is one finish)
+            var rows = new List<CollectionDisplayRow>(entries.Count);
+            foreach (var e in entries)
             {
-                var nonFoil = grp.FirstOrDefault(e => !e.IsFoil);
-                var foil = grp.FirstOrDefault(e => e.IsFoil);
-                var primary = nonFoil ?? foil!;
                 rows.Add(new CollectionDisplayRow
                 {
-                    CollectionEntryId = primary.WantListEntryId,
-                    PoolId = primary.PoolId,
-                    ScryfallId = primary.ScryfallId,
-                    Name = primary.Name,
-                    SetCode = primary.SetCode,
-                    SetName = primary.SetName,
-                    CollectorNumber = primary.CollectorNumber,
-                    TypeLine = primary.TypeLine,
-                    OracleText = primary.OracleText,
-                    FlavorText = primary.FlavorText,
-                    ManaCost = primary.ManaCost,
-                    ManaValue = primary.ManaValue,
-                    ColorIdentity = primary.ColorIdentity,
-                    Rarity = primary.Rarity,
-                    Artist = primary.Artist,
-                    Power = primary.Power,
-                    Toughness = primary.Toughness,
-                    IsFoil = primary.IsFoilAvailable,
-                    IsNonFoil = primary.IsNonFoilAvailable,
-                    PriceUsd = primary.PriceUsd,
-                    PriceUsdFoil = primary.PriceUsdFoil,
-                    ImageNormalUrl = primary.ImageNormalUrl,
-                    LocalImagePath = primary.LocalImagePath,
-                    LegalitiesJson = primary.LegalitiesJson,
-                    Quantity = nonFoil?.Quantity ?? 0,
-                    FoilQuantity = foil?.Quantity ?? 0,
-                    BuyAt = primary.OfferPrice,
-                    Notes = primary.Notes,
-                    MarketValue = primary.PriceUsd,
-                    DateAdded = primary.DateAdded
+                    CollectionEntryId = e.WantListEntryId,
+                    PoolId = e.PoolId,
+                    ScryfallId = e.ScryfallId,
+                    Name = e.Name,
+                    SetCode = e.SetCode,
+                    SetName = e.SetName,
+                    CollectorNumber = e.CollectorNumber,
+                    TypeLine = e.TypeLine,
+                    OracleText = e.OracleText,
+                    FlavorText = e.FlavorText,
+                    ManaCost = e.ManaCost,
+                    ManaValue = e.ManaValue,
+                    ColorIdentity = e.ColorIdentity,
+                    Rarity = e.Rarity,
+                    Artist = e.Artist,
+                    Power = e.Power,
+                    Toughness = e.Toughness,
+                    IsFoil = e.IsFoilAvailable,
+                    IsNonFoil = e.IsNonFoilAvailable,
+                    PriceUsd = e.PriceUsd,
+                    PriceUsdFoil = e.PriceUsdFoil,
+                    ImageNormalUrl = e.ImageNormalUrl,
+                    LocalImagePath = e.LocalImagePath,
+                    LegalitiesJson = e.LegalitiesJson,
+                    Quantity = e.Quantity,
+                    Finish = e.Finish,
+                    Price = e.Price,
+                    BuyAt = e.OfferPrice,
+                    Notes = e.Notes,
+                    MarketValue = e.PriceUsd,
+                    DateAdded = e.DateAdded
                 });
             }
-            rows.Sort((a, b) => string.Compare(
-                a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+            rows.Sort((a, b) =>
+            {
+                int c = string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+                return c != 0 ? c : string.Compare(a.Finish, b.Finish, StringComparison.Ordinal);
+            });
             for (int i = 0; i < rows.Count; i++) rows[i].RowIndex = i;
             BottomDataGrid.ItemsSource = rows;
             UpdateSummaryRow(rows);
@@ -4082,10 +4300,10 @@ namespace BreakersOfE
             if (!TopFilterActive || !_topColumnFilters.HasActiveFilters)
             {
                 UpdateTopSummary("Collection",
-                    nonFoil: rows.Sum(r => r.Quantity),
-                    foil: rows.Sum(r => r.FoilQuantity),
-                    total: rows.Sum(r => r.Quantity + r.FoilQuantity),
-                    value: rows.Sum(r => r.TotalValue));
+                    nonFoil: rows.Where(r => r.Finish == Models.CardFinish.NonFoil).Sum(r => r.Quantity),
+                    foil: rows.Where(r => r.Finish != Models.CardFinish.NonFoil).Sum(r => r.Quantity),
+                    total: rows.Sum(r => r.Quantity),
+                    value: rows.Sum(r => r.RowValue));
             }
         }
 
@@ -4106,14 +4324,14 @@ namespace BreakersOfE
             if (grid.Columns.Any(c =>
                 c.SortMemberPath?.StartsWith(CollectionColumnMarker) == true))
             {
-                if (!grid.Columns.Any(c => c.Header?.ToString() == "Foil"))
+                if (!grid.Columns.Any(c => c.Header?.ToString() == "Finish"))
                 {
                     var badge = new DataGridTextColumn
                     {
-                        Header = "Foil",
-                        SortMemberPath = "FoilBadge",
-                        Binding = new System.Windows.Data.Binding("FoilBadge"),
-                        Width = new DataGridLength(30),
+                        Header = "Finish",
+                        SortMemberPath = "Finish",
+                        Binding = new System.Windows.Data.Binding("FinishPill"),
+                        Width = new DataGridLength(45),
                         IsReadOnly = true
                     };
                     var style = new Style(typeof(TextBlock));
@@ -4150,8 +4368,8 @@ namespace BreakersOfE
                     Width = new DataGridLength(width),
                     IsReadOnly = readOnly
                 };
-                // Style the foil badge column gold
-                if (header == "Foil")
+                // Style the finish pill column gold (F/E stand out)
+                if (header == "Finish")
                 {
                     var style = new Style(typeof(TextBlock));
                     style.Setters.Add(new Setter(TextBlock.ForegroundProperty,
@@ -4216,20 +4434,20 @@ namespace BreakersOfE
             grid.Columns.Add(esCol);
 
             // ── Text columns in exact order ───────────────────────────────
-            grid.Columns.Add(MakeText("Foil", "FoilBadge", 30, true));
+            // Per-finish (Phase 2): "Finish" pill (F/E) replaces the old foil
+            // star; each row is one finish. Qty is that finish's count.
+            grid.Columns.Add(MakeText("Finish", "FinishPill", 45, true, sortBinding: "Finish"));
             grid.Columns.Add(MakeText("Name", "Name", 200, true));
             grid.Columns.Add(MakeText("Edition", "SetCode", 55, true));
             grid.Columns.Add(MakeText("Edition Name", "SetName", 160, true));
             grid.Columns.Add(MakeText("Qty", "Quantity", 45));
-            grid.Columns.Add(MakeText("Foil Qty", "FoilQuantity", 60));
             grid.Columns.Add(MakeText("Used", "UsedCount", 50, true));
             grid.Columns.Add(MakeText("Available", "AvailableCount", 70, true));
+            grid.Columns.Add(MakeText("Price", "PriceDisplay", 80, true, sortBinding: "PriceSort"));
+            grid.Columns.Add(MakeText("Value", "RowValueDisplay", 80, true, sortBinding: "RowValue"));
             grid.Columns.Add(MakeText("Buy At", "BuyAtDisplay", 70, sortBinding: "BuyAtSort"));
             grid.Columns.Add(MakeText("Sell At", "SellAtDisplay", 70, sortBinding: "SellAtSort"));
             grid.Columns.Add(MakeText("Sell At Value", "SellAtValueDisplay", 90, true, sortBinding: "SellAtValueSort"));
-            grid.Columns.Add(MakeText("Price High", "PriceHighDisplay", 80, true, sortBinding: "PriceHighSort"));
-            grid.Columns.Add(MakeText("Foil USD", "FoilValueDisplay", 80, true, sortBinding: "FoilValue"));
-            grid.Columns.Add(MakeText("Total Value", "TotalValueDisplay", 80, true, sortBinding: "TotalValue"));
             grid.Columns.Add(MakeText("Needed", "Needed", 60));
             grid.Columns.Add(MakeText("Excess", "Excess", 60));
             grid.Columns.Add(MakeText("Target", "Target", 60));
@@ -4242,8 +4460,6 @@ namespace BreakersOfE
             grid.Columns.Add(MakeText("Buy", "BuyStatus", 90));
             grid.Columns.Add(MakeText("Sell", "SellStatus", 90));
             grid.Columns.Add(MakeText("Added", "DateAdded", 130, true));
-            grid.Columns.Add(MakeText("USD", "PriceUsdDisplay", 90, true, sortBinding: "PriceUsdSort"));
-            grid.Columns.Add(MakeText("Price Low", "PriceLowDisplay", 80, true, sortBinding: "PriceLowSort"));
             grid.Columns.Add(MakeText("Color", "ColorDisplay", 50, true));
             grid.Columns.Add(MakeText("Type", "TypeLine", 160, true));
             grid.Columns.Add(MakeText("Rarity", "RarityCode", 50, true));
@@ -4479,7 +4695,8 @@ namespace BreakersOfE
                     ImageNormalUrl = ce.ImageNormalUrl,
                     LocalImagePath = ce.LocalImagePath,
                     Quantity = ce.Quantity,
-                    FoilQuantity = ce.FoilQuantity,
+                    Finish = ce.Finish,
+                    Price = ce.Price,
                     UsedCount = ce.UsedCount,
                     Condition = ce.Condition,
                     Language = ce.Language,
@@ -4533,7 +4750,8 @@ namespace BreakersOfE
                     ImageNormalUrl = ce.ImageNormalUrl,
                     LocalImagePath = ce.LocalImagePath,
                     Quantity = ce.Quantity,
-                    FoilQuantity = ce.FoilQuantity,
+                    Finish = ce.Finish,
+                    Price = ce.Price,
                     UsedCount = ce.UsedCount,
                     Condition = ce.Condition,
                     Language = ce.Language,
@@ -4586,7 +4804,8 @@ namespace BreakersOfE
                     ImageNormalUrl = ce.ImageNormalUrl,
                     LocalImagePath = ce.LocalImagePath,
                     Quantity = ce.Quantity,
-                    FoilQuantity = ce.FoilQuantity,
+                    Finish = ce.Finish,
+                    Price = ce.Price,
                     UsedCount = ce.UsedCount,
                     Condition = ce.Condition,
                     Language = ce.Language,
@@ -4640,7 +4859,8 @@ namespace BreakersOfE
                     ImageNormalUrl = ce.ImageNormalUrl,
                     LocalImagePath = ce.LocalImagePath,
                     Quantity = ce.Quantity,
-                    FoilQuantity = ce.FoilQuantity,
+                    Finish = ce.Finish,
+                    Price = ce.Price,
                     UsedCount = ce.UsedCount,
                     Condition = ce.Condition,
                     Language = ce.Language,
@@ -4692,7 +4912,8 @@ namespace BreakersOfE
                     ImageNormalUrl = ce.ImageNormalUrl,
                     LocalImagePath = ce.LocalImagePath,
                     Quantity = ce.Quantity,
-                    FoilQuantity = ce.FoilQuantity,
+                    Finish = ce.Finish,
+                    Price = ce.Price,
                     UsedCount = ce.UsedCount,
                     Condition = ce.Condition,
                     Language = ce.Language,
@@ -4762,6 +4983,8 @@ namespace BreakersOfE
                     LocalImageBackPath = ce.LocalImageBackPath,
                     Quantity = ce.Quantity,
                     FoilQuantity = ce.FoilQuantity,
+                    Finish = ce.Finish,
+                    Price = ce.Price,
                     UsedCount = ce.UsedCount,
                     Condition = ce.Condition,
                     Language = ce.Language,
@@ -5272,6 +5495,7 @@ namespace BreakersOfE
             BtnSaveAllDecks.IsEnabled = isDeckMode && anyDecks;
             BtnCloseDeck.IsEnabled = isDeckMode && hasDeck;
             BtnCloseAllDecks.IsEnabled = isDeckMode && anyDecks;
+            if (MenuRecentDecks != null) MenuRecentDecks.IsEnabled = isDeckMode;
             BtnDeckProperties.IsEnabled = isDeckMode && hasDeck;
             BtnDeckLegality.IsEnabled = hasDeck;
             BtnDeckStats.IsEnabled = isDeckMode && hasDeck;
@@ -5767,7 +5991,7 @@ namespace BreakersOfE
                 if (TopDataGrid.SelectedItem is PoolCard pc)
                     AddCardToActiveDeck(pc, foil: deckShift);
                 else if (TopDataGrid.SelectedItem is CollectionDisplayRow cr)
-                    AddCardToActiveDeck(cr);
+                    AddCardToActiveDeck(cr, requestFoil: deckShift ? true : (bool?)null);
                 e.Handled = true;
                 RestoreFocus();
                 return;
@@ -5778,7 +6002,10 @@ namespace BreakersOfE
             {
                 if (e.Key != Key.Enter) return;
                 if (TopDataGrid.SelectedItem is DeckCard dc)
-                    AddDeckCardToCollection(dc);
+                {
+                    bool shiftFoil = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+                    AddDeckCardToCollection(dc, foil: shiftFoil);
+                }
                 e.Handled = true;
                 RestoreFocus();
                 return;
@@ -6354,22 +6581,10 @@ namespace BreakersOfE
                 return;
             }
 
-            bool hasBoth = row.Quantity > 0 && row.FoilQuantity > 0;
-            bool foil = false;
-
-            if (hasBoth)
-            {
-                var ask = MessageBox.Show(
-                    $"'{row.Name}' has both non-foil ({row.Quantity}) and foil ({row.FoilQuantity}) copies.\n\n" +
-                    "Yes = Remove 1 Non-Foil\nNo = Remove 1 Foil",
-                    "Remove Non-Foil or Foil?",
-                    MessageBoxButton.YesNoCancel,
-                    MessageBoxImage.Question);
-                if (ask == MessageBoxResult.Cancel) return;
-                foil = ask == MessageBoxResult.No;
-            }
-            else if (row.FoilQuantity > 0 && row.Quantity == 0)
-                foil = true;
+            // Per-finish model: each collection row IS one finish, so removing
+            // the selected row removes that row's finish. No "non-foil or foil?"
+            // prompt needed — the row already knows which it is.
+            bool foil = row.Finish == Models.CardFinish.Foil;
 
             RemoveFromCollection(row, 1, false, foil);
         }
@@ -6400,6 +6615,10 @@ namespace BreakersOfE
                     canFoil = ac.IsFoil; canNonFoil = ac.IsNonFoil; break;
                 case ConspiracyCard cc:
                     canFoil = cc.IsFoil; canNonFoil = cc.IsNonFoil; break;
+                case CollectionDisplayRow cr:
+                    // In CollectionToDeck mode the top grid holds collection
+                    // rows; enable based on what finishes exist for that card.
+                    canFoil = cr.IsFoil; canNonFoil = cr.IsNonFoil; break;
             }
 
             TopCtxAddToCollNonFoil.IsEnabled = hasCard && isCollMode && canNonFoil;
@@ -6452,14 +6671,14 @@ namespace BreakersOfE
                 if (TopDataGrid.SelectedItem is PoolCard pc)
                     AddCardToActiveDeck(pc, foil: shift);
                 else if (TopDataGrid.SelectedItem is CollectionDisplayRow cr)
-                    AddCardToActiveDeck(cr);
+                    AddCardToActiveDeck(cr, requestFoil: shift ? true : (bool?)null);
                 e.Handled = true;
                 return;
             }
             if (_currentMode == "DeckToCollection")
             {
                 if (TopDataGrid.SelectedItem is DeckCard dc)
-                    AddDeckCardToCollection(dc);
+                    AddDeckCardToCollection(dc, foil: shift);
                 e.Handled = true;
                 return;
             }
@@ -6469,31 +6688,19 @@ namespace BreakersOfE
             e.Handled = true;
         }
 
-        // ── Remove 1 Non-Foil / 1 Foil ───────────────────────────────────────
-        private void CtxRemove1NonFoil_Click(object sender, RoutedEventArgs e)
+        // ── Remove 1 (of the selected row's finish) ──────────────────────────
+        private void CtxRemove1_Click(object sender, RoutedEventArgs e)
         {
             if (_bottomLocked) return;
             if (BottomDataGrid.SelectedItem is not CollectionDisplayRow row) return;
             if (row.Quantity <= 0)
             {
-                MessageBox.Show("No non-foil copies to remove.", "Info",
+                MessageBox.Show("No copies to remove.", "Info",
                     MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-            RemoveFromCollection(row, 1, false, foil: false);
-        }
-
-        private void CtxRemove1Foil_Click(object sender, RoutedEventArgs e)
-        {
-            if (_bottomLocked) return;
-            if (BottomDataGrid.SelectedItem is not CollectionDisplayRow row) return;
-            if (row.FoilQuantity <= 0)
-            {
-                MessageBox.Show("No foil copies to remove.", "Info",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-            RemoveFromCollection(row, 1, false, foil: true);
+            // Each row is one finish — remove one of THIS row's finish.
+            RemoveFromCollection(row, 1, false, foil: row.Finish == Models.CardFinish.Foil);
         }
 
         // ── Combine duplicate collection rows ─────────────────────────────────
@@ -6587,19 +6794,23 @@ namespace BreakersOfE
                     break;
             }
 
-            // Trade Binder — top table is Collection, bottom is binder
+            // Trade Binder — top table is Collection (per-finish rows), bottom is binder
             if (_currentMode == "CollectionToTradeBinder")
             {
-                int poolId = 0;
-                string name = "";
-                if (TopDataGrid.SelectedItem is PoolCard pp)
-                { poolId = pp.PoolId; name = pp.Name; }
-                else if (TopDataGrid.SelectedItem is CollectionDisplayRow cr2)
-                { poolId = cr2.PoolId; name = cr2.Name; }
-                if (poolId > 0)
+                if (TopDataGrid.SelectedItem is CollectionDisplayRow cr2)
+                {
+                    // Per-finish: the row's Finish determines foil, not the toolbar button
+                    bool binderFoil = cr2.Finish == Models.CardFinish.Foil;
+                    using var pdb2 = new AppDbContext();
+                    var pc2 = !string.IsNullOrEmpty(cr2.ScryfallId)
+                        ? pdb2.PoolCards.FirstOrDefault(c => c.ScryfallId == cr2.ScryfallId)
+                        : pdb2.PoolCards.FirstOrDefault(c => c.PoolId == cr2.PoolId);
+                    if (pc2 != null) AddToTradeBinder(pc2, binderFoil, qty);
+                }
+                else if (TopDataGrid.SelectedItem is PoolCard pp)
                 {
                     using var pdb2 = new AppDbContext();
-                    var pc2 = pdb2.PoolCards.FirstOrDefault(c => c.PoolId == poolId);
+                    var pc2 = pdb2.PoolCards.FirstOrDefault(c => c.PoolId == pp.PoolId);
                     if (pc2 != null) AddToTradeBinder(pc2, foil, qty);
                 }
                 return;
@@ -6637,17 +6848,53 @@ namespace BreakersOfE
             else if (foil && card.FoilQuantity <= 0 && card.Quantity > 0)
                 foil = false;
 
-            // Add 1 copy to collection
+            // Ensure this deck's usage (demand) is recorded so the per-deck guard
+            // has something to compare against — precon decks built from the pool
+            // have no DeckUsage row until synced.
+            if (_activeDeck != null)
+                DeckUsageService.SyncDeck(_activeDeck);
+
+            // PER-DECK guard: you can enter up to what THIS deck holds of this
+            // finish, tracked per deck. A card in multiple decks tracks
+            // separately, so other decks' copies don't block this one.
+            if (_activeDeck != null && !string.IsNullOrWhiteSpace(card.ScryfallId))
+            {
+                string deckId = _activeDeck.EnsureDeckId();
+                var (entered, demand) =
+                    DeckUsageService.GetDeckEntry(deckId, card.ScryfallId, foil);
+                string finishWord = foil ? "foil" : "non-foil";
+
+                if (demand == 0)
+                {
+                    MessageBox.Show(
+                        $"This deck holds no {finishWord} copies of '{card.Name}'.",
+                        "None to Add", MessageBoxButton.OK, MessageBoxImage.Information);
+                    RestoreFocus();
+                    return;
+                }
+                if (entered >= demand)
+                {
+                    MessageBox.Show(
+                        $"You've already entered all {demand} {finishWord} " +
+                        $"cop{(demand == 1 ? "y" : "ies")} of '{card.Name}' this deck holds.",
+                        "All Copies Entered", MessageBoxButton.OK, MessageBoxImage.Information);
+                    RestoreFocus();
+                    return;
+                }
+            }
+
+            // Add 1 copy to collection.
             AddToPoolCollection(card.PoolId, card.Name, 1, foil);
 
-            // Update UsedCount — card is in active deck so mark it used
-            if (_activeDeck != null)
-            {
-                var deckCard = _activeDeck.Cards
-                    .FirstOrDefault(c => c.PoolId == card.PoolId);
-                if (deckCard != null)
-                    SetUsedCount(card.PoolId, deckCard.TotalQuantity);
-            }
+            // Record that one more of this finish was entered for this deck.
+            if (_activeDeck != null && !string.IsNullOrWhiteSpace(card.ScryfallId))
+                DeckUsageService.IncrementDeckEntry(
+                    _activeDeck.EnsureDeckId(), card.ScryfallId, foil);
+
+            // Recompute this card's per-finish UsedCount (capped at owned).
+            // The deck was already synced before the guard, so only the count
+            // needs refreshing after the add.
+            DeckUsageService.RecomputeUsedForCard(card.ScryfallId);
 
             // Refresh bottom collection table immediately
             LoadBottomTable_Collection();
@@ -6790,9 +7037,7 @@ namespace BreakersOfE
         private void AddToPoolCollection(int poolId, string name,
     int qty, bool foil)
         {
-            using var db = new CollectionDbContext();
-
-            // Look up the full pool card for embedding data
+            // Look up the full pool card for embedding data + per-finish price.
             PoolCard? poolCard;
             using (var pdbLookup = new Data.AppDbContext())
                 poolCard = pdbLookup.PoolCards.AsNoTracking()
@@ -6800,96 +7045,72 @@ namespace BreakersOfE
 
             string scryfallId = poolCard?.ScryfallId ?? string.Empty;
 
-            var existing = !string.IsNullOrEmpty(scryfallId)
-                ? db.CollectionEntries.FirstOrDefault(c => c.ScryfallId == scryfallId)
-                : db.CollectionEntries.FirstOrDefault(c => c.PoolId == poolId);
+            // Finish is decided by the add (foil flag). Etched is handled by the
+            // explicit etched add path; a plain foil add is "foil".
+            string finish = foil ? Models.CardFinish.Foil : Models.CardFinish.NonFoil;
 
-            if (existing != null)
-            {
-                var result = MessageBox.Show(
-                    $"The collection already has copies of '{name}' present.\n\n" +
-                    $"Press 'Yes' to add the selected quantity ({qty}) to the " +
-                    $"already existing collection card\n" +
-                    $"Press 'No' to add the card at a new row\n" +
-                    $"Press 'Cancel' to skip addition of the card to the collection.",
-                    "Confirmation",
-                    MessageBoxButton.YesNoCancel,
-                    MessageBoxImage.Question);
-
-                if (result == MessageBoxResult.Cancel) return;
-
-                if (result == MessageBoxResult.Yes)
-                {
-                    if (foil) existing.FoilQuantity += qty;
-                    else existing.Quantity += qty;
-                    existing.DateModified = DateTime.Now;
-                    db.SaveChanges();
-                    RefreshBottom();
-                    ScrollBottomToPoolId(poolId);
-                    RestoreFocus();
-                    return;
-                }
-            }
-
-            // Add as new row with full embedded card data
-            var entry = new CollectionEntry
+            // Build a fully-embedded template row. The upsert service will either
+            // increment the matching per-finish row or insert this new one — the
+            // old "merge or new row?" prompt is gone: the finish decides the row.
+            var template = new CollectionEntry
             {
                 PoolId = poolId,
                 ScryfallId = scryfallId,
-                Quantity = foil ? 0 : qty,
-                FoilQuantity = foil ? qty : 0,
                 Condition = "Near Mint",
                 Language = "English",
                 DateAdded = DateTime.Now,
                 DateModified = DateTime.Now
             };
 
-            // Embed card data if pool card found
             if (poolCard != null)
             {
-                entry.OracleId = poolCard.OracleId;
-                entry.Name = poolCard.Name;
-                entry.ManaCost = poolCard.ManaCost;
-                entry.ManaValue = poolCard.ManaValue;
-                entry.TypeLine = poolCard.TypeLine;
-                entry.OracleText = poolCard.OracleText;
-                entry.FlavorText = poolCard.FlavorText;
-                entry.Power = poolCard.Power;
-                entry.Toughness = poolCard.Toughness;
-                entry.LoyaltyOrDefense = poolCard.LoyaltyOrDefense;
-                entry.Colors = poolCard.Colors;
-                entry.ColorIdentity = poolCard.ColorIdentity;
-                entry.SetCode = poolCard.SetCode;
-                entry.SetName = poolCard.SetName;
-                entry.SetType = poolCard.SetType;
-                entry.CollectorNumber = poolCard.CollectorNumber;
-                entry.Rarity = poolCard.Rarity;
-                entry.Artist = poolCard.Artist;
-                entry.ImageSmallUrl = poolCard.ImageSmallUrl;
-                entry.ImageNormalUrl = poolCard.ImageNormalUrl;
-                entry.ImageBackUrl = poolCard.ImageBackUrl;
-                entry.LocalImagePath = poolCard.LocalImagePath;
-                entry.LocalImageBackPath = poolCard.LocalImageBackPath;
-                entry.Layout = poolCard.Layout;
-                entry.IsFoilAvailable = poolCard.IsFoil;
-                entry.IsNonFoilAvailable = poolCard.IsNonFoil;
-                entry.IsToken = poolCard.IsToken;
-                entry.IsMeld = poolCard.IsMeld;
-                entry.ReleasedAt = poolCard.ReleasedAt;
-                entry.LegalitiesJson = poolCard.LegalitiesJson;
-                entry.IsFavorite = poolCard.IsFavorite;
-                entry.Keywords = poolCard.Keywords;
-                entry.PriceUsd = poolCard.PriceUsd;
-                entry.PriceUsdFoil = poolCard.PriceUsdFoil;
-                entry.PriceUsdEtched = poolCard.PriceUsdEtched;
-                entry.PriceEur = poolCard.PriceEur;
-                entry.PriceEurFoil = poolCard.PriceEurFoil;
-                entry.PriceTix = poolCard.PriceTix;
-                entry.PricesJson = poolCard.PricesJson;
+                template.OracleId = poolCard.OracleId;
+                template.Name = poolCard.Name;
+                template.ManaCost = poolCard.ManaCost;
+                template.ManaValue = poolCard.ManaValue;
+                template.TypeLine = poolCard.TypeLine;
+                template.OracleText = poolCard.OracleText;
+                template.FlavorText = poolCard.FlavorText;
+                template.Power = poolCard.Power;
+                template.Toughness = poolCard.Toughness;
+                template.LoyaltyOrDefense = poolCard.LoyaltyOrDefense;
+                template.Colors = poolCard.Colors;
+                template.ColorIdentity = poolCard.ColorIdentity;
+                template.SetCode = poolCard.SetCode;
+                template.SetName = poolCard.SetName;
+                template.SetType = poolCard.SetType;
+                template.CollectorNumber = poolCard.CollectorNumber;
+                template.Rarity = poolCard.Rarity;
+                template.Artist = poolCard.Artist;
+                template.ImageSmallUrl = poolCard.ImageSmallUrl;
+                template.ImageNormalUrl = poolCard.ImageNormalUrl;
+                template.ImageBackUrl = poolCard.ImageBackUrl;
+                template.LocalImagePath = poolCard.LocalImagePath;
+                template.LocalImageBackPath = poolCard.LocalImageBackPath;
+                template.Layout = poolCard.Layout;
+                template.IsFoilAvailable = poolCard.IsFoil;
+                template.IsNonFoilAvailable = poolCard.IsNonFoil;
+                template.IsToken = poolCard.IsToken;
+                template.IsMeld = poolCard.IsMeld;
+                template.ReleasedAt = poolCard.ReleasedAt;
+                template.LegalitiesJson = poolCard.LegalitiesJson;
+                template.IsFavorite = poolCard.IsFavorite;
+                template.Keywords = poolCard.Keywords;
+                // Keep the legacy multi-price columns populated too (harmless),
+                // and set the single per-finish Price for THIS row's finish.
+                template.PriceUsd = poolCard.PriceUsd;
+                template.PriceUsdFoil = poolCard.PriceUsdFoil;
+                template.PriceUsdEtched = poolCard.PriceUsdEtched;
+                template.PriceEur = poolCard.PriceEur;
+                template.PriceEurFoil = poolCard.PriceEurFoil;
+                template.PriceTix = poolCard.PriceTix;
+                template.PricesJson = poolCard.PricesJson;
+                template.Price = Services.CollectionService.PriceForFinish(
+                    finish, poolCard.PriceUsd, poolCard.PriceUsdFoil, poolCard.PriceUsdEtched);
             }
 
-            db.CollectionEntries.Add(entry);
-            db.SaveChanges();
+            Services.CollectionService.UpsertEntry(scryfallId, finish, qty, template);
+
             RefreshBottom();
             ScrollBottomToPoolId(poolId);
 
@@ -6901,6 +7122,10 @@ namespace BreakersOfE
             string name, int qty, bool foil)
         {
             using var db = new Data.CollectionDbContext();
+
+            // Per-finish (Phase 2): special types split per finish too (foil
+            // tokens exist). A plain foil add is "foil"; non-foil is "nonfoil".
+            string finish = foil ? Models.CardFinish.Foil : Models.CardFinish.NonFoil;
 
             // Look up the card's stable ScryfallId from the pool so the entry
             // can be remapped after a database rebuild (same protection as the
@@ -6926,15 +7151,16 @@ namespace BreakersOfE
             {
                 case "Planechase":
                     var pe = db.PlanarCollectionEntries
-                        .FirstOrDefault(c => c.PlanarId == cardId);
+                        .FirstOrDefault(c => c.PlanarId == cardId && c.Finish == finish);
                     if (pe == null)
                     {
                         var newPe = new PlanarCollectionEntry
                         {
                             PlanarId = cardId,
                             ScryfallId = scryfallId,
-                            Quantity = foil ? 0 : qty,
-                            FoilQuantity = foil ? qty : 0,
+                            Quantity = qty,
+                            FoilQuantity = 0,
+                            Finish = finish,
                             Condition = "Near Mint",
                             Language = "English",
                             DateAdded = DateTime.Now,
@@ -6959,23 +7185,23 @@ namespace BreakersOfE
                     }
                     else
                     {
-                        if (foil) pe.FoilQuantity += qty;
-                        else pe.Quantity += qty;
+                        pe.Quantity += qty;
                         pe.DateModified = DateTime.Now;
                     }
                     break;
 
                 case "Archenemy":
                     var se = db.SchemeCollectionEntries
-                        .FirstOrDefault(c => c.SchemeId == cardId);
+                        .FirstOrDefault(c => c.SchemeId == cardId && c.Finish == finish);
                     if (se == null)
                     {
                         var newSe = new SchemeCollectionEntry
                         {
                             SchemeId = cardId,
                             ScryfallId = scryfallId,
-                            Quantity = foil ? 0 : qty,
-                            FoilQuantity = foil ? qty : 0,
+                            Quantity = qty,
+                            FoilQuantity = 0,
+                            Finish = finish,
                             Condition = "Near Mint",
                             Language = "English",
                             DateAdded = DateTime.Now,
@@ -7000,15 +7226,14 @@ namespace BreakersOfE
                     }
                     else
                     {
-                        if (foil) se.FoilQuantity += qty;
-                        else se.Quantity += qty;
+                        se.Quantity += qty;
                         se.DateModified = DateTime.Now;
                     }
                     break;
 
                 case "Vanguard":
                     var ve = db.VanguardCollectionEntries
-                        .FirstOrDefault(c => c.VanguardId == cardId);
+                        .FirstOrDefault(c => c.VanguardId == cardId && c.Finish == finish);
                     if (ve == null)
                     {
                         var newVe = new VanguardCollectionEntry
@@ -7017,6 +7242,7 @@ namespace BreakersOfE
                             ScryfallId = scryfallId,
                             Quantity = qty,
                             FoilQuantity = 0,
+                            Finish = finish,
                             Condition = "Near Mint",
                             Language = "English",
                             DateAdded = DateTime.Now,
@@ -7049,15 +7275,16 @@ namespace BreakersOfE
 
                 case "Token":
                     var te = db.TokenCollectionEntries
-                        .FirstOrDefault(c => c.TokenId == cardId);
+                        .FirstOrDefault(c => c.TokenId == cardId && c.Finish == finish);
                     if (te == null)
                     {
                         var newTe = new TokenCollectionEntry
                         {
                             TokenId = cardId,
                             ScryfallId = scryfallId,
-                            Quantity = foil ? 0 : qty,
-                            FoilQuantity = foil ? qty : 0,
+                            Quantity = qty,
+                            FoilQuantity = 0,
+                            Finish = finish,
                             Condition = "Near Mint",
                             Language = "English",
                             DateAdded = DateTime.Now,
@@ -7084,23 +7311,23 @@ namespace BreakersOfE
                     }
                     else
                     {
-                        if (foil) te.FoilQuantity += qty;
-                        else te.Quantity += qty;
+                        te.Quantity += qty;
                         te.DateModified = DateTime.Now;
                     }
                     break;
 
                 case "ArtSeries":
                     var ae = db.ArtSeriesCollectionEntries
-                        .FirstOrDefault(c => c.ArtSeriesId == cardId);
+                        .FirstOrDefault(c => c.ArtSeriesId == cardId && c.Finish == finish);
                     if (ae == null)
                     {
                         var newAe = new ArtSeriesCollectionEntry
                         {
                             ArtSeriesId = cardId,
                             ScryfallId = scryfallId,
-                            Quantity = foil ? 0 : qty,
-                            FoilQuantity = foil ? qty : 0,
+                            Quantity = qty,
+                            FoilQuantity = 0,
+                            Finish = finish,
                             Condition = "Near Mint",
                             Language = "English",
                             DateAdded = DateTime.Now,
@@ -7124,23 +7351,23 @@ namespace BreakersOfE
                     }
                     else
                     {
-                        if (foil) ae.FoilQuantity += qty;
-                        else ae.Quantity += qty;
+                        ae.Quantity += qty;
                         ae.DateModified = DateTime.Now;
                     }
                     break;
 
                 case "Conspiracy":
                     var cone = db.ConspiracyCollectionEntries
-                        .FirstOrDefault(c => c.ConspiracyId == cardId);
+                        .FirstOrDefault(c => c.ConspiracyId == cardId && c.Finish == finish);
                     if (cone == null)
                     {
                         var newCe = new ConspiracyCollectionEntry
                         {
                             ConspiracyId = cardId,
                             ScryfallId = scryfallId,
-                            Quantity = foil ? 0 : qty,
-                            FoilQuantity = foil ? qty : 0,
+                            Quantity = qty,
+                            FoilQuantity = 0,
+                            Finish = finish,
                             Condition = "Near Mint",
                             Language = "English",
                             DateAdded = DateTime.Now,
@@ -7167,8 +7394,7 @@ namespace BreakersOfE
                     }
                     else
                     {
-                        if (foil) cone.FoilQuantity += qty;
-                        else cone.Quantity += qty;
+                        cone.Quantity += qty;
                         cone.DateModified = DateTime.Now;
                     }
                     break;
@@ -7182,30 +7408,35 @@ namespace BreakersOfE
         // ── Trade Binder — Have List operations ───────────────────────────────
         private void AddToTradeBinder(PoolCard pc, bool foil, int qty)
         {
-            using var db = new Data.CollectionDbContext();
+            string finish = foil ? Models.CardFinish.Foil : Models.CardFinish.NonFoil;
+            decimal? price = foil ? pc.PriceUsdFoil : pc.PriceUsd;
 
-            // Check if card is in a deck (UsedCount > 0)
-            var collEntry = !string.IsNullOrEmpty(pc.ScryfallId)
-                ? db.CollectionEntries.FirstOrDefault(c => c.ScryfallId == pc.ScryfallId)
-                : db.CollectionEntries.FirstOrDefault(c => c.PoolId == pc.PoolId);
-            if (collEntry != null && collEntry.UsedCount > 0)
+            // ── Availability guard: can't list more than you own minus committed ──
+            if (!string.IsNullOrWhiteSpace(pc.ScryfallId))
             {
-                var r = MessageBox.Show(
-                    $"'{pc.Name}' has {collEntry.UsedCount} copy/copies currently " +
-                    $"in a deck.\n\nAre you sure you want to list it in the Trade Binder?",
-                    "Card Is In a Deck",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Warning);
-                if (r != MessageBoxResult.Yes) return;
+                var (nfAvail, fAvail) =
+                    Services.DeckUsageService.GetAvailableByFinish(pc.ScryfallId);
+                int avail = foil ? fAvail : nfAvail;
+                if (avail < qty)
+                {
+                    string finishName = Models.CardFinish.Display(finish);
+                    MessageBox.Show(
+                        $"You only have {avail} available {finishName} " +
+                        $"cop{(avail == 1 ? "y" : "ies")} of '{pc.Name}'.\n" +
+                        "The rest are already used in decks or the Trade Binder.",
+                        "Not Enough Available",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    if (avail <= 0) return;
+                    qty = avail; // add what we can
+                }
             }
 
-            // Auto-pull condition and market price from collection entry
-            string condition = collEntry?.Condition ?? "Near Mint";
-            decimal? askingPrice = foil ? pc.PriceUsdFoil : pc.PriceUsd;
+            using var db = new Data.CollectionDbContext();
 
+            // Match on ScryfallId + Finish (per-finish model)
             var existing = !string.IsNullOrEmpty(pc.ScryfallId)
-                ? db.TradeBinderEntries.FirstOrDefault(e => e.ScryfallId == pc.ScryfallId && e.IsFoil == foil)
-                : db.TradeBinderEntries.FirstOrDefault(e => e.PoolId == pc.PoolId && e.IsFoil == foil);
+                ? db.TradeBinderEntries.FirstOrDefault(e => e.ScryfallId == pc.ScryfallId && e.Finish == finish)
+                : db.TradeBinderEntries.FirstOrDefault(e => e.PoolId == pc.PoolId && e.Finish == finish);
             if (existing == null)
                 db.TradeBinderEntries.Add(new Models.TradeBinderEntry
                 {
@@ -7235,8 +7466,10 @@ namespace BreakersOfE
                     LegalitiesJson = pc.LegalitiesJson,
                     Quantity = qty,
                     IsFoil = foil,
-                    Condition = condition,
-                    AskingPrice = askingPrice,
+                    Finish = finish,
+                    Price = price,
+                    Condition = "Near Mint",
+                    AskingPrice = price,
                     DateAdded = DateTime.Now
                 });
             else
@@ -7244,7 +7477,44 @@ namespace BreakersOfE
                 existing.Quantity += qty;
             }
             db.SaveChanges();
+
+            // Track in DeckUsage as a pseudo-deck so it counts toward Used
+            if (!string.IsNullOrWhiteSpace(pc.ScryfallId))
+            {
+                Services.DeckUsageService.IncrementBinderUsage(pc.ScryfallId, foil, qty);
+                Services.DeckUsageService.RecomputeUsedForCard(pc.ScryfallId);
+            }
+
             RefreshBottom();
+
+            // Refresh the top grid (collection) so Used/Available update immediately,
+            // then restore the selection so the user stays on the row they were on.
+            if (_currentMode == "CollectionToTradeBinder")
+            {
+                // Remember which row was selected (by ScryfallId + Finish)
+                string? selScryfallId = null;
+                string? selFinish = null;
+                if (TopDataGrid.SelectedItem is CollectionDisplayRow selRow)
+                {
+                    selScryfallId = selRow.ScryfallId;
+                    selFinish = selRow.Finish;
+                }
+
+                LoadTopTable_CollectionForDeck();
+
+                // Restore selection
+                if (selScryfallId != null &&
+                    TopDataGrid.ItemsSource is List<CollectionDisplayRow> topRows)
+                {
+                    var match = topRows.FirstOrDefault(
+                        r => r.ScryfallId == selScryfallId && r.Finish == selFinish);
+                    if (match != null)
+                    {
+                        TopDataGrid.SelectedItem = match;
+                        TopDataGrid.ScrollIntoView(match);
+                    }
+                }
+            }
         }
 
         private void SaveTradeBinderRow(CollectionDisplayRow row)
@@ -7272,24 +7542,83 @@ namespace BreakersOfE
             db.SaveChanges();
         }
 
-        private void RemoveFromTradeBinderRow(CollectionDisplayRow row)
+        private void RemoveFromTradeBinderRow(CollectionDisplayRow row, int qty = 0, bool all = true)
         {
             using var db = new Data.CollectionDbContext();
             var e = db.TradeBinderEntries.FirstOrDefault(
                 t => t.TradeBinderEntryId == row.CollectionEntryId);
             if (e == null) return;
-            db.TradeBinderEntries.Remove(e);
+
+            bool foil = e.Finish == Models.CardFinish.Foil;
+            int removedQty;
+
+            if (all || e.Quantity <= qty)
+            {
+                // Remove the entire entry
+                removedQty = e.Quantity;
+                db.TradeBinderEntries.Remove(e);
+            }
+            else
+            {
+                // Decrement by qty
+                removedQty = qty;
+                e.Quantity = Math.Max(0, e.Quantity - qty);
+            }
+
+            // Decrement binder usage tracking
+            if (!string.IsNullOrWhiteSpace(e.ScryfallId))
+            {
+                Services.DeckUsageService.DecrementBinderUsage(
+                    e.ScryfallId, foil, removedQty);
+                Services.DeckUsageService.RecomputeUsedForCard(e.ScryfallId);
+            }
+
             db.SaveChanges();
             RefreshBottom();
+
+            // Refresh collection top grid so Used/Available update
+            if (_currentMode == "CollectionToTradeBinder")
+            {
+                string? selScryfallId = null;
+                string? selFinish = null;
+                if (TopDataGrid.SelectedItem is CollectionDisplayRow selRow)
+                {
+                    selScryfallId = selRow.ScryfallId;
+                    selFinish = selRow.Finish;
+                }
+
+                LoadTopTable_CollectionForDeck();
+
+                if (selScryfallId != null &&
+                    TopDataGrid.ItemsSource is List<CollectionDisplayRow> topRows)
+                {
+                    var match = topRows.FirstOrDefault(
+                        r => r.ScryfallId == selScryfallId && r.Finish == selFinish);
+                    if (match != null)
+                    {
+                        TopDataGrid.SelectedItem = match;
+                        TopDataGrid.ScrollIntoView(match);
+                    }
+                }
+            }
         }
 
-        private void RemoveFromWantListRow(CollectionDisplayRow row)
+        private void RemoveFromWantListRow(CollectionDisplayRow row, int qty = 0, bool all = true)
         {
             using var db = new Data.CollectionDbContext();
             var e = db.WantListEntries.FirstOrDefault(
                 w => w.WantListEntryId == row.CollectionEntryId);
             if (e == null) return;
-            db.WantListEntries.Remove(e);
+
+            if (all || e.Quantity <= qty)
+            {
+                db.WantListEntries.Remove(e);
+            }
+            else
+            {
+                e.Quantity = Math.Max(0, e.Quantity - qty);
+            }
+
             db.SaveChanges();
             RefreshBottom();
         }
@@ -7298,10 +7627,13 @@ namespace BreakersOfE
         // ── Want List operations ──────────────────────────────────────────────
         private void AddToWantList(PoolCard pc, bool foil, int qty)
         {
+            string finish = foil ? Models.CardFinish.Foil : Models.CardFinish.NonFoil;
+            decimal? price = foil ? pc.PriceUsdFoil : pc.PriceUsd;
+
             using var db = new Data.CollectionDbContext();
             var existing = !string.IsNullOrEmpty(pc.ScryfallId)
-                ? db.WantListEntries.FirstOrDefault(e => e.ScryfallId == pc.ScryfallId && e.IsFoil == foil)
-                : db.WantListEntries.FirstOrDefault(e => e.PoolId == pc.PoolId && e.IsFoil == foil);
+                ? db.WantListEntries.FirstOrDefault(e => e.ScryfallId == pc.ScryfallId && e.Finish == finish)
+                : db.WantListEntries.FirstOrDefault(e => e.PoolId == pc.PoolId && e.Finish == finish);
             if (existing == null)
                 db.WantListEntries.Add(new Models.WantListEntry
                 {
@@ -7331,6 +7663,8 @@ namespace BreakersOfE
                     LegalitiesJson = pc.LegalitiesJson,
                     Quantity = qty,
                     IsFoil = foil,
+                    Finish = finish,
+                    Price = price,
                     DateAdded = DateTime.Now
                 });
             else
@@ -7353,6 +7687,14 @@ namespace BreakersOfE
                         var e = db.CollectionEntries.FirstOrDefault(
                             c => c.CollectionEntryId == row.CollectionEntryId);
                         if (e == null) return;
+
+                        // How many of this row's finish are being removed — used
+                        // to keep the active deck's per-deck entered count in
+                        // lockstep (Deck→Collection: removing pulls back out of
+                        // what was entered from this deck).
+                        bool rowIsFoil = e.Finish == Models.CardFinish.Foil;
+                        int removedCount = all ? e.Quantity : qty;
+
                         if (all) db.CollectionEntries.Remove(e);
                         else
                         {
@@ -7361,6 +7703,19 @@ namespace BreakersOfE
                             e.DateModified = DateTime.Now;
                             if (e.Quantity == 0 && e.FoilQuantity == 0)
                                 db.CollectionEntries.Remove(e);
+                        }
+
+                        // Keep the active deck's entered count synced on removal.
+                        // (Decrement DeckUsage now; the UsedCount recompute is
+                        // deferred until after the collection change is saved so
+                        // it reads the post-removal quantities — see below.)
+                        if (_currentMode == "DeckToCollection" && _activeDeck != null
+                            && !string.IsNullOrWhiteSpace(e.ScryfallId))
+                        {
+                            string deckId = _activeDeck.EnsureDeckId();
+                            for (int i = 0; i < Math.Max(1, removedCount); i++)
+                                DeckUsageService.DecrementDeckEntry(deckId, e.ScryfallId, rowIsFoil);
+                            _pendingRecomputeScryfallId = e.ScryfallId;
                         }
                         break;
                     }
@@ -7458,9 +7813,20 @@ namespace BreakersOfE
             }
 
             db.SaveChanges();
+
+            // Deferred: recompute the affected card's UsedCount now that the
+            // collection removal is committed (so it reads post-removal owned
+            // quantities and caps correctly).
+            if (!string.IsNullOrEmpty(_pendingRecomputeScryfallId))
+            {
+                DeckUsageService.RecomputeUsedForCard(_pendingRecomputeScryfallId);
+                _pendingRecomputeScryfallId = null;
+            }
+
             RefreshBottom();
             RestoreFocus();
         }
+        private string? _pendingRecomputeScryfallId;
 
         private void AdjustCollectionQty(
             CollectionDisplayRow row, int delta, bool foil)
@@ -8852,13 +9218,18 @@ namespace BreakersOfE
 
             rows.RemoveAll(r => r.IsFooter);
 
-            int totalNonFoil = rows.Sum(r => r.Quantity);
-            int totalFoils = rows.Sum(r => r.FoilQuantity);
+            // Per-finish: each row is one finish. "Non-foil qty" = sum of Qty
+            // where the row's finish is nonfoil; "Foil qty" = foil rows' Qty.
+            int totalNonFoil = rows.Where(r => r.Finish == Models.CardFinish.NonFoil)
+                                   .Sum(r => r.Quantity);
+            int totalFoils = rows.Where(r => r.Finish != Models.CardFinish.NonFoil)
+                                 .Sum(r => r.Quantity);
             int totalUsed = rows.Sum(r => r.UsedCount);
             int totalAvail = rows.Sum(r => r.AvailableCount);
-            decimal totalVal = rows.Sum(r => r.TotalValue);
+            // RowValue = per-finish Price × Quantity (replaces old combined TotalValue).
+            decimal totalVal = rows.Sum(r => r.RowValue);
             decimal totalMkt = rows.Where(r => r.MarketValue.HasValue)
-                                    .Sum(r => r.MarketValue!.Value * (r.Quantity + r.FoilQuantity));
+                                    .Sum(r => r.MarketValue!.Value * r.Quantity);
             decimal totalBuyAt = rows.Where(r => r.BuyAt.HasValue)
                                        .Sum(r => r.BuyAt!.Value);
             decimal totalSellAt = rows.Where(r => r.SellAt.HasValue)
@@ -9469,10 +9840,10 @@ namespace BreakersOfE
             else if (collVisible.Count > 0)
             {
                 UpdateTopSummary("Collection",
-                    nonFoil: collVisible.Sum(r => r.Quantity),
-                    foil: collVisible.Sum(r => r.FoilQuantity),
-                    total: collVisible.Sum(r => r.Quantity + r.FoilQuantity),
-                    value: collVisible.Sum(r => r.TotalValue));
+                    nonFoil: collVisible.Where(r => r.Finish == Models.CardFinish.NonFoil).Sum(r => r.Quantity),
+                    foil: collVisible.Where(r => r.Finish != Models.CardFinish.NonFoil).Sum(r => r.Quantity),
+                    total: collVisible.Sum(r => r.Quantity),
+                    value: collVisible.Sum(r => r.RowValue));
             }
             else if (deckVisible.Count > 0 && _activeDeck != null)
             {
@@ -9792,6 +10163,164 @@ namespace BreakersOfE
                 "Deck Prices Updated",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
+        }
+
+        /// <summary>
+        /// Finds decks referenced by the collection's DeckUsage records whose
+        /// deck file can no longer be found on disk, and for each one lets the
+        /// user either clear its usage or locate the moved file. This is the
+        /// deleted-deck safety net: usage stays consistent even when a deck file
+        /// is deleted or moved somewhere the app can't see.
+        /// </summary>
+        private void MenuReconcileDeckUsage_Click(object sender, RoutedEventArgs e)
+        {
+            List<(string DeckId, string DeckName)> known;
+            try
+            {
+                known = DeckUsageService.GetKnownDecks();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not read deck usage:\n\n{ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            if (known.Count == 0)
+            {
+                MessageBox.Show(
+                    "No deck usage is recorded yet, so there is nothing to reconcile.",
+                    "Reconcile Deck Usage",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            // Find decks whose file can't be located anywhere under the Decks folder.
+            var missing = known
+                .Where(d => DeckService.FindDeckFileById(d.DeckId) == null)
+                .ToList();
+
+            if (missing.Count == 0)
+            {
+                MessageBox.Show(
+                    $"All {known.Count} deck(s) referenced by your collection were found.\n" +
+                    "Nothing needs reconciling.",
+                    "Reconcile Deck Usage",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            int removed = 0, relocated = 0, skipped = 0, restored = 0;
+
+            foreach (var deck in missing)
+            {
+                // Yes = Remove usage, No = Locate file, Cancel = Skip
+                var choice = MessageBox.Show(
+                    $"The deck \"{deck.DeckName}\" is referenced by your collection, " +
+                    "but its file can't be found.\n\n" +
+                    "• Yes — Remove this deck's usage (frees those cards as available)\n" +
+                    "• No — Locate the deck file (if you moved it)\n" +
+                    "• Cancel — Skip for now",
+                    "Deck File Not Found",
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Question);
+
+                if (choice == MessageBoxResult.Cancel)
+                {
+                    skipped++;
+                    continue;
+                }
+
+                if (choice == MessageBoxResult.Yes)
+                {
+                    // Clear this deck's usage, then recompute affected counts.
+                    var affected = DeckUsageService.GetUsageForCard_ScryfallIdsForDeck(deck.DeckId);
+                    DeckUsageService.RemoveDeck(deck.DeckId);
+                    foreach (var sid in affected)
+                        RecomputeUsedCountByScryfall(sid, 0);
+                    removed++;
+                }
+                else // No — Locate
+                {
+                    var dlg = new Microsoft.Win32.OpenFileDialog
+                    {
+                        Title = $"Locate deck file for \"{deck.DeckName}\"",
+                        Filter = "Deck Files (*.deck)|*.deck",
+                        InitialDirectory = Services.AppFolderService.DecksFolder
+                    };
+                    if (dlg.ShowDialog() == true)
+                    {
+                        var located = DeckService.Load(dlg.FileName);
+                        if (located == null ||
+                            !string.Equals(located.DeckId, deck.DeckId,
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            MessageBox.Show(
+                                "That file is not the same deck (its id doesn't match), " +
+                                "so nothing was changed for this deck.",
+                                "Different Deck",
+                                MessageBoxButton.OK, MessageBoxImage.Warning);
+                            skipped++;
+                        }
+                        else
+                        {
+                            // Re-sync from the located file so usage + name refresh.
+                            DeckUsageService.SyncDeck(located);
+                            relocated++;
+                        }
+                    }
+                    else
+                    {
+                        skipped++;
+                    }
+                }
+            }
+
+            // ── RESTORE direction ────────────────────────────────────────────
+            // Scan all deck files on disk. Any that are collection-linked (were
+            // previously involved in a collection transaction) but currently
+            // have NO usage records — e.g. a file restored from trash after its
+            // usage was removed — get their usage rebuilt from the file. Pool-
+            // only decks (never collection-linked) are ignored.
+            try
+            {
+                string folder = Services.AppFolderService.DecksFolder;
+                if (System.IO.Directory.Exists(folder))
+                {
+                    var knownIds = new HashSet<string>(
+                        known.Select(k => k.DeckId), StringComparer.OrdinalIgnoreCase);
+
+                    foreach (var file in System.IO.Directory.EnumerateFiles(
+                        folder, "*.deck", System.IO.SearchOption.AllDirectories))
+                    {
+                        Deck? d;
+                        try { d = DeckService.Load(file); } catch { continue; }
+                        if (d == null) continue;
+                        if (!d.CollectionLinked) continue;               // pool-only → ignore
+                        if (knownIds.Contains(d.EnsureDeckId())) continue; // already has usage
+
+                        // Collection-linked deck with no usage rows → restore it.
+                        DeckUsageService.SyncDeck(d);
+                        restored++;
+                    }
+                }
+            }
+            catch { /* best-effort restore scan */ }
+
+            // Refresh the collection view
+            if (_currentMode == "DeckToCollection")
+                LoadBottomTable_Collection();
+            else
+                LoadCaches();
+
+            MessageBox.Show(
+                $"Reconcile complete.\n\n" +
+                $"Removed usage: {removed}\n" +
+                $"Relocated: {relocated}\n" +
+                $"Restored: {restored}\n" +
+                $"Skipped: {skipped}",
+                "Reconcile Deck Usage",
+                MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         private void ShowDeckCardDetail(DeckCard c)

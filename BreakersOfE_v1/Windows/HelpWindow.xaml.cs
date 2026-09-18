@@ -720,7 +720,7 @@ namespace BreakersOfE.Windows
                         P("Switch to Pool → Want List mode. Add any card from the pool to your want list."),
                         P("Each entry tracks: Quantity, Foil/Non-Foil, and Offer Price.")),
                     S("Visual Binder",
-                        P("Cards are shown in a 3×3 pocket grid per page. Foil cards have a rainbow triangle badge in the top-right corner. Quantity is shown as ×N in the bottom-left corner."),
+                        P("Cards are shown in a 3×3 pocket grid per page. Foil cards have a gold \"F\" pill badge in the top-right corner. Quantity is shown as ×N in the bottom-left corner."),
                         B("Click a card to select it"),
                         B("Double-click to see the enlarged card view with full details"),
                         B("Right-click to remove a card from the binder"),

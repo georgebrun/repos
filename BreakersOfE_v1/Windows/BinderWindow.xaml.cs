@@ -169,7 +169,7 @@ namespace BreakersOfE.Windows
             {
                 Margin = new Thickness(6),
                 Cursor = Cursors.Hand,
-                ToolTip = $"{pocket.Name}{(pocket.IsFoil ? " ✦ Foil" : "")}" +
+                ToolTip = $"{pocket.Name}{(pocket.IsFoil ? " (F)" : "")}" +
                           $"\n{pocket.SetCode}" +
                           $"{(!string.IsNullOrEmpty(pocket.Condition) ? "\n" + pocket.Condition : "")}" +
                           $"\n{pocket.PriceDisplay}"
@@ -200,13 +200,13 @@ namespace BreakersOfE.Windows
             Canvas.SetTop(cardImg, 0);
             canvas.Children.Add(cardImg);
 
-            // ── Foil badge — rainbow triangle top-right ──────────────────────
+            // ── Finish pill badge — top-right (F = Foil, E = Etched) ────────
             if (pocket.IsFoil)
             {
-                var foilBadge = MakeFoilTriangle();
-                Canvas.SetRight(foilBadge, 0);
-                Canvas.SetTop(foilBadge, 0);
-                canvas.Children.Add(foilBadge);
+                var pill = MakeFinishPill("F", 16);
+                Canvas.SetRight(pill, 2);
+                Canvas.SetTop(pill, 2);
+                canvas.Children.Add(pill);
             }
 
             // ── Qty badge — dark pill bottom-left ───────────────────────────
@@ -255,32 +255,23 @@ namespace BreakersOfE.Windows
             return outer;
         }
 
-        // ── Foil rainbow triangle badge ──────────────────────────────────────
-        private static UIElement MakeFoilTriangle()
+        // ── Finish pill badge (neutral lettered chip: F / E) ─────────────────
+        private static UIElement MakeFinishPill(string label, double fontSize = 9)
         {
-            const double size = 22;
-            var poly = new Polygon
+            return new Border
             {
-                Points = new PointCollection
+                Background = new SolidColorBrush(Color.FromArgb(210, 0xCC, 0x99, 0x00)), // gold
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(4, 1, 4, 1),
+                Child = new TextBlock
                 {
-                    new Point(0, 0),
-                    new Point(size, 0),
-                    new Point(size, size)
+                    Text = label,
+                    FontSize = fontSize,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = new SolidColorBrush(Colors.White)
                 },
-                Fill = new LinearGradientBrush(
-                    new GradientStopCollection
-                    {
-                        new GradientStop(Color.FromRgb(0xFF, 0x00, 0x80), 0.0),  // pink
-                        new GradientStop(Color.FromRgb(0xFF, 0xA5, 0x00), 0.2),  // orange
-                        new GradientStop(Color.FromRgb(0xFF, 0xFF, 0x00), 0.4),  // yellow
-                        new GradientStop(Color.FromRgb(0x00, 0xDD, 0x44), 0.6),  // green
-                        new GradientStop(Color.FromRgb(0x00, 0xAA, 0xFF), 0.8),  // blue
-                        new GradientStop(Color.FromRgb(0xAA, 0x00, 0xFF), 1.0),  // purple
-                    },
-                    new Point(0, 0), new Point(1, 1)),
-                Opacity = 0.85
+                IsHitTestVisible = false
             };
-            return poly;
         }
 
         // ── Qty pill badge ───────────────────────────────────────────────────

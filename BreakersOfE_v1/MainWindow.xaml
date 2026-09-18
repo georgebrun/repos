@@ -271,6 +271,9 @@
                 <MenuItem Header="💰 Update Deck Prices"
                           Click="MenuUpdateDeckPrices_Click"
                           ToolTip="Updates prices in all currently open decks from the pool"/>
+                <MenuItem Header="🧹 Reconcile Deck Usage"
+                          Click="MenuReconcileDeckUsage_Click"
+                          ToolTip="Finds cards marked as used in decks whose files no longer exist, and lets you clear or relocate them."/>
                 <Separator/>
                 <MenuItem Header="📒 _Trade Binder"       Name="MenuTradeBinder"
                           Click="MenuTradeBinder_Click"/>
@@ -833,8 +836,7 @@
                             </DataGrid.Resources>
                             <DataGrid.ContextMenu>
                                 <ContextMenu>
-                                    <MenuItem Header="Remove 1 Non-Foil"        Click="CtxRemove1NonFoil_Click"/>
-                                    <MenuItem Header="Remove 1 Foil"            Click="CtxRemove1Foil_Click"/>
+                                    <MenuItem Header="Remove 1"                 Click="CtxRemove1_Click"/>
                                     <Separator/>
                                     <MenuItem Header="Remove All Copies"        Click="CtxRemoveAll_Click"/>
                                     <Separator/>

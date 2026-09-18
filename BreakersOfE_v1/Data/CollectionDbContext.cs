@@ -25,6 +25,7 @@ namespace BreakersOfE.Data
         public DbSet<ArtSeriesCollectionEntry> ArtSeriesCollectionEntries { get; set; }
         public DbSet<TradeBinderEntry> TradeBinderEntries { get; set; }
         public DbSet<WantListEntry> WantListEntries { get; set; }
+        public DbSet<DeckUsage> DeckUsages { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder options)
         {
@@ -50,6 +51,13 @@ namespace BreakersOfE.Data
                 .HasIndex(e => e.ScryfallId);
             modelBuilder.Entity<CollectionEntry>()
                 .HasIndex(e => e.PoolId);  // legacy compat
+
+            // DeckUsage is looked up by card (ScryfallId) for the nested table,
+            // and by deck (DeckId) for reconcile/cleanup.
+            modelBuilder.Entity<DeckUsage>()
+                .HasIndex(e => e.ScryfallId);
+            modelBuilder.Entity<DeckUsage>()
+                .HasIndex(e => e.DeckId);
         }
 
         public void EnsureCreated()
@@ -77,6 +85,28 @@ namespace BreakersOfE.Data
         {
             if (!System.IO.File.Exists(AppFolderService.CollectionDatabasePath))
                 Database.EnsureCreated();
+
+            // ── DeckUsage: records which decks use each collection card ──────
+            // Replaces deck-file folder scanning. Keyed on ScryfallId + DeckId.
+            CreateTableIfMissing(@"
+                CREATE TABLE IF NOT EXISTS DeckUsages (
+                    DeckUsageId    INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ScryfallId     TEXT NOT NULL DEFAULT '',
+                    DeckId         TEXT NOT NULL DEFAULT '',
+                    DeckName       TEXT NOT NULL DEFAULT '',
+                    DeckType       TEXT NOT NULL DEFAULT '',
+                    Quantity       INTEGER NOT NULL DEFAULT 0,
+                    FoilQuantity   INTEGER NOT NULL DEFAULT 0,
+                    Category       TEXT NOT NULL DEFAULT '',
+                    DateRecorded   TEXT NOT NULL DEFAULT ''
+                )");
+            CreateTableIfMissing(
+                "CREATE INDEX IF NOT EXISTS IX_DeckUsages_ScryfallId ON DeckUsages(ScryfallId)");
+            CreateTableIfMissing(
+                "CREATE INDEX IF NOT EXISTS IX_DeckUsages_DeckId ON DeckUsages(DeckId)");
+            // Per-deck entered-count columns (added for existing DeckUsages tables).
+            AddColumn("DeckUsages", "EnteredNonFoil", "INTEGER NOT NULL DEFAULT 0");
+            AddColumn("DeckUsages", "EnteredFoil", "INTEGER NOT NULL DEFAULT 0");
 
             // ── Create tables that may not exist yet ────────────────────────
             CreateTableIfMissing(@"
@@ -331,6 +361,26 @@ namespace BreakersOfE.Data
             {
                 AddColumn("TradeBinderEntries", col, def);
                 AddColumn("WantListEntries", col, def);
+            }
+
+            // ── Phase 2: per-finish columns ─────────────────────────────────
+            // Finish = "nonfoil"/"foil"/"etched" (default nonfoil so existing
+            // rows are valid immediately). Price = single USD value for the
+            // row's finish. Added to collection AND both binders. Existing
+            // combined rows are split into per-finish rows by the migration.
+            AddColumn("CollectionEntries", "Finish", "TEXT NOT NULL DEFAULT 'nonfoil'");
+            AddColumn("CollectionEntries", "Price", "REAL");
+            AddColumn("TradeBinderEntries", "Finish", "TEXT NOT NULL DEFAULT 'nonfoil'");
+            AddColumn("TradeBinderEntries", "Price", "REAL");
+            AddColumn("WantListEntries", "Finish", "TEXT NOT NULL DEFAULT 'nonfoil'");
+            AddColumn("WantListEntries", "Price", "REAL");
+
+            // Special collection types (foil tokens etc. exist), same per-finish
+            // treatment. Etched defaults off; capability is there if ever needed.
+            foreach (var table in specialTables)
+            {
+                AddColumn(table, "Finish", "TEXT NOT NULL DEFAULT 'nonfoil'");
+                AddColumn(table, "Price", "REAL");
             }
         }
 

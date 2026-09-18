@@ -919,35 +919,26 @@ namespace BreakersOfE.Windows
                 Canvas.SetTop(border, 0);
                 canvas.Children.Add(border);
 
-                // Foil rainbow triangle — top right
+                // Finish pill — top right (F = Foil)
                 if (card.IsFoil)
                 {
-                    const double ts = 14;
-                    var poly = new System.Windows.Shapes.Polygon
+                    var pill = new Border
                     {
-                        Points = new PointCollection
+                        Background = new SolidColorBrush(Color.FromArgb(210, 0xCC, 0x99, 0x00)),
+                        CornerRadius = new CornerRadius(6),
+                        Padding = new Thickness(3, 1, 3, 1),
+                        Child = new TextBlock
                         {
-                            new Point(0, 0),
-                            new Point(ts, 0),
-                            new Point(ts, ts)
+                            Text = "F",
+                            FontSize = 8,
+                            FontWeight = FontWeights.Bold,
+                            Foreground = new SolidColorBrush(Colors.White)
                         },
-                        Fill = new LinearGradientBrush(
-                            new GradientStopCollection
-                            {
-                                new GradientStop(Color.FromRgb(0xFF, 0x00, 0x80), 0.0),
-                                new GradientStop(Color.FromRgb(0xFF, 0xA5, 0x00), 0.2),
-                                new GradientStop(Color.FromRgb(0xFF, 0xFF, 0x00), 0.4),
-                                new GradientStop(Color.FromRgb(0x00, 0xDD, 0x44), 0.6),
-                                new GradientStop(Color.FromRgb(0x00, 0xAA, 0xFF), 0.8),
-                                new GradientStop(Color.FromRgb(0xAA, 0x00, 0xFF), 1.0),
-                            },
-                            new Point(0, 0), new Point(1, 1)),
-                        Opacity = 0.9,
                         IsHitTestVisible = false
                     };
-                    Canvas.SetRight(poly, 0);
-                    Canvas.SetTop(poly, 0);
-                    canvas.Children.Add(poly);
+                    Canvas.SetRight(pill, 2);
+                    Canvas.SetTop(pill, 2);
+                    canvas.Children.Add(pill);
                 }
 
                 // Commander star — bottom left

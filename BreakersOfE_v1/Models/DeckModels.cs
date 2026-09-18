@@ -295,6 +295,23 @@ namespace BreakersOfE.Models
     public class Deck
     {
         // ── Identity ──────────────────────────────────────────────────────────
+        // Stable unique deck ID — the "ScryfallId for decks". Generated once and
+        // never changes, so deck-usage records survive renames and same-name
+        // decks. Never shown to the user; it's invisible plumbing. If an older
+        // deck file has no DeckId (empty), it's stamped with a fresh one the
+        // first time it's loaded/saved, so existing files self-heal.
+        public string DeckId { get; set; } = Guid.NewGuid().ToString();
+
+        /// <summary>
+        /// True once ANY card has been added to this deck from the collection
+        /// (Collection→Deck) or any of this deck's cards entered into the
+        /// collection (Deck→Collection). Marks the deck as "collection-linked"
+        /// so reconcile knows it SHOULD have usage records — and can restore
+        /// them if the file is moved/restored. Pool→Deck and Pool→Collection
+        /// never set this. Persisted in the .deck file; travels with the deck.
+        /// </summary>
+        public bool CollectionLinked { get; set; } = false;
+
         public string Name { get; set; } = "New Deck";
         public string Description { get; set; } = string.Empty;
         public DeckType DeckType { get; set; } = DeckType.Standard;
@@ -303,6 +320,18 @@ namespace BreakersOfE.Models
         public string FilePath { get; set; } = string.Empty;
         public DateTime Created { get; set; } = DateTime.Now;
         public DateTime Modified { get; set; } = DateTime.Now;
+
+        /// <summary>
+        /// Returns the deck's stable ID, generating and assigning one if this
+        /// deck was loaded from an older file that predates DeckId. Call this
+        /// (rather than the raw property) anywhere the ID must exist.
+        /// </summary>
+        public string EnsureDeckId()
+        {
+            if (string.IsNullOrWhiteSpace(DeckId))
+                DeckId = Guid.NewGuid().ToString();
+            return DeckId;
+        }
 
         // ── Power level ───────────────────────────────────────────────────────
         public int? UserPowerLevel { get; set; }   // user override 1-10

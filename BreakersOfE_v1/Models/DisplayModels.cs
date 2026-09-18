@@ -64,6 +64,21 @@ namespace BreakersOfE.Models
         public int Quantity { get; set; }
         public int FoilQuantity { get; set; }
         public string FoilBadge => FoilQuantity > 0 ? "★" : string.Empty;
+
+        // ── Per-finish (Phase 2) ──────────────────────────────────────────────
+        // Each row is one finish now. Finish = nonfoil/foil/etched.
+        public string Finish { get; set; } = "nonfoil";
+        // Pill shown in the grid: "" for non-foil, "F" for foil, "E" for etched.
+        public string FinishPill => Models.CardFinish.Pill(Finish);
+        public string FinishDisplay => Models.CardFinish.Display(Finish);
+        // Single per-finish price (this row's finish value).
+        public decimal? Price { get; set; }
+        public decimal PriceSort => Price ?? 0m;
+        public string PriceDisplay => Price.HasValue ? $"${Price.Value:0.00}" : string.Empty;
+        // Value of this row = per-finish price × quantity of this finish.
+        public decimal RowValue => (Price ?? 0m) * Quantity;
+        public string RowValueDisplay => $"${RowValue:0.00}";
+
         public int UsedCount { get; set; }
         public string Condition { get; set; } = "Unknown";
         public string Language { get; set; } = string.Empty;
@@ -175,8 +190,10 @@ namespace BreakersOfE.Models
         public int RowIndex { get; set; }
 
         // ── Computed quantities ───────────────────────────────────────────────
+        // Per-finish: each row is one finish, so Available = this finish's
+        // owned quantity minus this finish's used count (never negative).
         public int AvailableCount =>
-            Math.Max(0, Quantity + FoilQuantity - UsedCount);
+            Math.Max(0, Quantity - UsedCount);
 
         public string PowerToughness =>
             !string.IsNullOrWhiteSpace(Power) &&

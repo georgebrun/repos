@@ -51,34 +51,26 @@ namespace BreakersOfE.Windows
             Canvas.SetTop(cardImg, 0);
             CardCanvas.Children.Add(cardImg);
 
-            // ── Foil triangle — top right ────────────────────────────────────
+            // ── Finish pill — top right ────────────────────────────────────
             if (pocket.IsFoil)
             {
-                const double ts = 46;
-                var poly = new Polygon
+                var pill = new Border
                 {
-                    Points = new PointCollection
+                    Background = new SolidColorBrush(Color.FromArgb(210, 0xCC, 0x99, 0x00)),
+                    CornerRadius = new CornerRadius(10),
+                    Padding = new Thickness(8, 3, 8, 3),
+                    Child = new TextBlock
                     {
-                        new Point(0, 0),
-                        new Point(ts, 0),
-                        new Point(ts, ts)
+                        Text = "F",
+                        FontSize = 16,
+                        FontWeight = FontWeights.Bold,
+                        Foreground = new SolidColorBrush(Colors.White)
                     },
-                    Fill = new LinearGradientBrush(
-                        new GradientStopCollection
-                        {
-                            new GradientStop(Color.FromRgb(0xFF, 0x00, 0x80), 0.0),
-                            new GradientStop(Color.FromRgb(0xFF, 0xA5, 0x00), 0.2),
-                            new GradientStop(Color.FromRgb(0xFF, 0xFF, 0x00), 0.4),
-                            new GradientStop(Color.FromRgb(0x00, 0xDD, 0x44), 0.6),
-                            new GradientStop(Color.FromRgb(0x00, 0xAA, 0xFF), 0.8),
-                            new GradientStop(Color.FromRgb(0xAA, 0x00, 0xFF), 1.0),
-                        },
-                        new Point(0, 0), new Point(1, 1)),
-                    Opacity = 0.88
+                    IsHitTestVisible = false
                 };
-                Canvas.SetRight(poly, 0);
-                Canvas.SetTop(poly, 0);
-                CardCanvas.Children.Add(poly);
+                Canvas.SetRight(pill, 4);
+                Canvas.SetTop(pill, 4);
+                CardCanvas.Children.Add(pill);
             }
 
             // ── Qty badge — bottom left ──────────────────────────────────────

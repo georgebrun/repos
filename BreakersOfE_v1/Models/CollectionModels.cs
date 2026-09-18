@@ -53,8 +53,19 @@ namespace BreakersOfE.Models
         public string PricesJson { get; set; } = string.Empty;
 
         // ── Collection-specific metadata ────────────────────────────────────
+        // FINISH MODEL (Phase 2): each row now represents ONE finish of a
+        // printing. Finish is "nonfoil", "foil", or "etched". Row identity is
+        // ScryfallId + Finish. Quantity is the count of THIS finish. Price is
+        // the single USD value for THIS finish (stored raw decimal; displayed
+        // as currency rounded to cents). The legacy FoilQuantity and the
+        // multi-finish price columns above are kept temporarily so old data and
+        // un-migrated collections still load; the migration splits combined
+        // rows into per-finish rows and populates Finish + Price.
+        public string Finish { get; set; } = "nonfoil";
+        public decimal? Price { get; set; }
+
         public int Quantity { get; set; }
-        public int FoilQuantity { get; set; }
+        public int FoilQuantity { get; set; }   // legacy — migration drains this into per-finish rows
         public string Condition { get; set; } = "Unknown";
         public string Language { get; set; } = "English";
         public string Notes { get; set; } = string.Empty;
@@ -114,6 +125,9 @@ namespace BreakersOfE.Models
         // ── Collection metadata ─────────────────────────────────────────────
         public int Quantity { get; set; }
         public int FoilQuantity { get; set; }
+        // Phase 2 per-finish: Finish nonfoil/foil/etched, single Price for this finish.
+        public string Finish { get; set; } = "nonfoil";
+        public decimal? Price { get; set; }
         public string Condition { get; set; } = "Unknown";
         public string Language { get; set; } = "English";
         public string Notes { get; set; } = string.Empty;
@@ -169,6 +183,9 @@ namespace BreakersOfE.Models
         // ── Collection metadata ─────────────────────────────────────────────
         public int Quantity { get; set; }
         public int FoilQuantity { get; set; }
+        // Phase 2 per-finish: Finish nonfoil/foil/etched, single Price for this finish.
+        public string Finish { get; set; } = "nonfoil";
+        public decimal? Price { get; set; }
         public string Condition { get; set; } = "Unknown";
         public string Language { get; set; } = "English";
         public string Notes { get; set; } = string.Empty;
@@ -224,6 +241,9 @@ namespace BreakersOfE.Models
         // ── Collection metadata ─────────────────────────────────────────────
         public int Quantity { get; set; }
         public int FoilQuantity { get; set; }
+        // Phase 2 per-finish: Finish nonfoil/foil/etched, single Price for this finish.
+        public string Finish { get; set; } = "nonfoil";
+        public decimal? Price { get; set; }
         public string Condition { get; set; } = "Unknown";
         public string Language { get; set; } = "English";
         public string Notes { get; set; } = string.Empty;
@@ -281,6 +301,9 @@ namespace BreakersOfE.Models
         // ── Collection metadata ─────────────────────────────────────────────
         public int Quantity { get; set; }
         public int FoilQuantity { get; set; }
+        // Phase 2 per-finish: Finish nonfoil/foil/etched, single Price for this finish.
+        public string Finish { get; set; } = "nonfoil";
+        public decimal? Price { get; set; }
         public string Condition { get; set; } = "Unknown";
         public string Language { get; set; } = "English";
         public string Notes { get; set; } = string.Empty;
@@ -340,6 +363,9 @@ namespace BreakersOfE.Models
         // ── Collection metadata ─────────────────────────────────────────────
         public int Quantity { get; set; }
         public int FoilQuantity { get; set; }
+        // Phase 2 per-finish: Finish nonfoil/foil/etched, single Price for this finish.
+        public string Finish { get; set; } = "nonfoil";
+        public decimal? Price { get; set; }
         public string Condition { get; set; } = "Unknown";
         public string Language { get; set; } = "English";
         public string Notes { get; set; } = string.Empty;
@@ -379,6 +405,9 @@ namespace BreakersOfE.Models
         // ── Collection metadata ─────────────────────────────────────────────
         public int Quantity { get; set; }
         public int FoilQuantity { get; set; }
+        // Phase 2 per-finish: Finish nonfoil/foil/etched, single Price for this finish.
+        public string Finish { get; set; } = "nonfoil";
+        public decimal? Price { get; set; }
         public string Condition { get; set; } = "Unknown";
         public string Language { get; set; } = "English";
         public string Notes { get; set; } = string.Empty;
@@ -436,7 +465,12 @@ namespace BreakersOfE.Models
 
         // ── Trade-specific metadata ─────────────────────────────────────────
         public int Quantity { get; set; } = 1;
-        public bool IsFoil { get; set; } = false;
+        // FINISH MODEL (Phase 2): Finish is "nonfoil"/"foil"/"etched" — replaces
+        // the two-state IsFoil so binders can express etched too. IsFoil kept
+        // for migration (Finish populated from it); Price is this finish's value.
+        public string Finish { get; set; } = "nonfoil";
+        public decimal? Price { get; set; }
+        public bool IsFoil { get; set; } = false;   // legacy — migrated into Finish
         public string Condition { get; set; } = "Near Mint";
         public decimal? AskingPrice { get; set; }
         public string Notes { get; set; } = string.Empty;
@@ -477,10 +511,61 @@ namespace BreakersOfE.Models
 
         // ── Want-specific metadata ──────────────────────────────────────────
         public int Quantity { get; set; } = 1;
-        public bool IsFoil { get; set; } = false;
+        // FINISH MODEL (Phase 2): see TradeBinderEntry — Finish replaces IsFoil,
+        // adds etched; IsFoil kept for migration; Price is this finish's value.
+        public string Finish { get; set; } = "nonfoil";
+        public decimal? Price { get; set; }
+        public bool IsFoil { get; set; } = false;   // legacy — migrated into Finish
         public decimal? OfferPrice { get; set; }
         public string Notes { get; set; } = string.Empty;
         public DateTime DateAdded { get; set; } = DateTime.Now;
+    }
+
+    // ── Finish constants ───────────────────────────────────────────────────
+    /// <summary>
+    /// The three card finishes, as stored in the Finish column. Single source
+    /// of truth — never hard-code these strings elsewhere. Values match
+    /// Scryfall's finish names so pool prices map cleanly (usd → NonFoil,
+    /// usd_foil → Foil, usd_etched → Etched).
+    /// </summary>
+    public static class CardFinish
+    {
+        public const string NonFoil = "nonfoil";
+        public const string Foil = "foil";
+        public const string Etched = "etched";
+
+        /// <summary>Short display label for the finish pill: "" / "F" / "E".</summary>
+        public static string Pill(string finish) => finish switch
+        {
+            Foil => "F",
+            Etched => "E",
+            _ => string.Empty   // non-foil shows no pill
+        };
+
+        /// <summary>Full display name.</summary>
+        public static string Display(string finish) => finish switch
+        {
+            Foil => "Foil",
+            Etched => "Etched",
+            _ => "Non-Foil"
+        };
+
+        /// <summary>Normalizes any legacy/loose value to a canonical finish.</summary>
+        public static string Normalize(string? finish)
+        {
+            if (string.IsNullOrWhiteSpace(finish)) return NonFoil;
+            string f = finish.Trim().ToLowerInvariant();
+            return f switch
+            {
+                "foil" => Foil,
+                "etched" => Etched,
+                "etched foil" => Etched,
+                "nonfoil" => NonFoil,
+                "non-foil" => NonFoil,
+                "normal" => NonFoil,
+                _ => NonFoil
+            };
+        }
     }
 
     // ── App Settings ─────────────────────────────────────────────────────────
@@ -489,5 +574,63 @@ namespace BreakersOfE.Models
         [Key]
         public string Key { get; set; } = string.Empty;
         public string Value { get; set; } = string.Empty;
+    }
+
+    // ── Deck Usage ───────────────────────────────────────────────────────────
+    /// <summary>
+    /// Records that a collection card (by ScryfallId) is used in a specific
+    /// deck (by the deck's stable GUID). This REPLACES the old approach of
+    /// scanning deck files on disk to figure out "used in decks" — which was
+    /// unreliable because deck files can live anywhere. Instead, usage is
+    /// recorded in the collection database when the user actually enters a
+    /// deck's cards, so only decks the user genuinely entered can appear.
+    ///
+    /// Keyed on ScryfallId (never PoolId — PoolId is a local pool rowid that
+    /// changes when the pool is rebuilt) and DeckId (a GUID stamped at deck
+    /// creation, stable across renames and same-name decks).
+    /// </summary>
+    public class DeckUsage
+    {
+        [Key]
+        public int DeckUsageId { get; set; }
+
+        /// <summary>The card, by its stable Scryfall printing id.</summary>
+        public string ScryfallId { get; set; } = string.Empty;
+
+        /// <summary>The deck's stable GUID (never the name — names can change).</summary>
+        public string DeckId { get; set; } = string.Empty;
+
+        /// <summary>Deck name, denormalized for display without loading the file.
+        /// Refreshed whenever we see the deck; never used as a key.</summary>
+        public string DeckName { get; set; } = string.Empty;
+
+        /// <summary>Deck type label for display (Standard / Commander).</summary>
+        public string DeckType { get; set; } = string.Empty;
+
+        /// <summary>Non-foil copies of this card used in this deck.</summary>
+        public int Quantity { get; set; } = 0;
+
+        /// <summary>Foil copies of this card used in this deck.</summary>
+        public int FoilQuantity { get; set; } = 0;
+
+        /// <summary>
+        /// Per-deck entry tracking (Phase 2): how many of THIS deck's copies
+        /// have been entered into the collection, split by finish. This is what
+        /// makes the Deck→Collection guard per-deck: you can enter up to this
+        /// deck's Quantity/FoilQuantity, independent of what other decks hold or
+        /// what you own for them. A card in multiple decks tracks separately per
+        /// deck because DeckUsage is keyed on DeckId + ScryfallId.
+        /// </summary>
+        public int EnteredNonFoil { get; set; } = 0;
+        public int EnteredFoil { get; set; } = 0;
+
+        /// <summary>Mainboard / Commander / Sideboard.</summary>
+        public string Category { get; set; } = string.Empty;
+
+        public DateTime DateRecorded { get; set; } = DateTime.Now;
+
+        /// <summary>Total copies (foil + non-foil) used in this deck.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public int TotalQuantity => Quantity + FoilQuantity;
     }
 }
