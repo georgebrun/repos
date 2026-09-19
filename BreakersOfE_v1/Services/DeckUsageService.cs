@@ -228,6 +228,17 @@ namespace BreakersOfE.Services
             RecomputeUsedCounts(db, new[] { scryfallId });
         }
 
+        /// <summary>
+        /// Batch version — recompute UsedCount for multiple cards at once.
+        /// </summary>
+        public static void RecomputeUsedForCards(IEnumerable<string> scryfallIds)
+        {
+            var ids = scryfallIds?.Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+            if (ids == null || ids.Count == 0) return;
+            using var db = new CollectionDbContext();
+            RecomputeUsedCounts(db, ids);
+        }
+
         private static void RecomputeUsedCounts(
             CollectionDbContext db, IEnumerable<string> scryfallIds)
         {

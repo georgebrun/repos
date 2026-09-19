@@ -2920,6 +2920,10 @@ namespace BreakersOfE
                 // Not first run — check if collection needs card data migration
                 Dispatcher.BeginInvoke(new Action(() => CheckAndPromptMigration()),
                     System.Windows.Threading.DispatcherPriority.Background);
+
+                // Phase 3: check if collection needs per-finish migration
+                Dispatcher.BeginInvoke(new Action(() => CheckAndPromptPerFinishMigration()),
+                    System.Windows.Threading.DispatcherPriority.Background);
             }
 
             // Dispatcher at Render priority ensures the grid has laid out
@@ -3027,6 +3031,71 @@ namespace BreakersOfE
         private void MenuMigrateCollectionData_Click(object sender, RoutedEventArgs e)
         {
             RunMigration();
+        }
+
+        // ── Phase 3: per-finish migration ────────────────────────────────
+        private void CheckAndPromptPerFinishMigration()
+        {
+            try
+            {
+                if (!Services.CollectionMigrationService.NeedsMigration()) return;
+
+                var (combined, binder, want, special) =
+                    Services.CollectionMigrationService.GetMigrationStats();
+
+                int total = combined + binder + want + special;
+                if (total == 0) return;
+
+                var details = "";
+                if (combined > 0) details += $"  • {combined} collection entries to split\n";
+                if (binder > 0) details += $"  • {binder} Trade Binder entries to fix\n";
+                if (want > 0) details += $"  • {want} Want List entries to fix\n";
+                if (special > 0) details += $"  • {special} special collection entries to split\n";
+
+                var result = MessageBox.Show(
+                    $"Your collection needs a per-finish upgrade.\n\n" +
+                    $"Cards with both non-foil and foil copies stored in one row\n" +
+                    $"will be split into separate rows (one per finish).\n\n" +
+                    details + "\n" +
+                    "Your current collection.db will be backed up first.\n\n" +
+                    "Run the migration now?",
+                    "Collection Per-Finish Migration",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                if (result != MessageBoxResult.Yes) return;
+
+                string summary = Services.CollectionMigrationService.RunMigration();
+
+                // Phase 3b: backfill DeckUsage for existing decks
+                string deckSummary = "";
+                try
+                {
+                    deckSummary = "\n\n" + Services.CollectionMigrationService.BackfillDeckUsage();
+                }
+                catch (Exception dex)
+                {
+                    deckSummary = $"\n\nDeck backfill error: {dex.Message}";
+                }
+
+                MessageBox.Show(summary + deckSummary, "Migration Complete",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+
+                // Reload the current view to pick up the new per-finish rows.
+                // RefreshBottom already switches on _currentMode.
+                // For the top grid, only collection modes need a reload (pool is unaffected).
+                RefreshBottom();
+                if (_currentMode == "CollectionToTradeBinder" ||
+                    _currentMode == "CollectionToDeck")
+                    LoadTopTable_CollectionForDeck();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Migration failed:\n{ex.Message}\n\nYour backup is safe.",
+                    "Migration Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void RunMigration()

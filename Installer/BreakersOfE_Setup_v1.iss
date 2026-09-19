@@ -8,7 +8,7 @@
 ; ============================================================
 
 #define AppName      "Breakers of E"
-#define AppVersion   "1.2.4"
+#define AppVersion   "1.3.0"
 #define AppPublisher "Breakers Of E"
 #define AppExeName   "BreakersOfE.exe"
 #define AppURL       ""
