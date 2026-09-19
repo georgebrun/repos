@@ -71,6 +71,11 @@ namespace BreakersOfE.Services
                         return true;
                 }
 
+                // Check 5: CollectionEntries with Price null but PriceUsd available
+                if (HasRows(conn,
+                    "SELECT 1 FROM CollectionEntries WHERE Price IS NULL AND (PriceUsd IS NOT NULL OR PriceUsdFoil IS NOT NULL) LIMIT 1"))
+                    return true;
+
                 return false;
             }
             catch (Exception ex)
@@ -84,10 +89,10 @@ namespace BreakersOfE.Services
         /// <summary>
         /// Returns a summary of what needs migrating (for the prompt dialog).
         /// </summary>
-        public static (int combinedRows, int binderFixups, int wantFixups, int specialRows) GetMigrationStats()
+        public static (int combinedRows, int binderFixups, int wantFixups, int specialRows, int nullPrices) GetMigrationStats()
         {
             string path = AppFolderService.CollectionDatabasePath;
-            if (!File.Exists(path)) return (0, 0, 0, 0);
+            if (!File.Exists(path)) return (0, 0, 0, 0, 0);
 
             using var conn = new SqliteConnection($"Data Source={path};Mode=ReadOnly");
             conn.Open();
@@ -112,7 +117,10 @@ namespace BreakersOfE.Services
                         $"SELECT count(*) FROM {table} WHERE FoilQuantity > 0");
             }
 
-            return (combined, binder, want, special);
+            int nullPrices = CountRows(conn,
+                "SELECT count(*) FROM CollectionEntries WHERE Price IS NULL AND (PriceUsd IS NOT NULL OR PriceUsdFoil IS NOT NULL)");
+
+            return (combined, binder, want, special, nullPrices);
         }
 
         /// <summary>
@@ -136,6 +144,8 @@ namespace BreakersOfE.Services
             // ── Step 2: Run migrations ──────────────────────────────────
             int splitCount = 0, binderFixed = 0, wantFixed = 0, specialSplit = 0;
 
+            int pricesFixed = 0;
+
             using (var db = new CollectionDbContext())
             {
                 // 2a: Split combined CollectionEntries
@@ -149,14 +159,19 @@ namespace BreakersOfE.Services
 
                 // 2d: Split special collections
                 specialSplit = SplitSpecialCollections(db);
+
+                // 2e: Backfill Price on entries where it's null
+                // (entries that existed before Phase 2 added the Price column)
+                pricesFixed = BackfillPrices(db);
             }
 
-            int total = splitCount + binderFixed + wantFixed + specialSplit;
+            int total = splitCount + binderFixed + wantFixed + specialSplit + pricesFixed;
             return $"Migration complete.\n\n" +
                    $"Collection rows split: {splitCount}\n" +
                    $"Trade Binder entries fixed: {binderFixed}\n" +
                    $"Want List entries fixed: {wantFixed}\n" +
-                   $"Special collection rows split: {specialSplit}\n\n" +
+                   $"Special collection rows split: {specialSplit}\n" +
+                   $"Prices backfilled: {pricesFixed}\n\n" +
                    $"Total changes: {total}\n" +
                    $"Backup saved to:\n{backupPath}";
         }
@@ -308,6 +323,65 @@ namespace BreakersOfE.Services
 
             db.SaveChanges();
             return bad.Count;
+        }
+
+        // ── Backfill Price from PriceUsd/PriceUsdFoil ─────────────────
+
+        private static int BackfillPrices(CollectionDbContext db)
+        {
+            // CollectionEntries with Price null — set from PriceUsd or PriceUsdFoil
+            // based on Finish
+            var nullPrice = db.CollectionEntries
+                .Where(e => e.Price == null)
+                .ToList();
+
+            int count = 0;
+            foreach (var e in nullPrice)
+            {
+                decimal? price = e.Finish == CardFinish.Foil
+                    ? (e.PriceUsdFoil ?? e.PriceUsd)
+                    : (e.PriceUsd ?? e.PriceUsdFoil);
+                if (price != null)
+                {
+                    e.Price = price;
+                    count++;
+                }
+            }
+
+            // Trade Binder entries
+            var binderNull = db.TradeBinderEntries
+                .Where(e => e.Price == null)
+                .ToList();
+            foreach (var e in binderNull)
+            {
+                decimal? price = e.Finish == CardFinish.Foil
+                    ? (e.PriceUsdFoil ?? e.PriceUsd)
+                    : (e.PriceUsd ?? e.PriceUsdFoil);
+                if (price != null)
+                {
+                    e.Price = price;
+                    count++;
+                }
+            }
+
+            // Want List entries
+            var wantNull = db.WantListEntries
+                .Where(e => e.Price == null)
+                .ToList();
+            foreach (var e in wantNull)
+            {
+                decimal? price = e.Finish == CardFinish.Foil
+                    ? (e.PriceUsdFoil ?? e.PriceUsd)
+                    : (e.PriceUsd ?? e.PriceUsdFoil);
+                if (price != null)
+                {
+                    e.Price = price;
+                    count++;
+                }
+            }
+
+            if (count > 0) db.SaveChanges();
+            return count;
         }
 
         // ── Special collections: split FoilQuantity rows ─────────────────

@@ -3040,10 +3040,10 @@ namespace BreakersOfE
             {
                 if (!Services.CollectionMigrationService.NeedsMigration()) return;
 
-                var (combined, binder, want, special) =
+                var (combined, binder, want, special, nullPrices) =
                     Services.CollectionMigrationService.GetMigrationStats();
 
-                int total = combined + binder + want + special;
+                int total = combined + binder + want + special + nullPrices;
                 if (total == 0) return;
 
                 var details = "";
@@ -3051,6 +3051,7 @@ namespace BreakersOfE
                 if (binder > 0) details += $"  • {binder} Trade Binder entries to fix\n";
                 if (want > 0) details += $"  • {want} Want List entries to fix\n";
                 if (special > 0) details += $"  • {special} special collection entries to split\n";
+                if (nullPrices > 0) details += $"  • {nullPrices} entries need price backfill\n";
 
                 var result = MessageBox.Show(
                     $"Your collection needs a per-finish upgrade.\n\n" +
@@ -10120,6 +10121,10 @@ namespace BreakersOfE
                     ce.PriceEurFoil = p.PriceEurFoil;
                     ce.PriceTix = p.PriceTix;
                     ce.PricesJson = p.PricesJson;
+                    // Per-finish Price — the field the grid actually displays
+                    ce.Price = ce.Finish == Models.CardFinish.Foil
+                        ? (p.PriceUsdFoil ?? p.PriceUsd)
+                        : (p.PriceUsd ?? p.PriceUsdFoil);
                 }
             }
 
@@ -10131,6 +10136,9 @@ namespace BreakersOfE
                 {
                     tb.PriceUsd = p.PriceUsd;
                     tb.PriceUsdFoil = p.PriceUsdFoil;
+                    tb.Price = tb.Finish == Models.CardFinish.Foil
+                        ? (p.PriceUsdFoil ?? p.PriceUsd)
+                        : (p.PriceUsd ?? p.PriceUsdFoil);
                 }
             }
 
@@ -10142,6 +10150,9 @@ namespace BreakersOfE
                 {
                     wl.PriceUsd = p.PriceUsd;
                     wl.PriceUsdFoil = p.PriceUsdFoil;
+                    wl.Price = wl.Finish == Models.CardFinish.Foil
+                        ? (p.PriceUsdFoil ?? p.PriceUsd)
+                        : (p.PriceUsd ?? p.PriceUsdFoil);
                 }
             }
 
