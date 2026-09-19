@@ -5545,6 +5545,8 @@ namespace BreakersOfE
                 { canFoil = ac.IsFoil; canNonFoil = ac.IsNonFoil; }
                 else if (TopDataGrid.SelectedItem is CollectionDisplayRow cr)
                 { canFoil = cr.IsFoil; canNonFoil = cr.IsNonFoil; }
+                else if (TopDataGrid.SelectedItem is DeckCard dc)
+                { canFoil = dc.FoilQuantity > 0; canNonFoil = dc.Quantity > 0; }
             }
 
             // ── Group 1: Deck file buttons ────────────────────────────────────────
@@ -6654,10 +6656,15 @@ namespace BreakersOfE
         private void TopCtx_Opened(object sender, RoutedEventArgs e)
         {
             bool hasCard = TopDataGrid.SelectedItem != null;
+            // DeckToCollection: top table is a deck (read-only) — only
+            // "Add to Collection" actions should appear, not "Add to Deck".
             bool isDeckMode = _currentMode == "PoolToDeck" ||
-                              _currentMode == "CollectionToDeck" ||
-                              _currentMode == "DeckToCollection";
-            bool isCollMode = !isDeckMode;
+                              _currentMode == "CollectionToDeck";
+            bool isCollMode = _currentMode == "PoolToCollection" ||
+                              _currentMode == "DeckToCollection" ||
+                              _currentMode == "CollectionToTradeBinder" ||
+                              _currentMode == "PoolToWantList" ||
+                              (!isDeckMode && _currentMode != "");
 
             bool canFoil = false, canNonFoil = false;
             switch (TopDataGrid.SelectedItem)
@@ -6675,9 +6682,10 @@ namespace BreakersOfE
                 case ConspiracyCard cc:
                     canFoil = cc.IsFoil; canNonFoil = cc.IsNonFoil; break;
                 case CollectionDisplayRow cr:
-                    // In CollectionToDeck mode the top grid holds collection
-                    // rows; enable based on what finishes exist for that card.
                     canFoil = cr.IsFoil; canNonFoil = cr.IsNonFoil; break;
+                case DeckCard dc:
+                    canFoil = dc.FoilQuantity > 0;
+                    canNonFoil = dc.Quantity > 0; break;
             }
 
             TopCtxAddToCollNonFoil.IsEnabled = hasCard && isCollMode && canNonFoil;
@@ -6850,6 +6858,17 @@ namespace BreakersOfE
                     if (foil && !cc.IsFoil) return;
                     AddToSpecialCollection("Conspiracy", cc.ConspiracyId,
                         cc.Name, qty, foil);
+                    break;
+                case DeckCard dc:
+                    // Deck→Collection: look up the PoolCard and add to collection
+                    if (!string.IsNullOrEmpty(dc.ScryfallId))
+                    {
+                        using var pdb = new AppDbContext();
+                        var poolCard = pdb.PoolCards.FirstOrDefault(
+                            c => c.ScryfallId == dc.ScryfallId);
+                        if (poolCard != null)
+                            AddToPoolCollection(poolCard.PoolId, dc.Name, qty, foil);
+                    }
                     break;
             }
 
