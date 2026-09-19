@@ -100,32 +100,6 @@ namespace BreakersOfE.Services
                     deck.FilePath = filePath;
                     deck.IsModified = false;
                     RelinkDeckToPool(deck);
-
-                    // ── Heal-on-open: if CollectionLinked but no usage rows,
-                    // auto-restore usage from the deck's current contents.
-                    // This handles decks that were moved, restored from backup,
-                    // or had their usage rows lost. Safe + idempotent.
-                    try
-                    {
-                        string deckId = deck.EnsureDeckId();
-                        if (deck.CollectionLinked && !DeckUsageService.HasUsage(deckId))
-                        {
-                            DeckUsageService.SyncDeck(deck);
-                            // Best-guess entered counts = deck demand
-                            using var healDb = new Data.CollectionDbContext();
-                            var usages = healDb.DeckUsages
-                                .Where(u => u.DeckId == deckId).ToList();
-                            foreach (var u in usages)
-                            {
-                                u.EnteredNonFoil = u.Quantity;
-                                u.EnteredFoil = u.FoilQuantity;
-                            }
-                            healDb.SaveChanges();
-                            var affectedIds = usages.Select(u => u.ScryfallId).Distinct();
-                            DeckUsageService.RecomputeUsedForCards(affectedIds);
-                        }
-                    }
-                    catch { /* never let heal block loading the deck */ }
                 }
                 return deck;
             }

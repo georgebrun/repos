@@ -117,27 +117,6 @@ namespace BreakersOfE.Services
             string deckId = deck.EnsureDeckId();
             if (string.IsNullOrWhiteSpace(deckId)) return;
 
-            // SyncDeck is only ever called from collection-touching flows
-            // (Collection→Deck, Deck→Collection), so this deck is now
-            // collection-linked. Persist the flag into the .deck file if it
-            // wasn't already set, so reconcile can restore usage if the file is
-            // later moved/restored.
-            if (!deck.CollectionLinked)
-            {
-                deck.CollectionLinked = true;
-                try
-                {
-                    if (!string.IsNullOrEmpty(deck.FilePath) &&
-                        System.IO.File.Exists(deck.FilePath))
-                    {
-                        var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
-                        System.IO.File.WriteAllText(deck.FilePath,
-                            System.Text.Json.JsonSerializer.Serialize(deck, opts));
-                    }
-                }
-                catch { /* flag will still be set in-memory; persisted on next save */ }
-            }
-
             using var db = new CollectionDbContext();
 
             // Track every card affected by this sync so we can recompute its

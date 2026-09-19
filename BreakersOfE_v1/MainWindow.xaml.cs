@@ -3068,18 +3068,7 @@ namespace BreakersOfE
 
                 string summary = Services.CollectionMigrationService.RunMigration();
 
-                // Phase 3b: backfill DeckUsage for existing decks
-                string deckSummary = "";
-                try
-                {
-                    deckSummary = "\n\n" + Services.CollectionMigrationService.BackfillDeckUsage();
-                }
-                catch (Exception dex)
-                {
-                    deckSummary = $"\n\nDeck backfill error: {dex.Message}";
-                }
-
-                MessageBox.Show(summary + deckSummary, "Migration Complete",
+                MessageBox.Show(summary, "Migration Complete",
                     MessageBoxButton.OK, MessageBoxImage.Information);
 
                 // Reload the current view to pick up the new per-finish rows.
@@ -10376,10 +10365,17 @@ namespace BreakersOfE
                         Deck? d;
                         try { d = DeckService.Load(file); } catch { continue; }
                         if (d == null) continue;
-                        if (!d.CollectionLinked) continue;               // pool-only → ignore
                         if (knownIds.Contains(d.EnsureDeckId())) continue; // already has usage
 
-                        // Collection-linked deck with no usage rows → restore it.
+                        // Check if collection actually has entries for this deck's cards
+                        using var rdb = new Data.CollectionDbContext();
+                        bool hasEntries = d.Cards
+                            .Where(c => !string.IsNullOrEmpty(c.ScryfallId))
+                            .Any(c => rdb.CollectionEntries
+                                .Any(e => e.ScryfallId == c.ScryfallId));
+                        if (!hasEntries) continue;  // no collection overlap → skip
+
+                        // Deck has cards in the collection but no usage rows → restore.
                         DeckUsageService.SyncDeck(d);
                         restored++;
                     }

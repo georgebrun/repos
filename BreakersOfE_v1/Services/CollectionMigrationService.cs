@@ -40,6 +40,26 @@ namespace BreakersOfE.Services
                 using var conn = new SqliteConnection($"Data Source={path};Mode=ReadOnly");
                 conn.Open();
 
+                // Empty collection — nothing to migrate.
+                // Wipe any stale DeckUsage rows left from a prior backfill
+                // so Deck→Collection guards don't block on phantom "entered" counts.
+                if (!HasRows(conn, "SELECT 1 FROM CollectionEntries LIMIT 1"))
+                {
+                    conn.Close();
+                    try
+                    {
+                        using var db = new CollectionDbContext();
+                        var stale = db.DeckUsages.ToList();
+                        if (stale.Count > 0)
+                        {
+                            db.DeckUsages.RemoveRange(stale);
+                            db.SaveChanges();
+                        }
+                    }
+                    catch { }
+                    return false;
+                }
+
                 // Check 1: CollectionEntries with FoilQuantity > 0 (combined rows)
                 if (HasRows(conn,
                     "SELECT 1 FROM CollectionEntries WHERE FoilQuantity > 0 LIMIT 1"))
@@ -635,130 +655,6 @@ namespace BreakersOfE.Services
             DateModified = DateTime.Now
         };
 
-        // ── SQL helpers ──────────────────────────────────────────────────
-
-        /// <summary>
-        /// Phase 3b — Scan all .deck files, stamp DeckId + set CollectionLinked
-        /// where cards overlap with the collection, then SyncDeck + populate
-        /// entered counts for each CollectionLinked deck.
-        /// Returns a summary string.
-        /// </summary>
-        public static string BackfillDeckUsage()
-        {
-            string deckFolder = AppFolderService.DecksFolder;
-            if (!Directory.Exists(deckFolder))
-                return "No Decks folder found.";
-
-            var deckFiles = Directory.EnumerateFiles(
-                deckFolder, "*.deck", System.IO.SearchOption.AllDirectories).ToList();
-
-            if (deckFiles.Count == 0)
-                return "No .deck files found.";
-
-            // Load all collection ScryfallIds for quick overlap check
-            System.Collections.Generic.HashSet<string> collectionIds;
-            using (var cdb = new CollectionDbContext())
-            {
-                collectionIds = cdb.CollectionEntries
-                    .Where(e => e.ScryfallId != null && e.ScryfallId != "")
-                    .Select(e => e.ScryfallId)
-                    .Distinct()
-                    .ToHashSet();
-            }
-
-            int stamped = 0, linked = 0, synced = 0, saved = 0;
-
-            foreach (var file in deckFiles)
-            {
-                try
-                {
-                    string json = File.ReadAllText(file);
-                    var deck = System.Text.Json.JsonSerializer.Deserialize<Deck>(json);
-                    if (deck == null) continue;
-
-                    deck.FilePath = file;
-                    bool changed = false;
-
-                    // Stamp DeckId if missing
-                    if (string.IsNullOrWhiteSpace(deck.DeckId))
-                    {
-                        deck.EnsureDeckId();
-                        changed = true;
-                        stamped++;
-                    }
-
-                    // Check CollectionLinked: if any card's ScryfallId is in
-                    // the collection, this deck is collection-linked.
-                    if (!deck.CollectionLinked)
-                    {
-                        bool hasOverlap = deck.Cards
-                            .Any(c => !string.IsNullOrEmpty(c.ScryfallId) &&
-                                      collectionIds.Contains(c.ScryfallId));
-                        if (hasOverlap)
-                        {
-                            deck.CollectionLinked = true;
-                            changed = true;
-                            linked++;
-                        }
-                    }
-
-                    // SyncDeck + populate entered counts for linked decks
-                    if (deck.CollectionLinked &&
-                        !DeckUsageService.HasUsage(deck.EnsureDeckId()))
-                    {
-                        DeckUsageService.SyncDeck(deck);
-
-                        // Set entered counts = deck demand (best guess for
-                        // existing decks — we don't know the actual history,
-                        // so assume the full deck qty was entered).
-                        using var db = new CollectionDbContext();
-                        var usages = db.DeckUsages
-                            .Where(u => u.DeckId == deck.DeckId)
-                            .ToList();
-                        foreach (var u in usages)
-                        {
-                            u.EnteredNonFoil = u.Quantity;
-                            u.EnteredFoil = u.FoilQuantity;
-                        }
-                        db.SaveChanges();
-
-                        // Recompute UsedCount on affected collection entries
-                        var affectedIds = usages
-                            .Select(u => u.ScryfallId).Distinct();
-                        DeckUsageService.RecomputeUsedForCards(affectedIds);
-
-                        synced++;
-                    }
-
-                    // Save deck file if we changed it
-                    if (changed)
-                    {
-                        deck.Modified = DateTime.Now;
-                        string outJson = System.Text.Json.JsonSerializer.Serialize(
-                            deck, new System.Text.Json.JsonSerializerOptions
-                            {
-                                WriteIndented = true,
-                                DefaultIgnoreCondition = System.Text.Json.Serialization
-                                    .JsonIgnoreCondition.WhenWritingDefault
-                            });
-                        File.WriteAllText(file, outJson);
-                        saved++;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine(
-                        $"[Migration] Deck backfill error on {file}: {ex.Message}");
-                }
-            }
-
-            return $"Deck backfill complete.\n\n" +
-                   $"Deck files scanned: {deckFiles.Count}\n" +
-                   $"DeckIds stamped: {stamped}\n" +
-                   $"Newly collection-linked: {linked}\n" +
-                   $"Usage synced: {synced}\n" +
-                   $"Files saved: {saved}";
-        }
 
         // ── SQL helpers ──────────────────────────────────────────────────
 
