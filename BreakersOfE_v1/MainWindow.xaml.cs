@@ -9497,7 +9497,7 @@ namespace BreakersOfE
             {
                 new Models.FooterRow
                 {
-                    Qty         = nonFoil.ToString("N0"),
+                    Qty         = (nonFoil + foil).ToString("N0"),
                     FoilQty     = foil.ToString("N0"),
                     Used        = used.ToString("N0"),
                     Available   = avail.ToString("N0"),
