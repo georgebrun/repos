@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -42,12 +43,235 @@ namespace BreakersOfE.Views.Pages
             InitializeComponent();
             _vm = (PoolViewModel)DataContext;
             Loaded += PoolPage_Loaded;
+            PoolGrid.SelectionChanged += PoolGrid_SelectionChanged;
         }
 
         public void LoadPool(string tag)
         {
             _vm.LoadPool(tag);
             ResetSearch();
+            ClearDetail();
+
+            // Apply default multi-level sort: Name → Edition → Collector Number
+            _lastSortProp = "Name";
+            _lastSortAsc = true;
+            var view = CollectionViewSource.GetDefaultView(PoolGrid.ItemsSource)
+                       as ListCollectionView;
+            if (view != null)
+                view.CustomSort = new PoolSortComparer(
+                    "Name", true, _editionChronological);
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // LEFT DETAIL PANEL — populated on row selection
+        // ══════════════════════════════════════════════════════════════════
+        private bool _showingBack = false;
+
+        private void PoolGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            _showingBack = false;
+            if (PoolGrid.SelectedItem == null) { ClearDetail(); return; }
+
+            // Use reflection so this works for PoolCard, TokenCard, etc.
+            var item = PoolGrid.SelectedItem;
+            string Get(string prop) =>
+                item.GetType().GetProperty(prop)?.GetValue(item)?.ToString() ?? "";
+
+            DetailName.Text = Get("Name");
+            DetailType.Text = Get("TypeLine");
+            DetailSet.Text = $"{Get("SetName")} ({Get("SetCode")})";
+            DetailCollectorNumber.Text = Get("CollectorNumber");
+            DetailRarity.Text = Get("Rarity");
+            DetailArtist.Text = Get("Artist");
+
+            // Oracle + flavor
+            DetailOracle.Text = Get("OracleText");
+            DetailFlavor.Text = Get("FlavorText");
+
+            // P/T or Loyalty
+            string p = Get("Power"), t = Get("Toughness"), loy = Get("LoyaltyOrDefense");
+            if (!string.IsNullOrEmpty(p) && !string.IsNullOrEmpty(t))
+            {
+                DetailPTLabel.Text = "POWER / TOUGHNESS";
+                DetailPT.Text = $"{p}/{t}";
+                DetailPTLabel.Visibility = Visibility.Visible;
+                DetailPT.Visibility = Visibility.Visible;
+            }
+            else if (!string.IsNullOrEmpty(loy))
+            {
+                DetailPTLabel.Text = "LOYALTY / DEFENSE";
+                DetailPT.Text = loy;
+                DetailPTLabel.Visibility = Visibility.Visible;
+                DetailPT.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                DetailPTLabel.Visibility = Visibility.Collapsed;
+                DetailPT.Visibility = Visibility.Collapsed;
+            }
+
+            // Finishes
+            bool isFoil = bool.TryParse(Get("IsFoil"), out var f) && f;
+            bool isNonFoil = bool.TryParse(Get("IsNonFoil"), out var nf) && nf;
+            var finishes = new List<string>();
+            if (isFoil) finishes.Add("Foil");
+            if (isNonFoil) finishes.Add("Non-Foil");
+            DetailFinishes.Text = finishes.Count > 0
+                ? string.Join(" · ", finishes) : "Unknown";
+
+            // Prices
+            string usd = Get("PriceUsd") is string pu && !string.IsNullOrEmpty(pu) ? $"USD:  ${pu}" : "";
+            string foilP = Get("PriceUsdFoil") is string pf && !string.IsNullOrEmpty(pf) ? $"USD Foil: ${pf}" : "";
+            DetailPrices.Text = string.Join("\n",
+                new[] { usd, foilP }.Where(s => !string.IsNullOrEmpty(s)));
+
+            // Mana cost symbols
+            DetailManaCost.Items.Clear();
+            string manaCost = Get("ManaCost");
+            if (!string.IsNullOrEmpty(manaCost))
+            {
+                var converter = new Services.ManaCostConverter();
+                var symbols = converter.Convert(manaCost, typeof(object), null!,
+                    System.Globalization.CultureInfo.CurrentCulture);
+                if (symbols is System.Collections.IEnumerable items)
+                    foreach (var sym in items)
+                        DetailManaCost.Items.Add(sym);
+            }
+
+            // Set symbol (rarity-tinted)
+            string setSymbolPath = Get("SetSymbolPath");
+            string rarity = Get("Rarity");
+            if (!string.IsNullOrEmpty(setSymbolPath))
+            {
+                var converter = new Services.ImageSourceConverter();
+                var img = converter.Convert(
+                    new object[] { setSymbolPath, rarity },
+                    typeof(ImageSource), null!,
+                    System.Globalization.CultureInfo.CurrentCulture);
+                DetailSetSymbol.Source = img as ImageSource;
+            }
+            else
+            {
+                DetailSetSymbol.Source = null;
+            }
+
+            // Card image
+            LoadCardImage(Get("ImageNormalUrl"), Get("LocalImagePath"));
+
+            // Back face button
+            string backUrl = Get("ImageBackUrl");
+            BtnShowBackFace.Visibility = !string.IsNullOrEmpty(backUrl)
+                ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void LoadCardImage(string url, string localPath)
+        {
+            try
+            {
+                // Try local first
+                if (!string.IsNullOrEmpty(localPath) && File.Exists(localPath))
+                {
+                    var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                    bmp.BeginInit();
+                    bmp.UriSource = new Uri(localPath, UriKind.Absolute);
+                    bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                    bmp.EndInit();
+                    bmp.Freeze();
+                    DetailCardImage.Source = bmp;
+                    return;
+                }
+
+                // Fall back to URL
+                if (!string.IsNullOrEmpty(url))
+                {
+                    var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                    bmp.BeginInit();
+                    bmp.UriSource = new Uri(url, UriKind.Absolute);
+                    bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                    bmp.EndInit();
+                    DetailCardImage.Source = bmp;
+                }
+                else
+                {
+                    DetailCardImage.Source = null;
+                }
+            }
+            catch { DetailCardImage.Source = null; }
+        }
+
+        private void BtnShowBackFace_Click(object sender, RoutedEventArgs e)
+        {
+            if (PoolGrid.SelectedItem == null) return;
+            var item = PoolGrid.SelectedItem;
+            string Get(string prop) =>
+                item.GetType().GetProperty(prop)?.GetValue(item)?.ToString() ?? "";
+
+            _showingBack = !_showingBack;
+            if (_showingBack)
+            {
+                LoadCardImage(Get("ImageBackUrl"), Get("LocalImageBackPath"));
+                BtnShowBackFace.Content = "🔄 Show Front Face";
+            }
+            else
+            {
+                LoadCardImage(Get("ImageNormalUrl"), Get("LocalImagePath"));
+                BtnShowBackFace.Content = "🔄 Show Back Face";
+            }
+        }
+
+        private void ClearDetail()
+        {
+            DetailCardImage.Source = null;
+            DetailName.Text = "";
+            DetailType.Text = "";
+            DetailSet.Text = "";
+            DetailSetSymbol.Source = null;
+            DetailCollectorNumber.Text = "";
+            DetailRarity.Text = "";
+            DetailPT.Text = "";
+            DetailPTLabel.Visibility = Visibility.Collapsed;
+            DetailPT.Visibility = Visibility.Collapsed;
+            DetailOracle.Text = "";
+            DetailFlavor.Text = "";
+            DetailArtist.Text = "";
+            DetailFinishes.Text = "";
+            DetailPrices.Text = "";
+            DetailManaCost.Items.Clear();
+            BtnShowBackFace.Visibility = Visibility.Collapsed;
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // CARD DETAIL POPUP — double-click grid row or detail image
+        // ══════════════════════════════════════════════════════════════════
+        private CardDetailWindow? _cardDetailWindow;
+
+        private void PoolGrid_MouseDoubleClick(object sender,
+            System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (PoolGrid.SelectedItem == null) return;
+            OpenCardDetailPopup(PoolGrid.SelectedItem);
+        }
+
+        private void DetailImage_MouseDoubleClick(object sender,
+            System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (e.ClickCount < 2) return;
+            if (PoolGrid.SelectedItem == null) return;
+            OpenCardDetailPopup(PoolGrid.SelectedItem);
+        }
+
+        private void OpenCardDetailPopup(object card)
+        {
+            if (_cardDetailWindow != null && _cardDetailWindow.IsVisible)
+            {
+                _cardDetailWindow.Close();
+                _cardDetailWindow = null;
+                return;
+            }
+
+            _cardDetailWindow = new CardDetailWindow(card, Window.GetWindow(this));
+            _cardDetailWindow.Closed += (s, ev) => _cardDetailWindow = null;
+            _cardDetailWindow.Show();
         }
 
         private void PoolPage_Loaded(object sender, RoutedEventArgs e)
@@ -110,13 +334,47 @@ namespace BreakersOfE.Views.Pages
             popup.Show();
         }
 
+        // ── Edition sort order toggle ──────────────────────────────────
+        private bool _editionChronological = false;
+
+        private void BtnEditionOrder_Click(object sender, RoutedEventArgs e)
+        {
+            _editionChronological = !_editionChronological;
+            if (sender is Button btn)
+                btn.Content = _editionChronological ? "Edition: Chrono" : "Edition: A→Z";
+
+            // Re-sort with current settings
+            var view = CollectionViewSource.GetDefaultView(PoolGrid.ItemsSource)
+                       as ListCollectionView;
+            if (view?.CustomSort is PoolSortComparer existing)
+            {
+                // Re-apply with toggled edition order
+                view.CustomSort = new PoolSortComparer(
+                    _lastSortProp ?? "Name", _lastSortAsc, _editionChronological);
+            }
+            else
+            {
+                // Default sort with new edition order
+                if (view != null)
+                    view.CustomSort = new PoolSortComparer(
+                        "Name", true, _editionChronological);
+            }
+        }
+
+        private string? _lastSortProp;
+        private bool _lastSortAsc = true;
+
         private void SortColumn(string propName, bool ascending)
         {
+            _lastSortProp = propName;
+            _lastSortAsc = ascending;
+
             var view = CollectionViewSource.GetDefaultView(PoolGrid.ItemsSource)
                        as ListCollectionView;
             if (view == null) return;
 
-            view.CustomSort = new NaturalComparer(propName, ascending);
+            view.CustomSort = new PoolSortComparer(
+                propName, ascending, _editionChronological);
         }
 
         private void UpdateFunnelIcon(Button funnelButton, bool active)
@@ -135,10 +393,14 @@ namespace BreakersOfE.Views.Pages
             _vm.Filters.ClearAll();
             _vm.ApplyFilters();
 
-            // Reset any custom sort
+            // Reset to default multi-level sort (Name → Edition → Collector Number)
+            _lastSortProp = "Name";
+            _lastSortAsc = true;
             var view = CollectionViewSource.GetDefaultView(PoolGrid.ItemsSource)
                        as ListCollectionView;
-            if (view != null) view.CustomSort = null;
+            if (view != null)
+                view.CustomSort = new PoolSortComparer(
+                    "Name", true, _editionChronological);
 
             // Reset all funnel icons to inactive
             foreach (var btn in FindVisualChildren<Button>(PoolGrid)
@@ -213,26 +475,81 @@ namespace BreakersOfE.Views.Pages
         }
     }
 
-    /// <summary>Numeric-aware comparer for grid sorting (1,2,10 not 1,10,2).</summary>
-    public class NaturalComparer : System.Collections.IComparer
+    /// <summary>
+    /// Multi-level sort for the pool grid. Primary sort = whatever column the
+    /// user clicked. Sub-sorts: Edition (alpha or chrono) → Collector Number.
+    /// When no user sort is active, default is Name → Edition → Collector Number.
+    /// </summary>
+    public class PoolSortComparer : System.Collections.IComparer
     {
-        private readonly string _prop;
-        private readonly bool _asc;
-        private System.Reflection.PropertyInfo? _pi;
+        private readonly string _primaryProp;
+        private readonly bool _primaryAsc;
+        private readonly bool _editionChronological;
 
-        public NaturalComparer(string prop, bool asc) { _prop = prop; _asc = asc; }
+        // Cached reflection
+        private System.Reflection.PropertyInfo? _primaryPi;
+        private System.Reflection.PropertyInfo? _setCodePi;
+        private System.Reflection.PropertyInfo? _releasedAtPi;
+        private System.Reflection.PropertyInfo? _collNumSortPi;
+
+        public PoolSortComparer(string primaryProp, bool ascending,
+            bool editionChronological = false)
+        {
+            _primaryProp = primaryProp;
+            _primaryAsc = ascending;
+            _editionChronological = editionChronological;
+        }
 
         public int Compare(object? x, object? y)
         {
             if (x == null || y == null) return 0;
-            _pi ??= x.GetType().GetProperty(_prop,
-                System.Reflection.BindingFlags.Public |
-                System.Reflection.BindingFlags.Instance |
-                System.Reflection.BindingFlags.IgnoreCase);
-            string a = _pi?.GetValue(x)?.ToString() ?? string.Empty;
-            string b = _pi?.GetValue(y)?.ToString() ?? string.Empty;
-            int r = ColumnFilterState.CompareNatural(a, b);
-            return _asc ? r : -r;
+
+            // Cache property info on first call
+            var type = x.GetType();
+            var flags = System.Reflection.BindingFlags.Public |
+                        System.Reflection.BindingFlags.Instance |
+                        System.Reflection.BindingFlags.IgnoreCase;
+            _primaryPi ??= type.GetProperty(_primaryProp, flags);
+            _setCodePi ??= type.GetProperty("SetCode", flags);
+            _releasedAtPi ??= type.GetProperty("ReleasedAt", flags);
+            _collNumSortPi ??= type.GetProperty("CollectorNumberSort", flags);
+
+            // Primary sort
+            string a = _primaryPi?.GetValue(x)?.ToString() ?? "";
+            string b = _primaryPi?.GetValue(y)?.ToString() ?? "";
+            int cmp = ColumnFilterState.CompareNatural(a, b);
+            if (!_primaryAsc) cmp = -cmp;
+            if (cmp != 0) return cmp;
+
+            // Sub-sort 1: Edition
+            if (_primaryProp != "SetCode" && _primaryProp != "ReleasedAt")
+            {
+                if (_editionChronological)
+                {
+                    string ra = _releasedAtPi?.GetValue(x)?.ToString() ?? "";
+                    string rb = _releasedAtPi?.GetValue(y)?.ToString() ?? "";
+                    cmp = string.Compare(ra, rb, StringComparison.Ordinal); // ISO dates sort naturally
+                    if (cmp != 0) return cmp;
+                }
+                else
+                {
+                    string sa = _setCodePi?.GetValue(x)?.ToString() ?? "";
+                    string sb = _setCodePi?.GetValue(y)?.ToString() ?? "";
+                    cmp = string.Compare(sa, sb, StringComparison.OrdinalIgnoreCase);
+                    if (cmp != 0) return cmp;
+                }
+            }
+
+            // Sub-sort 2: Collector Number (numeric)
+            if (_primaryProp != "CollectorNumber" && _primaryProp != "CollectorNumberSort")
+            {
+                double na = (_collNumSortPi?.GetValue(x) as double?) ?? 9999;
+                double nb = (_collNumSortPi?.GetValue(y) as double?) ?? 9999;
+                cmp = na.CompareTo(nb);
+                if (cmp != 0) return cmp;
+            }
+
+            return 0;
         }
     }
 }

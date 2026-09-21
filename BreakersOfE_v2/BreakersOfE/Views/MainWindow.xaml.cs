@@ -10,8 +10,6 @@ namespace BreakersOfE.Views
         {
             InitializeComponent();
 
-            // When a pool sub-item is clicked, hand its Tag to the PoolPage
-            // so the page knows which table to load.
             RootNavigation.Navigated += RootNavigation_Navigated;
 
             // Land on the main Cards pool by default.
@@ -22,22 +20,23 @@ namespace BreakersOfE.Views
         private void RootNavigation_Navigated(
             NavigationView sender, NavigatedEventArgs args)
         {
-            // The page instance we just navigated to
             if (args.Page is not PoolPage page)
                 return;
 
-            // Find the selected nav item and read its Tag ("Cards", "Tokens", …)
-            if (sender.SelectedItem is NavigationViewItem item &&
-                item.Tag is string poolTag &&
-                !string.IsNullOrEmpty(poolTag))
+            // SelectedItem lags behind the Navigated event in Wpf.Ui —
+            // defer reading it until the dispatcher has processed the
+            // selection update, so we get the NEWLY selected item.
+            Dispatcher.BeginInvoke(new Action(() =>
             {
+                string poolTag = "Cards";
+                if (sender.SelectedItem is NavigationViewItem item &&
+                    item.Tag is string tag &&
+                    !string.IsNullOrEmpty(tag))
+                {
+                    poolTag = tag;
+                }
                 page.LoadPool(poolTag);
-            }
-            else
-            {
-                // Default when the parent "Card Pool" item itself is hit
-                page.LoadPool("Cards");
-            }
+            }), System.Windows.Threading.DispatcherPriority.Loaded);
         }
     }
 }
