@@ -1302,5 +1302,171 @@ namespace BreakersOfE.Services
             if (!Directory.Exists(path)) Directory.CreateDirectory(path);
             return path;
         }
+
+        // ══════════════════════════════════════════════════════════════════
+        // RULINGS BULK DOWNLOAD
+        // ══════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Downloads all rulings from Scryfall's bulk-data endpoint and stores
+        /// them in rulings.db. Each ruling is a (ScryfallId, date, comment) row.
+        /// </summary>
+        public async Task<int> DownloadRulingsAsync(
+            IProgress<ImportProgress> progress, CancellationToken ct)
+        {
+            progress.Report(new ImportProgress
+            { Percentage = 5, Step = "Fetching rulings download URL...", Detail = "" });
+
+            // Get the bulk data URL for rulings — try direct endpoint first,
+            // fall back to listing all bulk data types and finding "rulings".
+            string bulkUrl;
+            try
+            {
+                // Try direct: /bulk-data/rulings
+                var resp = await _http.GetAsync(
+                    "https://api.scryfall.com/bulk-data/rulings", ct);
+
+                if (resp.IsSuccessStatusCode)
+                {
+                    var json = await resp.Content.ReadAsStringAsync(ct);
+                    using var doc = System.Text.Json.JsonDocument.Parse(json);
+                    // Prefer JSONL (Scryfall retired plain JSON July 2026)
+                    if (doc.RootElement.TryGetProperty("jsonl_download_uri", out var juri))
+                        bulkUrl = juri.GetString() ?? "";
+                    else if (doc.RootElement.TryGetProperty("download_uri", out var uri))
+                        bulkUrl = uri.GetString() ?? "";
+                    else
+                        bulkUrl = "";
+                }
+                else
+                    bulkUrl = "";
+
+                // Fallback: list all bulk data and find rulings
+                if (string.IsNullOrEmpty(bulkUrl))
+                {
+                    resp = await _http.GetAsync(
+                        "https://api.scryfall.com/bulk-data", ct);
+                    resp.EnsureSuccessStatusCode();
+                    var json = await resp.Content.ReadAsStringAsync(ct);
+                    using var doc = System.Text.Json.JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty("data", out var data))
+                    {
+                        foreach (var item in data.EnumerateArray())
+                        {
+                            var typeProp = item.TryGetProperty("type", out var t)
+                                ? t.GetString() : "";
+                            if (typeProp == "rulings")
+                            {
+                                // Prefer JSONL
+                                bulkUrl = item.TryGetProperty("jsonl_download_uri", out var jdu)
+                                    ? jdu.GetString() ?? "" : "";
+                                if (string.IsNullOrEmpty(bulkUrl))
+                                    bulkUrl = item.TryGetProperty("download_uri", out var du)
+                                        ? du.GetString() ?? "" : "";
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (string.IsNullOrEmpty(bulkUrl))
+                    throw new Exception("Could not find rulings download URL from Scryfall.");
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) when (ex.Message.Contains("Could not find"))
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Failed to get rulings URL: {ex.Message}");
+            }
+
+            // Download the rulings file (may be JSONL gzipped or plain JSON)
+            progress.Report(new ImportProgress { Percentage = 15, Step = "Downloading rulings...", Detail = "" });
+            string ext = bulkUrl.Contains(".jsonl") ? ".jsonl.gz" : ".json";
+            string tempFile = Path.Combine(Path.GetTempPath(), $"scryfall_rulings{ext}");
+            bool isGzip = ext.EndsWith(".gz");
+            try
+            {
+                using var stream = await _http.GetStreamAsync(bulkUrl, ct);
+                using var fs = new FileStream(tempFile, FileMode.Create);
+                await stream.CopyToAsync(fs, ct);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Failed to download rulings: {ex.Message}");
+            }
+
+            // Parse and import into rulings.db using the same JSONL/JSON
+            // enumerator that handles card bulk data.
+            progress.Report(new ImportProgress { Percentage = 50, Step = "Importing rulings...", Detail = "" });
+            int count = 0;
+            try
+            {
+                using var db = new Data.RulingsDbContext();
+                db.EnsureCreated();
+
+                // Clear existing rulings (full refresh)
+                db.Database.ExecuteSqlRaw("DELETE FROM CardRulings");
+
+                var batch = new List<Data.CardRuling>(1000);
+                await foreach (var item in EnumerateCardsAsync(tempFile, isGzip, ct))
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    // Scryfall rulings bulk has: object, oracle_id, source, published_at, comment
+                    string oracleId = item.TryGetProperty("oracle_id", out var oid)
+                        ? oid.GetString() ?? "" : "";
+                    string publishedAt = item.TryGetProperty("published_at", out var pa)
+                        ? pa.GetString() ?? "" : "";
+                    string comment = item.TryGetProperty("comment", out var cm)
+                        ? cm.GetString() ?? "" : "";
+
+                    if (string.IsNullOrEmpty(oracleId) || string.IsNullOrEmpty(comment))
+                        continue;
+
+                    batch.Add(new Data.CardRuling
+                    {
+                        ScryfallId = oracleId, // store oracle_id — we'll look up by it
+                        PublishedAt = publishedAt,
+                        Comment = comment
+                    });
+
+                    if (batch.Count >= 1000)
+                    {
+                        db.CardRulings.AddRange(batch);
+                        await db.SaveChangesAsync(ct);
+                        count += batch.Count;
+                        batch.Clear();
+                        progress.Report(new ImportProgress
+                        {
+                            Percentage = 50 + Math.Min(45, count / 500),
+                            Step = "Importing rulings...",
+                            Detail = $"{count:N0} rulings imported"
+                        });
+                    }
+                }
+
+                if (batch.Count > 0)
+                {
+                    db.CardRulings.AddRange(batch);
+                    await db.SaveChangesAsync(ct);
+                    count += batch.Count;
+                }
+            }
+            finally
+            {
+                try { File.Delete(tempFile); } catch { }
+            }
+
+            progress.Report(new ImportProgress
+            {
+                Percentage = 100,
+                Step = "Rulings download complete!",
+                Detail = $"{count:N0} rulings imported"
+            });
+            return count;
+        }
     }
 }

@@ -81,6 +81,18 @@ namespace BreakersOfE.ViewModels
         // ══════════════════════════════════════════════════════════════════
 
         /// <summary>
+        /// Full database update + rulings download in one click.
+        /// </summary>
+        [RelayCommand]
+        private async Task StartFullUpdateWithRulings()
+        {
+            await StartFullUpdate();
+            // Only continue to rulings if the full update succeeded
+            if (StatusText == "Update complete!")
+                await DownloadRulings();
+        }
+
+        /// <summary>
         /// Full database update: download bulk data → import all cards →
         /// update prices → download set/mana symbols.
         /// Keyword dictionary rebuilds in the background after completion.
@@ -229,6 +241,51 @@ namespace BreakersOfE.ViewModels
         {
             _cts?.Cancel();
             StatusText = "Cancelling...";
+        }
+
+        /// <summary>
+        /// Download all card rulings from Scryfall into rulings.db.
+        /// Separate from the main update — optional, larger download.
+        /// </summary>
+        [RelayCommand]
+        private async Task DownloadRulings()
+        {
+            if (!PreflightCheck()) return;
+
+            IsRunning = true;
+            CanStart = false;
+            _cts = new CancellationTokenSource();
+
+            try
+            {
+                var progress = new Progress<ImportProgress>(p =>
+                {
+                    ProgressPercent = p.Percentage;
+                    StatusText = p.Step;
+                    DetailText = p.Detail;
+                });
+
+                int count = await _scryfall.DownloadRulingsAsync(progress, _cts.Token);
+                StatusText = "Rulings download complete!";
+                DetailText = $"{count:N0} rulings imported into rulings.db";
+                ProgressPercent = 100;
+            }
+            catch (OperationCanceledException)
+            {
+                StatusText = "Rulings download cancelled.";
+            }
+            catch (Exception ex)
+            {
+                StatusText = "Rulings download failed.";
+                DetailText = ex.Message;
+            }
+            finally
+            {
+                IsRunning = false;
+                CanStart = true;
+                _cts?.Dispose();
+                _cts = null;
+            }
         }
 
         // ══════════════════════════════════════════════════════════════════

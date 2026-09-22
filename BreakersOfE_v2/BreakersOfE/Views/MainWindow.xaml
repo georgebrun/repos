@@ -87,6 +87,12 @@
                     </ui:NavigationViewItem.MenuItems>
                 </ui:NavigationViewItem>
 
+                <!-- ═══ SETS (set browser over the Cards pool) ═══ -->
+                <ui:NavigationViewItem Content="Sets"
+                                       Tag="Sets"
+                                       TargetPageType="{x:Type pages:PoolPage}"
+                                       Icon="{ui:SymbolIcon Layer24}" />
+
             </ui:NavigationView.MenuItems>
 
             <!-- ═══ FOOTER ═══ -->

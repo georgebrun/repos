@@ -71,11 +71,28 @@
             </ui:Card>
 
             <!-- ═══ ACTION BUTTONS ═══ -->
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,12"
+                        IsEnabled="{Binding CanStart}">
+
+                <ui:Button Content="Full Update + Rulings"
+                           Appearance="Primary"
+                           Command="{Binding StartFullUpdateWithRulingsCommand}"
+                           Margin="0,0,12,0"
+                           ToolTip="Full database update including rulings download">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="ArrowDownload24" />
+                    </ui:Button.Icon>
+                </ui:Button>
+
+            </StackPanel>
+
+            <TextBlock Text="Individual Downloads" FontSize="12" Opacity="0.5"
+                       Margin="0,0,0,6"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             <StackPanel Orientation="Horizontal" Margin="0,0,0,24"
                         IsEnabled="{Binding CanStart}">
 
                 <ui:Button Content="Full Database Update"
-                           Appearance="Primary"
                            Command="{Binding StartFullUpdateCommand}"
                            Margin="0,0,12,0">
                     <ui:Button.Icon>
@@ -88,6 +105,15 @@
                            Margin="0,0,12,0">
                     <ui:Button.Icon>
                         <ui:SymbolIcon Symbol="CurrencyDollarEuro24" />
+                    </ui:Button.Icon>
+                </ui:Button>
+
+                <ui:Button Content="Download Rulings"
+                           Command="{Binding DownloadRulingsCommand}"
+                           Margin="0,0,24,0"
+                           ToolTip="Download all card rulings from Scryfall (optional)">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="BookOpen24" />
                     </ui:Button.Icon>
                 </ui:Button>
 

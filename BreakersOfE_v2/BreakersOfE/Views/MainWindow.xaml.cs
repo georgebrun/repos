@@ -35,7 +35,11 @@ namespace BreakersOfE.Views
                 {
                     poolTag = tag;
                 }
-                page.LoadPool(poolTag);
+
+                if (poolTag == "Sets")
+                    page.ShowSets();
+                else
+                    page.LoadPool(poolTag);
             }), System.Windows.Threading.DispatcherPriority.Loaded);
         }
     }

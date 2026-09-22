@@ -23,6 +23,12 @@ namespace BreakersOfE.ViewModels
         /// <summary>The per-column filter engine for this grid.</summary>
         public PoolColumnFilters Filters { get; } = new();
 
+        /// <summary>
+        /// The full unfiltered table. The set browser builds its tiles from
+        /// this so set counts don't shrink when filters are active.
+        /// </summary>
+        public IReadOnlyList<object> AllRows => _allRows;
+
         [ObservableProperty]
         private IEnumerable items = System.Array.Empty<object>();
 
@@ -156,13 +162,13 @@ namespace BreakersOfE.ViewModels
 
         private static string TitleFor(string tag) => tag switch
         {
-            "Tokens"       => "Card Pool — Tokens",
-            "Planes"       => "Card Pool — Planes",
-            "Schemes"      => "Card Pool — Schemes",
-            "Vanguards"    => "Card Pool — Vanguards",
-            "ArtSeries"    => "Card Pool — Art Series",
+            "Tokens" => "Card Pool — Tokens",
+            "Planes" => "Card Pool — Planes",
+            "Schemes" => "Card Pool — Schemes",
+            "Vanguards" => "Card Pool — Vanguards",
+            "ArtSeries" => "Card Pool — Art Series",
             "Conspiracies" => "Card Pool — Conspiracies",
-            _              => "Card Pool — Cards"
+            _ => "Card Pool — Cards"
         };
     }
 }

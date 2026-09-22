@@ -174,10 +174,20 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal"
                         HorizontalAlignment="Right" VerticalAlignment="Center"
                         Margin="0,0,12,0">
-                    <Button Content="Edition: A→Z" Padding="10,4" Margin="0,0,8,0"
+                    <Button x:Name="BtnBackToSets" Content="◀  All Sets"
+                        Padding="10,4" Margin="0,0,8,0"
+                        Visibility="Collapsed"
+                        Click="BtnBackToSets_Click"
+                        ToolTip="Back to the set browser"/>
+                    <Button x:Name="BtnViewToggle" Content="Gallery View"
+                        Padding="10,4" Margin="0,0,8,0"
+                        Click="BtnViewToggle_Click"
+                        ToolTip="Switch between the data grid and card-image gallery"/>
+                    <Button x:Name="BtnEditionOrder" Content="Edition: Chrono"
+                        Padding="10,4" Margin="0,0,8,0"
                         Click="BtnEditionOrder_Click"
                         ToolTip="Toggle edition sub-sort: Alphabetical ↔ Chronological"/>
-                    <Button Content="Clear All Filters" Padding="10,4"
+                    <Button x:Name="BtnClearFilters" Content="Clear All Filters" Padding="10,4"
                         Click="ClearAllFilters_Click"/>
                 </StackPanel>
 
@@ -216,6 +226,17 @@
                     <Style TargetType="DataGridRow">
                         <Setter Property="Foreground" Value="{Binding RowForegroundBrush}" />
                         <Setter Property="Background" Value="{Binding RowBackgroundBrush}" />
+                        <Style.Triggers>
+                            <!-- The Background setter above hides the default selection
+                             color, so draw selection explicitly. Light blue keeps the
+                             color-identity text readable; the blue edge marks the row
+                             whether or not the grid has focus. -->
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="#C8E1FF" />
+                                <Setter Property="BorderBrush" Value="#4CA0FF" />
+                                <Setter Property="BorderThickness" Value="0,1,0,1" />
+                            </Trigger>
+                        </Style.Triggers>
                     </Style>
                 </DataGrid.RowStyle>
 
@@ -277,6 +298,192 @@
                 </DataGrid.Columns>
             </DataGrid>
 
+            <!-- ═══ CARD GALLERY (virtualized rows of N tiles) ═══
+             Same data, same order (sort + filters) as the grid above.
+             Each ListBox item is one ROW; only visible rows are built,
+             and only visible tiles load images. -->
+            <ListBox Grid.Row="1" x:Name="GalleryList"
+                 Visibility="Collapsed"
+                 Background="Transparent" BorderThickness="0"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 ScrollViewer.CanContentScroll="True"
+                 VirtualizingPanel.IsVirtualizing="True"
+                 VirtualizingPanel.VirtualizationMode="Recycling"
+                 VirtualizingPanel.ScrollUnit="Pixel"
+                 SizeChanged="GalleryList_SizeChanged">
+                <ListBox.ItemContainerStyle>
+                    <!-- Strip ListBoxItem chrome: we draw our own tile selection -->
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Focusable" Value="False"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <ContentPresenter/>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <ItemsControl ItemsSource="{Binding Items}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="{Binding TileWidth}" Height="{Binding TileHeight}"
+                                        Margin="4" CornerRadius="10" BorderThickness="3"
+                                        Background="#18808080" Cursor="Hand"
+                                        ToolTip="{Binding Name}"
+                                        MouseLeftButtonDown="GalleryTile_MouseLeftButtonDown">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="BorderBrush" Value="Transparent"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                        <Setter Property="BorderBrush"
+                                                            Value="#4CA0FF"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <Grid>
+                                            <!-- Placeholder: card name until the image arrives
+                                             (stays if offline). The image covers it. -->
+                                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap"
+                                                   TextAlignment="Center" FontSize="12"
+                                                   VerticalAlignment="Center" Margin="8"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                            <Image Source="{Binding Image}" Stretch="Uniform"
+                                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                                            <!-- Price badge -->
+                                            <Border HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                                                Margin="0,0,0,6" CornerRadius="8" Padding="8,2"
+                                                Background="#D0202020"
+                                                Visibility="{Binding HasPrice, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <TextBlock Text="{Binding PriceText}" FontSize="11"
+                                                       FontWeight="SemiBold" Foreground="White"/>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <!-- ═══ SET BROWSER (virtualized: section headers + rows of set tiles) ═══
+             Built from the in-memory pool. Click a tile → Edition filter
+             for that set + gallery view. -->
+            <ListBox Grid.Row="1" x:Name="SetList"
+                 Visibility="Collapsed"
+                 Background="Transparent" BorderThickness="0"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 ScrollViewer.CanContentScroll="True"
+                 VirtualizingPanel.IsVirtualizing="True"
+                 VirtualizingPanel.VirtualizationMode="Recycling"
+                 VirtualizingPanel.ScrollUnit="Pixel"
+                 SizeChanged="SetList_SizeChanged">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Focusable" Value="False"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <ContentPresenter/>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <!-- Section header -->
+                            <Border Visibility="{Binding IsHeader, Converter={StaticResource BoolToVisibilityConverter}}"
+                                Margin="4,18,12,8" Padding="0,0,0,6"
+                                BorderBrush="#40808080" BorderThickness="0,0,0,1">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding HeaderText}" FontSize="16" FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                    <Border Margin="10,0,0,0" CornerRadius="9" Padding="8,1"
+                                        Background="#40808080" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding HeaderCount}" FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Row of set tiles -->
+                            <ItemsControl ItemsSource="{Binding Tiles}"
+                                      Visibility="{Binding IsTileRow, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Width="300" Height="72" Margin="4" CornerRadius="8"
+                                            BorderThickness="2" Cursor="Hand"
+                                            ToolTip="{Binding Name}"
+                                            MouseLeftButtonDown="SetTile_MouseLeftButtonDown">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="#18808080"/>
+                                                    <Setter Property="BorderBrush" Value="Transparent"/>
+                                                    <Style.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter Property="Background" Value="#30808080"/>
+                                                        </Trigger>
+                                                        <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                                                            <Setter Property="BorderBrush" Value="#4CA0FF"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="64"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Image Grid.Column="0" Source="{Binding Symbol}"
+                                                   Width="34" Height="34"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center"
+                                                        Margin="0,0,10,0">
+                                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                    <TextBlock Text="{Binding Summary}" FontSize="12" Margin="0,3,0,0"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <!-- Downloads-in-progress pill (gallery image downloads) -->
+            <Border Grid.Row="1" x:Name="DownloadsPill"
+                Visibility="Collapsed" IsHitTestVisible="False"
+                HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                Margin="0,0,0,16" CornerRadius="14" Padding="14,6"
+                Background="#E0202020" BorderBrush="#60808080" BorderThickness="1">
+                <TextBlock x:Name="DownloadsPillText" FontSize="12" Foreground="White"/>
+            </Border>
+
             <!-- Empty-state -->
             <Border Grid.Row="1" Background="#20000000" CornerRadius="8"
                 Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibilityConverter}}">
@@ -296,9 +503,22 @@
             </Border>
 
             <!-- ═══ STATUS BAR ═══ -->
-            <TextBlock Grid.Row="2" Text="{Binding StatusText}"
-                   FontSize="13" Opacity="0.7" Margin="0,6,0,0"
-                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            <DockPanel Grid.Row="2" Margin="0,6,0,0" LastChildFill="True">
+                <!-- Card size slider — gallery mode only -->
+                <StackPanel x:Name="GalleryBar" DockPanel.Dock="Right"
+                        Orientation="Horizontal" Visibility="Collapsed">
+                    <TextBlock Text="Card size" VerticalAlignment="Center" Margin="0,0,8,0"
+                           FontSize="13" Opacity="0.7"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <Slider x:Name="GallerySizeSlider" Width="220" VerticalAlignment="Center"
+                        Minimum="120" Maximum="340" Value="180"
+                        SmallChange="10" LargeChange="40"
+                        ValueChanged="GallerySizeSlider_ValueChanged"/>
+                </StackPanel>
+                <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                       FontSize="13" Opacity="0.7"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            </DockPanel>
         </Grid>
         <!-- end right content grid -->
     </Grid>
