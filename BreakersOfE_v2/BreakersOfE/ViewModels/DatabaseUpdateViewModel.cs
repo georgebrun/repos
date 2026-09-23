@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using BreakersOfE.Services;
 using BreakersOfE.Data;
@@ -332,6 +332,11 @@ namespace BreakersOfE.ViewModels
                     {
                         entry.PriceUsd = prices.PriceUsd;
                         entry.PriceUsdFoil = prices.PriceUsdFoil;
+                        entry.PriceUsdEtched = prices.PriceUsdEtched;
+                        // Per-finish Price is what the grid shows (v1 lesson:
+                        // skipping this left prices stale after an update).
+                        entry.Price = PriceForFinish(entry.Finish,
+                            prices.PriceUsd, prices.PriceUsdFoil, prices.PriceUsdEtched);
                     }
                 }
 
@@ -343,6 +348,8 @@ namespace BreakersOfE.ViewModels
                     {
                         entry.PriceUsd = prices.PriceUsd;
                         entry.PriceUsdFoil = prices.PriceUsdFoil;
+                        entry.Price = PriceForFinish(entry.Finish,
+                            prices.PriceUsd, prices.PriceUsdFoil, prices.PriceUsdEtched);
                     }
                 }
 
@@ -354,6 +361,8 @@ namespace BreakersOfE.ViewModels
                     {
                         entry.PriceUsd = prices.PriceUsd;
                         entry.PriceUsdFoil = prices.PriceUsdFoil;
+                        entry.Price = PriceForFinish(entry.Finish,
+                            prices.PriceUsd, prices.PriceUsdFoil, prices.PriceUsdEtched);
                     }
                 }
 
@@ -364,6 +373,20 @@ namespace BreakersOfE.ViewModels
                 // If collection DB doesn't exist yet, that's fine — skip
             }
         }
+
+        /// <summary>
+        /// The USD price for one finish: non-foil → usd, foil → usd_foil,
+        /// etched → usd_etched. Falls back to the other finishes when a price
+        /// is missing, so a row never shows blank when Scryfall has any price.
+        /// </summary>
+        private static decimal? PriceForFinish(string? finish,
+            decimal? usd, decimal? foil, decimal? etched) =>
+            Models.CardFinish.Normalize(finish) switch
+            {
+                Models.CardFinish.Foil => foil ?? usd,
+                Models.CardFinish.Etched => etched ?? foil ?? usd,
+                _ => usd ?? foil,
+            };
 
         /// <summary>
         /// Rebuilds the keyword dictionary in the background.

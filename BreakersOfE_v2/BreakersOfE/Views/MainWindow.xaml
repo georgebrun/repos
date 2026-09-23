@@ -1,4 +1,4 @@
-<ui:FluentWindow x:Class="BreakersOfE.Views.MainWindow"
+﻿<ui:FluentWindow x:Class="BreakersOfE.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
@@ -39,6 +39,44 @@
                            IsPaneToggleVisible="True"
                            OpenPaneLength="220"
                            Margin="0,40,0,0">
+
+            <!-- ═══ GRID / GALLERY SWITCH (above the tree) ═══
+                 App-wide: decides whether card pages show the grid or the
+                 gallery. The highlighted side is the current mode. -->
+            <ui:NavigationView.PaneHeader>
+                <Grid>
+                    <!-- Pane open: full two-sided switch -->
+                    <Grid Margin="8,4,8,10"
+                          Visibility="{Binding IsPaneOpen, ElementName=RootNavigation,
+                                       Converter={StaticResource BoolToVisibilityConverter}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <ui:Button x:Name="BtnModeGrid" Grid.Column="0"
+                                   Content="Grid" HorizontalAlignment="Stretch"
+                                   Margin="0,0,2,0" Click="BtnModeGrid_Click"
+                                   Icon="{ui:SymbolIcon Grid24}"
+                                   ToolTip="Show cards in the data grid"/>
+                        <ui:Button x:Name="BtnModeGallery" Grid.Column="1"
+                                   Content="Gallery" HorizontalAlignment="Stretch"
+                                   Margin="2,0,0,0" Click="BtnModeGallery_Click"
+                                   Icon="{ui:SymbolIcon Image24}"
+                                   ToolTip="Show cards as images"/>
+                    </Grid>
+
+                    <!-- Pane collapsed: one icon button showing the current
+                         mode; click flips it. -->
+                    <ui:Button x:Name="BtnModeCompact"
+                               Width="36" Height="36" Padding="0"
+                               HorizontalAlignment="Left" Margin="6,4,0,10"
+                               Appearance="Primary"
+                               Click="BtnModeCompact_Click"
+                               Visibility="{Binding IsPaneOpen, ElementName=RootNavigation,
+                                            Converter={StaticResource BoolToVisibilityConverter},
+                                            ConverterParameter=Invert}"/>
+                </Grid>
+            </ui:NavigationView.PaneHeader>
 
             <ui:NavigationView.MenuItems>
 
@@ -92,6 +130,12 @@
                                        Tag="Sets"
                                        TargetPageType="{x:Type pages:PoolPage}"
                                        Icon="{ui:SymbolIcon Layer24}" />
+
+                <!-- ═══ COLLECTION (view-only for now) ═══ -->
+                <ui:NavigationViewItem Content="Collection"
+                                       Tag="Collection"
+                                       TargetPageType="{x:Type pages:PoolPage}"
+                                       Icon="{ui:SymbolIcon Folder24}" />
 
             </ui:NavigationView.MenuItems>
 

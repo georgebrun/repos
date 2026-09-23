@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using BreakersOfE.Data;
 using BreakersOfE.Services;
 
@@ -35,6 +35,19 @@ namespace BreakersOfE
             {
                 // Don't crash on startup if the DB can't be initialized —
                 // the user can still run a database update to fix things.
+            }
+
+            // Collection database: create it on first run, or bring an
+            // existing one (e.g. copied over from v1) up to the current
+            // schema. Only ADDS missing tables/columns, never removes data.
+            try
+            {
+                using var collection = new CollectionDbContext();
+                collection.MigrateSchema();
+            }
+            catch
+            {
+                // Same policy as the pool: never block startup on this.
             }
         }
     }

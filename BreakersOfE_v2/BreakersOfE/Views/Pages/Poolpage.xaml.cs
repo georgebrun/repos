@@ -51,9 +51,15 @@ namespace BreakersOfE.Views.Pages
             Loaded += PoolPage_Loaded;
             PoolGrid.SelectionChanged += PoolGrid_SelectionChanged;
 
-            // Gallery "N downloads in progress" pill (event fires off-thread)
-            Services.ImageCacheService.PendingChanged += n =>
-                Dispatcher.BeginInvoke(new Action(() => UpdateDownloadsPill(n)));
+            // Gallery view: selection goes through the grid (one selection,
+            // two views); double-click opens the detail window.
+            Gallery.CardClicked += card => PoolGrid.SelectedItem = card;
+            Gallery.CardOpened += OpenCardDetailPopup;
+
+            // Grid / Gallery switch above the left navigation (app-wide).
+            // Listen only while this page is on screen.
+            Loaded += (_, _) => Services.CardViewModeService.ModeChanged += OnCardViewModeChanged;
+            Unloaded += (_, _) => Services.CardViewModeService.ModeChanged -= OnCardViewModeChanged;
         }
 
         private string _currentTag = "";
@@ -64,7 +70,7 @@ namespace BreakersOfE.Views.Pages
         {
             _inSetsContext = false;
             LoadPoolCore(tag);
-            SetViewMode(_viewMode == PoolViewMode.Sets ? _lastCardMode : _viewMode);
+            SetViewMode(SwitchMode);
         }
 
         /// <summary>
@@ -97,7 +103,7 @@ namespace BreakersOfE.Views.Pages
             _vm.LoadPool(tag);
             ResetSearch();
             ClearDetail();
-            _galleryItems.Clear();   // new card objects for this pool type
+            Gallery.Reset();         // new card objects for this pool type
             _setTiles = null;        // set tiles come from the new pool too
             // Sort is applied in OnItemsChanged when the binding propagates.
         }
@@ -142,185 +148,15 @@ namespace BreakersOfE.Views.Pages
         }
 
         // ══════════════════════════════════════════════════════════════════
-        // LEFT DETAIL PANEL — populated on row selection
+        // LEFT DETAIL PANEL — shared CardDetailPanel control
         // ══════════════════════════════════════════════════════════════════
-        private bool _showingBack = false;
-
         private void PoolGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            _showingBack = false;
-            SyncGallerySelection(PoolGrid.SelectedItem);
-            if (PoolGrid.SelectedItem == null) { ClearDetail(); return; }
-
-            // Use reflection so this works for PoolCard, TokenCard, etc.
-            var item = PoolGrid.SelectedItem;
-            string Get(string prop) =>
-                item.GetType().GetProperty(prop)?.GetValue(item)?.ToString() ?? "";
-
-            DetailName.Text = Get("Name");
-            DetailType.Text = Get("TypeLine");
-            DetailSet.Text = $"{Get("SetName")} ({Get("SetCode")})";
-            DetailCollectorNumber.Text = Get("CollectorNumber");
-            DetailRarity.Text = Get("Rarity");
-            DetailArtist.Text = Get("Artist");
-
-            // Oracle + flavor
-            DetailOracle.Text = Get("OracleText");
-            DetailFlavor.Text = Get("FlavorText");
-
-            // P/T or Loyalty
-            string p = Get("Power"), t = Get("Toughness"), loy = Get("LoyaltyOrDefense");
-            if (!string.IsNullOrEmpty(p) && !string.IsNullOrEmpty(t))
-            {
-                DetailPTLabel.Text = "POWER / TOUGHNESS";
-                DetailPT.Text = $"{p}/{t}";
-                DetailPTLabel.Visibility = Visibility.Visible;
-                DetailPT.Visibility = Visibility.Visible;
-            }
-            else if (!string.IsNullOrEmpty(loy))
-            {
-                DetailPTLabel.Text = "LOYALTY / DEFENSE";
-                DetailPT.Text = loy;
-                DetailPTLabel.Visibility = Visibility.Visible;
-                DetailPT.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                DetailPTLabel.Visibility = Visibility.Collapsed;
-                DetailPT.Visibility = Visibility.Collapsed;
-            }
-
-            // Finishes
-            bool isFoil = bool.TryParse(Get("IsFoil"), out var f) && f;
-            bool isNonFoil = bool.TryParse(Get("IsNonFoil"), out var nf) && nf;
-            var finishes = new List<string>();
-            if (isFoil) finishes.Add("Foil");
-            if (isNonFoil) finishes.Add("Non-Foil");
-            DetailFinishes.Text = finishes.Count > 0
-                ? string.Join(" · ", finishes) : "Unknown";
-
-            // Prices
-            string usd = Get("PriceUsd") is string pu && !string.IsNullOrEmpty(pu) ? $"USD:  ${pu}" : "";
-            string foilP = Get("PriceUsdFoil") is string pf && !string.IsNullOrEmpty(pf) ? $"USD Foil: ${pf}" : "";
-            DetailPrices.Text = string.Join("\n",
-                new[] { usd, foilP }.Where(s => !string.IsNullOrEmpty(s)));
-
-            // Mana cost symbols
-            DetailManaCost.Items.Clear();
-            string manaCost = Get("ManaCost");
-            if (!string.IsNullOrEmpty(manaCost))
-            {
-                var converter = new Services.ManaCostConverter();
-                var symbols = converter.Convert(manaCost, typeof(object), null!,
-                    System.Globalization.CultureInfo.CurrentCulture);
-                if (symbols is System.Collections.IEnumerable items)
-                    foreach (var sym in items)
-                        DetailManaCost.Items.Add(sym);
-            }
-
-            // Set symbol (rarity-tinted)
-            string setSymbolPath = Get("SetSymbolPath");
-            string rarity = Get("Rarity");
-            if (!string.IsNullOrEmpty(setSymbolPath))
-            {
-                var converter = new Services.ImageSourceConverter();
-                var img = converter.Convert(
-                    new object[] { setSymbolPath, rarity },
-                    typeof(ImageSource), null!,
-                    System.Globalization.CultureInfo.CurrentCulture);
-                DetailSetSymbol.Source = img as ImageSource;
-            }
-            else
-            {
-                DetailSetSymbol.Source = null;
-            }
-
-            // Card image
-            LoadCardImage(Get("ImageNormalUrl"),
-                    Services.ImageCacheService.GetCachedPath(Get("ScryfallId")) ?? Get("LocalImagePath"));
-
-            // Back face button
-            string backUrl = Get("ImageBackUrl");
-            BtnShowBackFace.Visibility = !string.IsNullOrEmpty(backUrl)
-                ? Visibility.Visible : Visibility.Collapsed;
+            Gallery.SelectCard(PoolGrid.SelectedItem);
+            Detail.ShowCard(PoolGrid.SelectedItem);
         }
 
-        private void LoadCardImage(string url, string localPath)
-        {
-            try
-            {
-                // Try local first
-                if (!string.IsNullOrEmpty(localPath) && File.Exists(localPath))
-                {
-                    var bmp = new System.Windows.Media.Imaging.BitmapImage();
-                    bmp.BeginInit();
-                    bmp.UriSource = new Uri(localPath, UriKind.Absolute);
-                    bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                    bmp.EndInit();
-                    bmp.Freeze();
-                    DetailCardImage.Source = bmp;
-                    return;
-                }
-
-                // Fall back to URL
-                if (!string.IsNullOrEmpty(url))
-                {
-                    var bmp = new System.Windows.Media.Imaging.BitmapImage();
-                    bmp.BeginInit();
-                    bmp.UriSource = new Uri(url, UriKind.Absolute);
-                    bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                    bmp.EndInit();
-                    DetailCardImage.Source = bmp;
-                }
-                else
-                {
-                    DetailCardImage.Source = null;
-                }
-            }
-            catch { DetailCardImage.Source = null; }
-        }
-
-        private void BtnShowBackFace_Click(object sender, RoutedEventArgs e)
-        {
-            if (PoolGrid.SelectedItem == null) return;
-            var item = PoolGrid.SelectedItem;
-            string Get(string prop) =>
-                item.GetType().GetProperty(prop)?.GetValue(item)?.ToString() ?? "";
-
-            _showingBack = !_showingBack;
-            if (_showingBack)
-            {
-                LoadCardImage(Get("ImageBackUrl"), Get("LocalImageBackPath"));
-                BtnShowBackFace.Content = "🔄 Show Front Face";
-            }
-            else
-            {
-                LoadCardImage(Get("ImageNormalUrl"),
-                    Services.ImageCacheService.GetCachedPath(Get("ScryfallId")) ?? Get("LocalImagePath"));
-                BtnShowBackFace.Content = "🔄 Show Back Face";
-            }
-        }
-
-        private void ClearDetail()
-        {
-            DetailCardImage.Source = null;
-            DetailName.Text = "";
-            DetailType.Text = "";
-            DetailSet.Text = "";
-            DetailSetSymbol.Source = null;
-            DetailCollectorNumber.Text = "";
-            DetailRarity.Text = "";
-            DetailPT.Text = "";
-            DetailPTLabel.Visibility = Visibility.Collapsed;
-            DetailPT.Visibility = Visibility.Collapsed;
-            DetailOracle.Text = "";
-            DetailFlavor.Text = "";
-            DetailArtist.Text = "";
-            DetailFinishes.Text = "";
-            DetailPrices.Text = "";
-            DetailManaCost.Items.Clear();
-            BtnShowBackFace.Visibility = Visibility.Collapsed;
-        }
+        private void ClearDetail() => Detail.ShowCard(null);
 
         // ══════════════════════════════════════════════════════════════════
         // CARD DETAIL POPUP — double-click grid row or detail image
@@ -334,10 +170,8 @@ namespace BreakersOfE.Views.Pages
             OpenCardDetailPopup(PoolGrid.SelectedItem);
         }
 
-        private void DetailImage_MouseDoubleClick(object sender,
-            System.Windows.Input.MouseButtonEventArgs e)
+        private void Detail_ImageDoubleClicked(object? sender, EventArgs e)
         {
-            if (e.ClickCount < 2) return;
             if (PoolGrid.SelectedItem == null) return;
             OpenCardDetailPopup(PoolGrid.SelectedItem);
         }
@@ -366,7 +200,7 @@ namespace BreakersOfE.Views.Pages
             _cardDetailWindow.CardChanged += newCard =>
             {
                 PoolGrid.SelectedItem = newCard;
-                if (_galleryMode) ScrollGalleryToCard(newCard, toTop: false);
+                if (_galleryMode) Gallery.ScrollToCard(newCard, toTop: false);
                 else PoolGrid.ScrollIntoView(newCard);
             };
             _cardDetailWindow.Closed += (s, ev) => _cardDetailWindow = null;
@@ -614,7 +448,7 @@ namespace BreakersOfE.Views.Pages
             // Gallery mode: put the match's row at the top of the gallery
             if (_galleryMode)
             {
-                ScrollGalleryToCard(matchItem, toTop: true);
+                Gallery.ScrollToCard(matchItem, toTop: true);
                 return;
             }
 
@@ -630,35 +464,27 @@ namespace BreakersOfE.Views.Pages
         }
 
         // ══════════════════════════════════════════════════════════════════
-        // CARD GALLERY — same data and order as the grid, shown as images.
-        // Virtualized: each ListBox item is a ROW of N tiles, only visible
-        // rows are built, and only visible tiles load images (on demand,
-        // cached by ScryfallId).
+        // CARD GALLERY — its own view (Views/Controls/GalleryView). This page
+        // feeds it the grid's sorted/filtered cards and shares the selection.
         // ══════════════════════════════════════════════════════════════════
-        private bool _galleryMode;
-        private readonly Dictionary<object, GalleryItem> _galleryItems =
-            new(ReferenceEqualityComparer.Instance);
-        private readonly List<GalleryItem> _galleryOrdered = new();
-        private List<GalleryRow> _galleryRows = new();
-        private GalleryItem? _gallerySelected;
-        private int _galleryPerRow = 1;
-        private double _galleryRowHeight = 1;
-
-        private const double TileMargin = 8;          // 4 each side (matches XAML)
-        private const double CardAspect = 680.0 / 488.0;
+        private bool _galleryMode => _viewMode == PoolViewMode.Gallery;
 
         // ── View modes: Grid, Gallery, Sets ─────────────────────────────
         private enum PoolViewMode { Grid, Gallery, Sets }
         private PoolViewMode _viewMode = PoolViewMode.Grid;
-        private PoolViewMode _lastCardMode = PoolViewMode.Grid;   // where "back" goes from Sets
 
-        private void BtnViewToggle_Click(object sender, RoutedEventArgs e)
+        /// <summary>The card view the switch above the navigation is set to.</summary>
+        private static PoolViewMode SwitchMode =>
+            Services.CardViewModeService.Mode == Services.CardViewMode.Gallery
+                ? PoolViewMode.Gallery : PoolViewMode.Grid;
+
+        /// <summary>
+        /// Switch flipped. In the set browser nothing changes on screen; the
+        /// switch just decides what opening a set shows.
+        /// </summary>
+        private void OnCardViewModeChanged(Services.CardViewMode _)
         {
-            if (_viewMode == PoolViewMode.Sets)
-                SetViewMode(_lastCardMode);
-            else
-                SetViewMode(_viewMode == PoolViewMode.Grid
-                    ? PoolViewMode.Gallery : PoolViewMode.Grid);
+            if (_viewMode != PoolViewMode.Sets) SetViewMode(SwitchMode);
         }
 
         private void SetViewMode(PoolViewMode mode)
@@ -667,19 +493,14 @@ namespace BreakersOfE.Views.Pages
             var selected = PoolGrid.SelectedItem;
 
             _viewMode = mode;
-            _galleryMode = mode == PoolViewMode.Gallery;
-            if (mode != PoolViewMode.Sets) _lastCardMode = mode;
 
             PoolGrid.Visibility = mode == PoolViewMode.Grid ? Visibility.Visible : Visibility.Collapsed;
-            GalleryList.Visibility = mode == PoolViewMode.Gallery ? Visibility.Visible : Visibility.Collapsed;
+            Gallery.Visibility = mode == PoolViewMode.Gallery ? Visibility.Visible : Visibility.Collapsed;
             SetList.Visibility = mode == PoolViewMode.Sets ? Visibility.Visible : Visibility.Collapsed;
-            GalleryBar.Visibility = mode == PoolViewMode.Gallery ? Visibility.Visible : Visibility.Collapsed;
 
             // Header buttons: Edition sort only matters in the grid; the set
             // browser uses none of the card-view buttons.
             bool cardView = mode != PoolViewMode.Sets;
-            BtnViewToggle.Content = mode == PoolViewMode.Grid ? "Gallery View" : "Grid View";
-            BtnViewToggle.Visibility = cardView ? Visibility.Visible : Visibility.Collapsed;
             BtnClearFilters.Visibility = cardView ? Visibility.Visible : Visibility.Collapsed;
             BtnEditionOrder.Visibility = mode == PoolViewMode.Grid ? Visibility.Visible : Visibility.Collapsed;
             BtnBackToSets.Visibility = cardView && _inSetsContext ? Visibility.Visible : Visibility.Collapsed;
@@ -689,7 +510,6 @@ namespace BreakersOfE.Views.Pages
                 _vm.Title = "Sets";
                 if (_setTiles != null) _vm.StatusText = $"{_setTiles.Count:N0} sets";
             }
-            UpdateDownloadsPill(Services.ImageCacheService.Pending);
 
             // Wait for layout so the new view has a real width to size rows.
             Dispatcher.BeginInvoke(new Action(() =>
@@ -697,8 +517,8 @@ namespace BreakersOfE.Views.Pages
                 switch (mode)
                 {
                     case PoolViewMode.Gallery:
-                        RebuildGallery();
-                        if (selected != null) ScrollGalleryToCard(selected, toTop: true);
+                        Gallery.Show(GridOrder(), selected);
+                        if (selected != null) Gallery.ScrollToCard(selected, toTop: true);
                         break;
                     case PoolViewMode.Grid:
                         if (selected != null && previous != PoolViewMode.Grid)
@@ -847,7 +667,7 @@ namespace BreakersOfE.Views.Pages
             ResetSearch();
             _vm.ApplyFilters();
             RefreshFunnelIcons();
-            SetViewMode(PoolViewMode.Gallery);
+            SetViewMode(SwitchMode);          // grid or gallery, per the switch
             _vm.Title = $"Sets — {tile.Name}";
         }
 
@@ -921,161 +741,16 @@ namespace BreakersOfE.Views.Pages
             }
         }
 
+        /// <summary>Gallery follows the grid's data and order.</summary>
         private void RebuildGalleryIfVisible()
         {
-            if (_galleryMode) RebuildGallery();
+            if (_galleryMode) Gallery.Show(GridOrder(), PoolGrid.SelectedItem);
         }
 
-        /// <summary>Re-read the grid's sorted/filtered view into gallery order.</summary>
-        private void RebuildGallery()
-        {
-            _galleryOrdered.Clear();
-            var view = CollectionViewSource.GetDefaultView(PoolGrid.ItemsSource);
-            if (view != null)
-            {
-                foreach (var card in view)
-                {
-                    if (card == null) continue;
-                    if (!_galleryItems.TryGetValue(card, out var gi))
-                    {
-                        gi = GalleryItem.FromCard(card);
-                        _galleryItems[card] = gi;
-                    }
-                    _galleryOrdered.Add(gi);
-                }
-            }
-            RebuildGalleryRows(keepPosition: false);
-            SyncGallerySelection(PoolGrid.SelectedItem);
-        }
-
-        /// <summary>
-        /// Chunk the ordered tiles into rows of N, where N fits the current
-        /// width at the current card size. Optionally keep the user's place.
-        /// </summary>
-        private void RebuildGalleryRows(bool keepPosition)
-        {
-            if (GalleryList == null) return;
-
-            // Remember which card is at the top, to restore after resize.
-            int anchorIndex = 0;
-            var sv = FindVisualChild<ScrollViewer>(GalleryList);
-            if (keepPosition && sv != null && _galleryRowHeight > 0)
-                anchorIndex = (int)(sv.VerticalOffset / _galleryRowHeight) * _galleryPerRow;
-
-            double tileW = GallerySizeSlider.Value;
-            double tileH = Math.Round(tileW * CardAspect);
-            double avail = GalleryList.ActualWidth - SystemParameters.VerticalScrollBarWidth - 4;
-            int perRow = Math.Max(1, (int)(avail / (tileW + TileMargin)));
-
-            _galleryPerRow = perRow;
-            _galleryRowHeight = tileH + TileMargin;
-
-            var rows = new List<GalleryRow>(_galleryOrdered.Count / perRow + 1);
-            for (int i = 0; i < _galleryOrdered.Count; i += perRow)
-            {
-                var chunk = _galleryOrdered.GetRange(i, Math.Min(perRow, _galleryOrdered.Count - i));
-                foreach (var gi in chunk) { gi.TileWidth = tileW; gi.TileHeight = tileH; }
-                rows.Add(new GalleryRow(chunk));
-            }
-            _galleryRows = rows;
-            GalleryList.ItemsSource = rows;
-
-            // A fresh build (new data, filter, or sort) starts at the top.
-            if (!keepPosition)
-                FindVisualChild<ScrollViewer>(GalleryList)?.ScrollToTop();
-
-            if (keepPosition && anchorIndex > 0)
-            {
-                int row = anchorIndex / perRow;
-                Dispatcher.BeginInvoke(new Action(() =>
-                    FindVisualChild<ScrollViewer>(GalleryList)?
-                        .ScrollToVerticalOffset(row * _galleryRowHeight)),
-                    System.Windows.Threading.DispatcherPriority.Loaded);
-            }
-        }
-
-        private void GalleryList_SizeChanged(object sender, SizeChangedEventArgs e)
-        {
-            if (!_galleryMode || !e.WidthChanged || _galleryOrdered.Count == 0) return;
-
-            // Only rebuild when the number of cards per row actually changes.
-            double tileW = GallerySizeSlider.Value;
-            double avail = GalleryList.ActualWidth - SystemParameters.VerticalScrollBarWidth - 4;
-            int perRow = Math.Max(1, (int)(avail / (tileW + TileMargin)));
-            if (perRow != _galleryPerRow) RebuildGalleryRows(keepPosition: true);
-        }
-
-        private void GallerySizeSlider_ValueChanged(object sender,
-            RoutedPropertyChangedEventArgs<double> e)
-        {
-            // Also fires during InitializeComponent — guard until ready.
-            if (!_galleryMode || GalleryList == null || _galleryOrdered.Count == 0) return;
-            RebuildGalleryRows(keepPosition: true);
-        }
-
-        private void GalleryTile_MouseLeftButtonDown(object sender,
-            System.Windows.Input.MouseButtonEventArgs e)
-        {
-            if ((sender as FrameworkElement)?.DataContext is not GalleryItem gi) return;
-
-            // Selecting through the grid drives the left detail panel exactly
-            // as it does in grid mode (one selection, two views).
-            PoolGrid.SelectedItem = gi.Card;
-
-            if (e.ClickCount == 2)
-                OpenCardDetailPopup(gi.Card);
-        }
-
-        /// <summary>Highlight the tile for the grid's current selection.</summary>
-        private void SyncGallerySelection(object? card)
-        {
-            if (_gallerySelected != null) _gallerySelected.IsSelected = false;
-            _gallerySelected = null;
-            if (card != null && _galleryItems.TryGetValue(card, out var gi))
-            {
-                gi.IsSelected = true;
-                _gallerySelected = gi;
-            }
-        }
-
-        /// <summary>
-        /// Scroll the gallery to a card's row. toTop = put the row at the top
-        /// (search); otherwise just bring it into view (prev/next navigation).
-        /// </summary>
-        private void ScrollGalleryToCard(object card, bool toTop)
-        {
-            if (!_galleryItems.TryGetValue(card, out var gi)) return;
-            int idx = _galleryOrdered.IndexOf(gi);
-            if (idx < 0 || _galleryRows.Count == 0) return;
-
-            int row = Math.Min(idx / _galleryPerRow, _galleryRows.Count - 1);
-            GalleryList.UpdateLayout();
-            if (toTop)
-            {
-                // Same proven two-step as the grid: jump past, then scroll back
-                // up so the target row lands at the top.
-                int jump = Math.Min(row + 10, _galleryRows.Count - 1);
-                GalleryList.ScrollIntoView(_galleryRows[jump]);
-                GalleryList.UpdateLayout();
-            }
-            GalleryList.ScrollIntoView(_galleryRows[row]);
-        }
-
-        private void UpdateDownloadsPill(int pending)
-        {
-            if (DownloadsPill == null) return;
-            if (_galleryMode && pending > 0)
-            {
-                DownloadsPillText.Text = pending == 1
-                    ? "1 download in progress"
-                    : $"{pending} downloads in progress";
-                DownloadsPill.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                DownloadsPill.Visibility = Visibility.Collapsed;
-            }
-        }
+        /// <summary>The grid's cards in display order (sort + filters applied).</summary>
+        private System.Collections.IEnumerable GridOrder() =>
+            CollectionViewSource.GetDefaultView(PoolGrid.ItemsSource)
+                ?? (System.Collections.IEnumerable)Array.Empty<object>();
 
         // ── Visual tree helpers ─────────────────────────────────────────
         private static T? FindVisualChild<T>(DependencyObject root)

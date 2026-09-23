@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using BreakersOfE.Data;
 using BreakersOfE.Filtering;
 using Microsoft.EntityFrameworkCore;
@@ -92,6 +92,13 @@ namespace BreakersOfE.ViewModels
                             rows = db.ConspiracyCards.AsNoTracking().OrderBy(c => c.Name)
                                      .ToList().Cast<object>().ToList();
                             label = "conspiracies"; break;
+                        case "Collection":
+                            // View-only: read the collection, never write.
+                            using (var cdb = new CollectionDbContext())
+                                rows = cdb.CollectionEntries.AsNoTracking()
+                                          .OrderBy(c => c.Name).ThenBy(c => c.SetCode)
+                                          .ToList().Cast<object>().ToList();
+                            label = "collection rows"; break;
                         case "Cards":
                         default:
                             rows = db.PoolCards.AsNoTracking()
@@ -162,13 +169,14 @@ namespace BreakersOfE.ViewModels
 
         private static string TitleFor(string tag) => tag switch
         {
-            "Tokens" => "Card Pool — Tokens",
-            "Planes" => "Card Pool — Planes",
-            "Schemes" => "Card Pool — Schemes",
-            "Vanguards" => "Card Pool — Vanguards",
-            "ArtSeries" => "Card Pool — Art Series",
+            "Tokens"       => "Card Pool — Tokens",
+            "Planes"       => "Card Pool — Planes",
+            "Schemes"      => "Card Pool — Schemes",
+            "Vanguards"    => "Card Pool — Vanguards",
+            "ArtSeries"    => "Card Pool — Art Series",
             "Conspiracies" => "Card Pool — Conspiracies",
-            _ => "Card Pool — Cards"
+            "Collection"   => "Collection",
+            _              => "Card Pool — Cards"
         };
     }
 }

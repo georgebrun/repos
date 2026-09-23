@@ -25,6 +25,7 @@ namespace BreakersOfE.Data
         public DbSet<ArtSeriesCollectionEntry> ArtSeriesCollectionEntries { get; set; }
         public DbSet<TradeBinderEntry> TradeBinderEntries { get; set; }
         public DbSet<WantListEntry> WantListEntries { get; set; }
+        public DbSet<DeckUsage> DeckUsages { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder options)
         {
@@ -50,6 +51,13 @@ namespace BreakersOfE.Data
                 .HasIndex(e => e.ScryfallId);
             modelBuilder.Entity<CollectionEntry>()
                 .HasIndex(e => e.PoolId);  // legacy compat
+
+            // DeckUsage is looked up by card (ScryfallId) for the nested table,
+            // and by deck (DeckId) for reconcile/cleanup.
+            modelBuilder.Entity<DeckUsage>()
+                .HasIndex(e => e.ScryfallId);
+            modelBuilder.Entity<DeckUsage>()
+                .HasIndex(e => e.DeckId);
         }
 
         public void EnsureCreated()
@@ -75,8 +83,11 @@ namespace BreakersOfE.Data
 
         public void MigrateSchema()
         {
-            if (!System.IO.File.Exists(AppFolderService.CollectionDatabasePath))
-                Database.EnsureCreated();
+            // Build every table the model defines that isn't there yet. Works
+            // for a missing file, an EMPTY file (something opened the DB before
+            // setup ran), or a half-built one. EnsureCreated alone can't do
+            // this: it does nothing once a file has any tables at all.
+            CreateMissingTablesFromModel();
 
             // ── Create tables that may not exist yet ────────────────────────
             CreateTableIfMissing(@"
@@ -331,6 +342,40 @@ namespace BreakersOfE.Data
             {
                 AddColumnIfMissing("TradeBinderEntries", col, def);
                 AddColumnIfMissing("WantListEntries", col, def);
+            }
+
+            // ── From v1 Phase 1: DeckUsage — which decks use each card ──────
+            // Usage lives ONLY in the collection DB, never on deck files.
+            // Keyed on ScryfallId + DeckId (deck GUID); never PoolId.
+            CreateTableIfMissing(@"
+                CREATE TABLE IF NOT EXISTS DeckUsages (
+                    DeckUsageId    INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ScryfallId     TEXT NOT NULL DEFAULT '',
+                    DeckId         TEXT NOT NULL DEFAULT '',
+                    DeckName       TEXT NOT NULL DEFAULT '',
+                    DeckType       TEXT NOT NULL DEFAULT '',
+                    Quantity       INTEGER NOT NULL DEFAULT 0,
+                    FoilQuantity   INTEGER NOT NULL DEFAULT 0,
+                    Category       TEXT NOT NULL DEFAULT '',
+                    DateRecorded   TEXT NOT NULL DEFAULT ''
+                )");
+            CreateTableIfMissing(
+                "CREATE INDEX IF NOT EXISTS IX_DeckUsages_ScryfallId ON DeckUsages(ScryfallId)");
+            CreateTableIfMissing(
+                "CREATE INDEX IF NOT EXISTS IX_DeckUsages_DeckId ON DeckUsages(DeckId)");
+            // Per-deck entered counts (added later in v1).
+            AddColumnIfMissing("DeckUsages", "EnteredNonFoil", "INTEGER NOT NULL DEFAULT 0");
+            AddColumnIfMissing("DeckUsages", "EnteredFoil", "INTEGER NOT NULL DEFAULT 0");
+
+            // ── From v1 Phase 2: per-finish columns ─────────────────────────
+            // Finish = "nonfoil"/"foil"/"etched" (default nonfoil, so rows are
+            // valid immediately). Price = USD for this row's finish. Older
+            // combined rows are split into per-finish rows by the migration.
+            foreach (var table in new[] { "CollectionEntries", "TradeBinderEntries", "WantListEntries" }
+                                  .Concat(specialTables))
+            {
+                AddColumnIfMissing(table, "Finish", "TEXT NOT NULL DEFAULT 'nonfoil'");
+                AddColumnIfMissing(table, "Price", "REAL");
             }
         }
 
@@ -625,6 +670,33 @@ namespace BreakersOfE.Data
                     $"ALTER TABLE {table} ADD COLUMN `{col}` {def}");
             }
 #pragma warning restore EF1002
+        }
+
+        /// <summary>
+        /// Creates every table and index in the EF model that the file is
+        /// missing, leaving existing tables and data untouched. Uses EF's own
+        /// create script (so it always matches the model classes), made safe
+        /// to re-run with IF NOT EXISTS. Raw ADO command, not ExecuteSqlRaw,
+        /// so the script is never treated as a format string.
+        /// </summary>
+        private void CreateMissingTablesFromModel()
+        {
+            string script = Database.GenerateCreateScript()
+                .Replace("CREATE TABLE \"", "CREATE TABLE IF NOT EXISTS \"")
+                .Replace("CREATE UNIQUE INDEX \"", "CREATE UNIQUE INDEX IF NOT EXISTS \"")
+                .Replace("CREATE INDEX \"", "CREATE INDEX IF NOT EXISTS \"");
+
+            Database.OpenConnection();
+            try
+            {
+                using var cmd = Database.GetDbConnection().CreateCommand();
+                cmd.CommandText = script;
+                cmd.ExecuteNonQuery();
+            }
+            finally
+            {
+                Database.CloseConnection();
+            }
         }
 
         private void CreateTableIfMissing(string sql)
