@@ -32,6 +32,11 @@ namespace BreakersOfE.ViewModels
         public string PriceText { get; }
         public bool HasPrice => !string.IsNullOrEmpty(PriceText);
 
+        /// <summary>Gold finish pill on the tile: "F" for a foil collection row
+        /// or a foil-only pool printing, "E" for etched, blank otherwise.</summary>
+        public string FinishPill { get; }
+        public bool HasFinishPill => !string.IsNullOrEmpty(FinishPill);
+
         // Set on every row rebuild (size slider / window width).
         public double TileWidth { get; set; }
         public double TileHeight { get; set; }
@@ -59,13 +64,15 @@ namespace BreakersOfE.ViewModels
             }
         }
 
-        private GalleryItem(object card, string sid, string url, string name, string price)
+        private GalleryItem(object card, string sid, string url, string name,
+                            string price, string finishPill)
         {
             Card = card;
             ScryfallId = sid;
             ImageUrl = url;
             Name = name;
             PriceText = price;
+            FinishPill = finishPill;
         }
 
         private async void BeginLoad()
@@ -102,6 +109,7 @@ namespace BreakersOfE.ViewModels
         private sealed class Accessors
         {
             public PropertyInfo? Sid, Url, SmallUrl, Name, Usd, UsdFoil;
+            public PropertyInfo? Finish, Price, FinishPill;   // collection rows / pill
         }
 
         public static GalleryItem FromCard(object card)
@@ -114,6 +122,9 @@ namespace BreakersOfE.ViewModels
                 Name = t.GetProperty("Name"),
                 Usd = t.GetProperty("PriceUsd"),
                 UsdFoil = t.GetProperty("PriceUsdFoil"),
+                Finish = t.GetProperty("Finish"),
+                Price = t.GetProperty("Price"),
+                FinishPill = t.GetProperty("FinishPill"),
             });
 
             string sid = a.Sid?.GetValue(card) as string ?? "";
@@ -122,13 +133,25 @@ namespace BreakersOfE.ViewModels
                 url = a.SmallUrl?.GetValue(card) as string ?? "";
             string name = a.Name?.GetValue(card) as string ?? "";
 
-            // Price badge: non-foil price, or foil price for foil-only printings.
-            decimal? usd = a.Usd?.GetValue(card) as decimal?;
-            decimal? foil = a.UsdFoil?.GetValue(card) as decimal?;
-            decimal? p = usd ?? foil;
+            // Price badge. Collection rows (they have Finish + Price): that
+            // row's own finish price. Pool cards: non-foil price, or the foil
+            // price for foil-only printings.
+            decimal? p;
+            if (a.Finish != null && a.Price != null)
+            {
+                p = a.Price.GetValue(card) as decimal?;
+            }
+            else
+            {
+                decimal? usd = a.Usd?.GetValue(card) as decimal?;
+                decimal? foil = a.UsdFoil?.GetValue(card) as decimal?;
+                p = usd ?? foil;
+            }
             string price = p.HasValue ? $"${p.Value:F2}" : "";
 
-            return new GalleryItem(card, sid, url, name, price);
+            string pill = a.FinishPill?.GetValue(card) as string ?? "";
+
+            return new GalleryItem(card, sid, url, name, price, pill);
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

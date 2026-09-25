@@ -65,51 +65,58 @@
 
         <!-- ═══ RIGHT CONTENT (header + grid + status) ═══ -->
         <Grid Grid.Column="1">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-        <!-- ═══ HEADER ═══ -->
-        <Grid Grid.Row="0" Margin="0,0,0,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
+            <!-- ═══ HEADER ═══ -->
+            <Grid Grid.Row="0" Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-            <TextBlock Grid.Column="0" Text="{Binding Title}"
+                <TextBlock Grid.Column="0" Text="{Binding Title}"
                        FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center"
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
 
-            <StackPanel Grid.Column="1" Orientation="Horizontal"
+                <StackPanel Grid.Column="1" Orientation="Horizontal"
                         HorizontalAlignment="Right" VerticalAlignment="Center"
                         Margin="0,0,12,0">
-                <Button x:Name="BtnBackToSets" Content="◀  All Sets"
+                    <Button x:Name="BtnBackToSets" Content="◀  All Sets"
                         Padding="10,4" Margin="0,0,8,0"
                         Visibility="Collapsed"
                         Click="BtnBackToSets_Click"
                         ToolTip="Back to the set browser"/>
-                <Button x:Name="BtnEditionOrder" Content="Edition: Chrono"
+                    <Button x:Name="BtnEditionOrder" Content="Edition: Chrono"
                         Padding="10,4" Margin="0,0,8,0"
                         Click="BtnEditionOrder_Click"
                         ToolTip="Toggle edition sub-sort: Alphabetical ↔ Chronological"/>
-                <Button x:Name="BtnClearFilters" Content="Clear All Filters" Padding="10,4"
+                    <Button x:Name="BtnColumns" Content="Columns" Padding="10,4" Margin="0,0,8,0"
+                        Click="BtnColumns_Click"
+                        ToolTip="Show or hide columns. Drag headers to reorder, edges to resize — saved per table."/>
+                    <Button x:Name="BtnLegality" Content="Legality" Padding="10,4" Margin="0,0,8,0"
+                        Visibility="Collapsed"
+                        Click="BtnLegality_Click"
+                        ToolTip="Show or hide format legality columns — saved per table."/>
+                    <Button x:Name="BtnClearFilters" Content="Clear All Filters" Padding="10,4"
                         Click="ClearAllFilters_Click"/>
-            </StackPanel>
+                </StackPanel>
 
-            <!-- Search — begins-with, scroll-to, NEVER filters rows -->
-            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                <TextBlock Text="Search:" VerticalAlignment="Center" Margin="0,0,6,0"
+                <!-- Search — begins-with, scroll-to, NEVER filters rows -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Search:" VerticalAlignment="Center" Margin="0,0,6,0"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                <TextBox x:Name="SearchBox" Width="240" VerticalAlignment="Center"
+                    <TextBox x:Name="SearchBox" Width="240" VerticalAlignment="Center"
                          TextChanged="SearchBox_TextChanged"/>
-            </StackPanel>
-        </Grid>
+                </StackPanel>
+            </Grid>
 
-        <!-- ═══ POOL GRID (plain WPF DataGrid + funnel headers) ═══ -->
-        <DataGrid Grid.Row="1" x:Name="PoolGrid"
+            <!-- ═══ POOL GRID (plain WPF DataGrid + funnel headers) ═══ -->
+            <DataGrid Grid.Row="1" x:Name="PoolGrid"
                   ItemsSource="{Binding Items}"
                   AutoGenerateColumns="False"
                   IsReadOnly="True"
@@ -130,89 +137,187 @@
                   RowDetailsVisibilityMode="Collapsed"
                   MouseDoubleClick="PoolGrid_MouseDoubleClick">
 
-            <DataGrid.RowStyle>
-                <Style TargetType="DataGridRow">
-                    <Setter Property="Foreground" Value="{Binding RowForegroundBrush}" />
-                    <Setter Property="Background" Value="{Binding RowBackgroundBrush}" />
-                    <Style.Triggers>
-                        <!-- The Background setter above hides the default selection
+                <DataGrid.RowStyle>
+                    <Style TargetType="DataGridRow">
+                        <Setter Property="Foreground" Value="{Binding RowForegroundBrush}" />
+                        <Setter Property="Background" Value="{Binding RowBackgroundBrush}" />
+                        <Style.Triggers>
+                            <!-- The Background setter above hides the default selection
                              color, so draw selection explicitly. Light blue keeps the
                              color-identity text readable; the blue edge marks the row
                              whether or not the grid has focus. -->
-                        <Trigger Property="IsSelected" Value="True">
-                            <Setter Property="Background" Value="#C8E1FF" />
-                            <Setter Property="BorderBrush" Value="#4CA0FF" />
-                            <Setter Property="BorderThickness" Value="0,1,0,1" />
-                        </Trigger>
-                    </Style.Triggers>
-                </Style>
-            </DataGrid.RowStyle>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="#C8E1FF" />
+                                <Setter Property="BorderBrush" Value="#4CA0FF" />
+                                <Setter Property="BorderThickness" Value="0,1,0,1" />
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </DataGrid.RowStyle>
 
-            <DataGrid.Columns>
+                <DataGrid.Columns>
 
-                <!-- Set symbol (no filter, no funnel) -->
-                <DataGridTemplateColumn Header="Set" Width="40" CanUserResize="False">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <Image Width="18" Height="18"
+                    <!-- Set symbol (no filter, no funnel) -->
+                    <DataGridTemplateColumn Header="Set" Width="40" CanUserResize="False">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Image Width="18" Height="18"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"
                                    RenderOptions.BitmapScalingMode="HighQuality">
-                                <Image.Source>
-                                    <MultiBinding Converter="{StaticResource ImageSourceConverter}">
-                                        <Binding Path="SetSymbolPath" />
-                                        <Binding Path="Rarity" />
-                                    </MultiBinding>
-                                </Image.Source>
-                            </Image>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+                                    <Image.Source>
+                                        <MultiBinding Converter="{StaticResource ImageSourceConverter}">
+                                            <Binding Path="SetSymbolPath" />
+                                            <Binding Path="Rarity" />
+                                        </MultiBinding>
+                                    </Image.Source>
+                                </Image>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
-                <DataGridTextColumn Header="Name"         Binding="{Binding Name}"            Width="210"
+                    <!-- Finish pill, every table. Collection: gold "F" = foil row, "E" = etched,
+                     blank = non-foil. Pool: gold "F" = foil-only printing (no non-foil). -->
+                    <DataGridTextColumn Header="Finish" Binding="{Binding FinishPill}" Width="80"
+                                    HeaderTemplate="{StaticResource FilterableHeader}">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="#FFC000"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+
+                    <DataGridTextColumn Header="Name"         Binding="{Binding Name}"            Width="210"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
-                <DataGridTextColumn Header="Edition"      Binding="{Binding SetCode}"         Width="60"
+                    <DataGridTextColumn Header="Edition"      Binding="{Binding SetCode}"         Width="85"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
-                <DataGridTextColumn Header="Edition Name" Binding="{Binding SetName}"         Width="170"
-                                    HeaderTemplate="{StaticResource FilterableHeader}" />
-                <DataGridTextColumn Header="Type"         Binding="{Binding TypeLine}"        Width="190"
-                                    HeaderTemplate="{StaticResource FilterableHeader}" />
-                <DataGridTextColumn Header="Rarity"       Binding="{Binding RarityCode}"      Width="55"
+                    <DataGridTextColumn Header="Edition Name" Binding="{Binding SetName}"         Width="170"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
 
-                <!-- Mana cost (no filter) -->
-                <DataGridTemplateColumn Header="Cost" Width="110">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <ContentPresenter Content="{Binding ManaCost,
+                    <!-- COLLECTION ONLY: per-finish counts and value (same order as v1). -->
+                    <DataGridTextColumn Header="Qty"       Binding="{Binding Quantity}"        Width="75"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Used"      Binding="{Binding UsedCount}"       Width="80"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Available" Binding="{Binding AvailableCount}"  Width="105"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Price"     Binding="{Binding PriceDisplay}"    Width="75"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Value"     Binding="{Binding RowValueDisplay}" Width="80"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+
+                    <!-- COLLECTION ONLY: the rest of v1's collection columns, v1 order. -->
+                    <DataGridTextColumn Header="Buy At" Binding="{Binding BuyAtDisplay}" Width="85"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Sell At" Binding="{Binding SellAtDisplay}" Width="85"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Sell At Value" Binding="{Binding SellAtValueDisplay}" Width="120"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Needed" Binding="{Binding Needed}" Width="85"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Excess" Binding="{Binding Excess}" Width="80"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Target" Binding="{Binding Target}" Width="80"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Condition" Binding="{Binding Condition}" Width="105"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Notes" Binding="{Binding Notes}" Width="150"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Storage" Binding="{Binding StorageLocation}" Width="100"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Desired" Binding="{Binding Desired}" Width="95"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Group" Binding="{Binding CardGroup}" Width="85"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Print Type" Binding="{Binding PrintType}" Width="105"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Buy" Binding="{Binding BuyStatus}" Width="90"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Sell" Binding="{Binding SellStatus}" Width="90"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Added" Binding="{Binding DateAddedDisplay}" Width="100"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Color" Binding="{Binding ColorDisplay}" Width="75"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Type"         Binding="{Binding TypeLine}"        Width="190"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Rarity"       Binding="{Binding RarityCode}"      Width="80"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+
+                    <!-- Mana cost (no filter) -->
+                    <DataGridTemplateColumn Header="Cost" Width="110">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ContentPresenter Content="{Binding ManaCost,
                                               Converter={StaticResource ManaCostConverter}}"
                                               VerticalAlignment="Center"/>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
-                <DataGridTextColumn Header="P/T"     Binding="{Binding PowerToughness}"      Width="55"
+                    <DataGridTextColumn Header="P/T"     Binding="{Binding PowerToughness}"      Width="70"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
-                <DataGridTextColumn Header="USD"     Binding="{Binding PriceUsdDisplay}"     Width="70"
+                    <DataGridTextColumn Header="USD"     Binding="{Binding PriceUsdDisplay}"     Width="70"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
-                <DataGridTextColumn Header="Foil $"  Binding="{Binding PriceUsdFoilDisplay}" Width="70"
+                    <DataGridTextColumn Header="Foil $"  Binding="{Binding PriceUsdFoilDisplay}" Width="70"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
-                <DataGridTextColumn Header="Text"    Binding="{Binding OracleText}"          Width="260"
+                    <DataGridTextColumn Header="Text"    Binding="{Binding OracleText}"          Width="260"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
-                <DataGridTextColumn Header="Artist"  Binding="{Binding Artist}"              Width="140"
+                    <!-- COLLECTION ONLY -->
+                    <DataGridTextColumn Header="Flavor" Binding="{Binding FlavorText}" Width="160"
+                                    Visibility="Collapsed"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
-                <DataGridTextColumn Header="No."     Binding="{Binding CollectorNumber}"     Width="55"
+                    <DataGridTextColumn Header="Artist"  Binding="{Binding Artist}"              Width="140"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="No."     Binding="{Binding CollectorNumber}"     Width="70"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <!-- COLLECTION ONLY -->
+                    <DataGridTextColumn Header="Power" Binding="{Binding Power}" Width="80"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Toughness" Binding="{Binding Toughness}" Width="105"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="CMC" Binding="{Binding ManaValue}" Width="70"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Row" Binding="{Binding RowIndex}" Width="65"
+                                    Visibility="Collapsed"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
 
-            </DataGrid.Columns>
-        </DataGrid>
+                </DataGrid.Columns>
+            </DataGrid>
 
-        <!-- ═══ CARD GALLERY — its own view (Views/Controls/GalleryView) ═══ -->
-        <ctl:GalleryView Grid.Row="1" x:Name="Gallery" Visibility="Collapsed"/>
+            <!-- ═══ CARD GALLERY — its own view (Views/Controls/GalleryView) ═══ -->
+            <ctl:GalleryView Grid.Row="1" x:Name="Gallery" Visibility="Collapsed"/>
 
-        <!-- ═══ SET BROWSER (virtualized: section headers + rows of set tiles) ═══
+            <!-- ═══ SET BROWSER (virtualized: section headers + rows of set tiles) ═══
              Built from the in-memory pool. Click a tile → Edition filter
              for that set + gallery view. -->
-        <ListBox Grid.Row="1" x:Name="SetList"
+            <ListBox Grid.Row="1" x:Name="SetList"
                  Visibility="Collapsed"
                  Background="Transparent" BorderThickness="0"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -221,118 +326,119 @@
                  VirtualizingPanel.VirtualizationMode="Recycling"
                  VirtualizingPanel.ScrollUnit="Pixel"
                  SizeChanged="SetList_SizeChanged">
-            <ListBox.ItemContainerStyle>
-                <Style TargetType="ListBoxItem">
-                    <Setter Property="Focusable" Value="False"/>
-                    <Setter Property="Template">
-                        <Setter.Value>
-                            <ControlTemplate TargetType="ListBoxItem">
-                                <ContentPresenter/>
-                            </ControlTemplate>
-                        </Setter.Value>
-                    </Setter>
-                </Style>
-            </ListBox.ItemContainerStyle>
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <Grid>
-                        <!-- Section header -->
-                        <Border Visibility="{Binding IsHeader, Converter={StaticResource BoolToVisibilityConverter}}"
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Focusable" Value="False"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <ContentPresenter/>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <!-- Section header -->
+                            <Border Visibility="{Binding IsHeader, Converter={StaticResource BoolToVisibilityConverter}}"
                                 Margin="4,18,12,8" Padding="0,0,0,6"
                                 BorderBrush="#40808080" BorderThickness="0,0,0,1">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding HeaderText}" FontSize="16" FontWeight="SemiBold"
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding HeaderText}" FontSize="16" FontWeight="SemiBold"
                                            VerticalAlignment="Center"
                                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                <Border Margin="10,0,0,0" CornerRadius="9" Padding="8,1"
+                                    <Border Margin="10,0,0,0" CornerRadius="9" Padding="8,1"
                                         Background="#40808080" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding HeaderCount}" FontSize="12"
+                                        <TextBlock Text="{Binding HeaderCount}" FontSize="12"
                                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                </Border>
-                            </StackPanel>
-                        </Border>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
 
-                        <!-- Row of set tiles -->
-                        <ItemsControl ItemsSource="{Binding Tiles}"
+                            <!-- Row of set tiles -->
+                            <ItemsControl ItemsSource="{Binding Tiles}"
                                       Visibility="{Binding IsTileRow, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Width="300" Height="72" Margin="4" CornerRadius="8"
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Width="300" Height="72" Margin="4" CornerRadius="8"
                                             BorderThickness="2" Cursor="Hand"
                                             ToolTip="{Binding Name}"
                                             MouseLeftButtonDown="SetTile_MouseLeftButtonDown">
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Setter Property="Background" Value="#18808080"/>
-                                                <Setter Property="BorderBrush" Value="Transparent"/>
-                                                <Style.Triggers>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter Property="Background" Value="#30808080"/>
-                                                    </Trigger>
-                                                    <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
-                                                        <Setter Property="BorderBrush" Value="#4CA0FF"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="64"/>
-                                                <ColumnDefinition Width="*"/>
-                                            </Grid.ColumnDefinitions>
-                                            <Image Grid.Column="0" Source="{Binding Symbol}"
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="#18808080"/>
+                                                    <Setter Property="BorderBrush" Value="Transparent"/>
+                                                    <Style.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter Property="Background" Value="#30808080"/>
+                                                        </Trigger>
+                                                        <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                                                            <Setter Property="BorderBrush" Value="#4CA0FF"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="64"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Image Grid.Column="0" Source="{Binding Symbol}"
                                                    Width="34" Height="34"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"
                                                    RenderOptions.BitmapScalingMode="HighQuality"/>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center"
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center"
                                                         Margin="0,0,10,0">
-                                                <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
+                                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
                                                            TextTrimming="CharacterEllipsis"
                                                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                                <TextBlock Text="{Binding Summary}" FontSize="12" Margin="0,3,0,0"
+                                                    <TextBlock Text="{Binding Summary}" FontSize="12" Margin="0,3,0,0"
                                                            TextTrimming="CharacterEllipsis"
                                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </Grid>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
 
 
-        <!-- Empty-state -->
-        <Border Grid.Row="1" Background="#20000000" CornerRadius="8"
+            <!-- Empty-state -->
+            <Border Grid.Row="1" Background="#20000000" CornerRadius="8"
                 Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibilityConverter}}">
-            <TextBlock Text="{Binding EmptyMessage}" TextAlignment="Center" TextWrapping="Wrap"
+                <TextBlock Text="{Binding EmptyMessage}" TextAlignment="Center" TextWrapping="Wrap"
                        MaxWidth="420" Opacity="0.8"
                        VerticalAlignment="Center" HorizontalAlignment="Center"/>
-        </Border>
+            </Border>
 
-        <!-- Loading overlay -->
-        <Border Grid.Row="1" Background="#40000000"
+            <!-- Loading overlay -->
+            <Border Grid.Row="1" Background="#40000000"
                 Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}">
-            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                <ui:ProgressRing IsIndeterminate="True" Width="48" Height="48"/>
-                <TextBlock Text="Loading pool..." Margin="0,12,0,0" HorizontalAlignment="Center"
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <ui:ProgressRing IsIndeterminate="True" Width="48" Height="48"/>
+                    <TextBlock Text="Loading pool..." Margin="0,12,0,0" HorizontalAlignment="Center"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-            </StackPanel>
-        </Border>
+                </StackPanel>
+            </Border>
 
-        <!-- ═══ STATUS BAR ═══ -->
-        <DockPanel Grid.Row="2" Margin="0,6,0,0" LastChildFill="True">
-            <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+            <!-- ═══ STATUS BAR ═══ -->
+            <DockPanel Grid.Row="2" Margin="0,6,0,0" LastChildFill="True">
+                <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                        FontSize="13" Opacity="0.7"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-        </DockPanel>
-        </Grid> <!-- end right content grid -->
+            </DockPanel>
+        </Grid>
+        <!-- end right content grid -->
     </Grid>
 </Page>

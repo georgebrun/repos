@@ -31,6 +31,8 @@ namespace BreakersOfE.Models
         public string Layout { get; set; } = string.Empty;
         public bool IsFoil { get; set; }
         public bool IsNonFoil { get; set; }
+        /// <summary>Gold "F" for foil-only printings (no non-foil version exists).</summary>
+        [NotMapped] public string FinishPill => IsFoil && !IsNonFoil ? "F" : string.Empty;
         public string ReleasedAt { get; set; } = string.Empty;
         public string LocalImagePath { get; set; } = string.Empty;
         public bool IsFavorite { get; set; }
@@ -106,6 +108,8 @@ namespace BreakersOfE.Models
         public string Layout { get; set; } = string.Empty;
         public bool IsFoil { get; set; }
         public bool IsNonFoil { get; set; }
+        /// <summary>Gold "F" for foil-only printings (no non-foil version exists).</summary>
+        [NotMapped] public string FinishPill => IsFoil && !IsNonFoil ? "F" : string.Empty;
         public string ReleasedAt { get; set; } = string.Empty;
         public string LocalImagePath { get; set; } = string.Empty;
         public bool IsFavorite { get; set; }
@@ -181,6 +185,8 @@ namespace BreakersOfE.Models
         public string Layout { get; set; } = string.Empty;
         public bool IsFoil { get; set; }
         public bool IsNonFoil { get; set; }
+        /// <summary>Gold "F" for foil-only printings (no non-foil version exists).</summary>
+        [NotMapped] public string FinishPill => IsFoil && !IsNonFoil ? "F" : string.Empty;
         public string ReleasedAt { get; set; } = string.Empty;
         public string LocalImagePath { get; set; } = string.Empty;
         public bool IsFavorite { get; set; }
@@ -257,6 +263,8 @@ namespace BreakersOfE.Models
         public string Layout { get; set; } = string.Empty;
         public bool IsFoil { get; set; }
         public bool IsNonFoil { get; set; }
+        /// <summary>Gold "F" for foil-only printings (no non-foil version exists).</summary>
+        [NotMapped] public string FinishPill => IsFoil && !IsNonFoil ? "F" : string.Empty;
         public string ReleasedAt { get; set; } = string.Empty;
         public string LocalImagePath { get; set; } = string.Empty;
         public bool IsFavorite { get; set; }
@@ -339,6 +347,8 @@ namespace BreakersOfE.Models
         public string Layout { get; set; } = string.Empty;
         public bool IsFoil { get; set; }
         public bool IsNonFoil { get; set; }
+        /// <summary>Gold "F" for foil-only printings (no non-foil version exists).</summary>
+        [NotMapped] public string FinishPill => IsFoil && !IsNonFoil ? "F" : string.Empty;
         public string ReleasedAt { get; set; } = string.Empty;
         public string LocalImagePath { get; set; } = string.Empty;
         public bool IsFavorite { get; set; }

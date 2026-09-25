@@ -38,6 +38,8 @@ namespace BreakersOfE.Models
         public string Layout { get; set; } = string.Empty;
         public bool IsFoil { get; set; }
         public bool IsNonFoil { get; set; }
+        /// <summary>Gold "F" for foil-only printings (no non-foil version exists).</summary>
+        [NotMapped] public string FinishPill => IsFoil && !IsNonFoil ? "F" : string.Empty;
         public bool IsToken { get; set; }
         public bool IsMeld { get; set; }
         public string ReleasedAt { get; set; } = string.Empty;

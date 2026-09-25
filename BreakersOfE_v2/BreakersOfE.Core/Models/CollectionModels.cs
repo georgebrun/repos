@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace BreakersOfE.Models
 {
     // ── Pool Collection ─────────────────────────────────────────────────────
-    public class CollectionEntry
+    public class CollectionEntry : ILegalityRow
     {
         [Key]
         public int CollectionEntryId { get; set; }
@@ -95,11 +95,13 @@ namespace BreakersOfE.Models
         [NotMapped] public bool IsFoil => IsFoilAvailable;       // finishes the printing exists in
         [NotMapped] public bool IsNonFoil => IsNonFoilAvailable;
 
-        [NotMapped] public string PowerToughness =>
+        [NotMapped]
+        public string PowerToughness =>
             !string.IsNullOrWhiteSpace(Power) && !string.IsNullOrWhiteSpace(Toughness)
                 ? $"{Power}/{Toughness}" : string.Empty;
 
-        [NotMapped] public double CollectorNumberSort
+        [NotMapped]
+        public double CollectorNumberSort
         {
             get
             {
@@ -110,18 +112,80 @@ namespace BreakersOfE.Models
             }
         }
 
-        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped]
+        public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C", "uncommon" => "U", "rare" => "R",
-            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
+            "common" => "C",
+            "uncommon" => "U",
+            "rare" => "R",
+            "mythic" => "M",
+            "special" => "S",
+            "bonus" => "B",
+            _ => "?"
         };
 
-        [NotMapped] public string PriceUsdDisplay =>
+        [NotMapped]
+        public string PriceUsdDisplay =>
             PriceUsd.HasValue ? $"${PriceUsd.Value:F2}" : "—";
-        [NotMapped] public string PriceUsdFoilDisplay =>
+        [NotMapped]
+        public string PriceUsdFoilDisplay =>
             PriceUsdFoil.HasValue ? $"${PriceUsdFoil.Value:F2}" : "—";
 
-        [NotMapped] public string SetSymbolPath
+        // ── Per-finish collection columns (each row is ONE finish) ─────────
+        /// <summary>Finish pill: "F" foil, "E" etched, blank for non-foil.</summary>
+        [NotMapped] public string FinishPill => CardFinish.Pill(Finish);
+
+        /// <summary>Owned minus used, for THIS finish. UsedCount is kept
+        /// derived and per-finish (capped at Quantity) by the deck-usage code.</summary>
+        [NotMapped] public int AvailableCount => Math.Max(0, Quantity - UsedCount);
+
+        /// <summary>This finish's price (not the non-foil USD column).</summary>
+        [NotMapped]
+        public string PriceDisplay =>
+            Price.HasValue ? $"${Price.Value:F2}" : "—";
+
+        /// <summary>This finish's price × this row's quantity.</summary>
+        [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
+        [NotMapped]
+        public string RowValueDisplay =>
+            Price.HasValue ? $"${RowValue:F2}" : "—";
+
+        // ── Legality columns: {Binding Legality[commander].Text} etc. ────────
+        private LegalityAccessor? _legality;
+        [NotMapped]
+        public LegalityAccessor Legality =>
+            _legality ??= new LegalityAccessor(() => LegalitiesJson);
+
+        // ── Remaining v1 collection columns ─────────────────────────────────
+        [NotMapped]
+        public string BuyAtDisplay =>
+            BuyAt.HasValue ? $"${BuyAt.Value:F2}" : string.Empty;
+        [NotMapped]
+        public string SellAtDisplay =>
+            SellAt.HasValue ? $"${SellAt.Value:F2}" : string.Empty;
+        [NotMapped]
+        public string SellAtValueDisplay =>
+            SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
+
+        /// <summary>Date added as yyyy-MM-dd so it sorts and filters in date order.</summary>
+        [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
+
+        /// <summary>W/U/B/R/G for one color, M for multicolor, N for colorless (as v1).</summary>
+        [NotMapped]
+        public string ColorDisplay
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(Colors)) return "N";
+                var distinct = Colors.Where(c => "WUBRG".Contains(c)).Distinct().ToList();
+                if (distinct.Count == 0) return "N";
+                if (distinct.Count > 1) return "M";
+                return distinct[0].ToString();
+            }
+        }
+
+        [NotMapped]
+        public string SetSymbolPath
         {
             get
             {
@@ -133,10 +197,12 @@ namespace BreakersOfE.Models
         }
 
         // Collection tint (blue family), foil rows marked like the pool.
-        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground(
                 ColorIdentity, TypeLine, Finish == CardFinish.Foil);
-        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
                 Finish == CardFinish.Foil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }

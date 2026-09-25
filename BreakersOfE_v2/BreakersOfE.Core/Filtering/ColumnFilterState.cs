@@ -88,18 +88,18 @@ namespace BreakersOfE.Filtering
 
             return op switch
             {
-                TextFilterOperator.Contains        => v.Contains(t),
-                TextFilterOperator.DoesNotContain  => !v.Contains(t),
-                TextFilterOperator.Equals          => v == t,
-                TextFilterOperator.DoesNotEqual    => v != t,
-                TextFilterOperator.BeginsWith      => v.StartsWith(t),
-                TextFilterOperator.EndsWith        => v.EndsWith(t),
-                TextFilterOperator.IsBlank         => string.IsNullOrWhiteSpace(value),
-                TextFilterOperator.IsNotBlank      => !string.IsNullOrWhiteSpace(value),
-                TextFilterOperator.GreaterThan          => CompareNumeric(value, text) > 0,
-                TextFilterOperator.GreaterThanOrEqual   => CompareNumeric(value, text) >= 0,
-                TextFilterOperator.LessThan             => CompareNumeric(value, text) < 0,
-                TextFilterOperator.LessThanOrEqual      => CompareNumeric(value, text) <= 0,
+                TextFilterOperator.Contains => v.Contains(t),
+                TextFilterOperator.DoesNotContain => !v.Contains(t),
+                TextFilterOperator.Equals => v == t,
+                TextFilterOperator.DoesNotEqual => v != t,
+                TextFilterOperator.BeginsWith => v.StartsWith(t),
+                TextFilterOperator.EndsWith => v.EndsWith(t),
+                TextFilterOperator.IsBlank => string.IsNullOrWhiteSpace(value),
+                TextFilterOperator.IsNotBlank => !string.IsNullOrWhiteSpace(value),
+                TextFilterOperator.GreaterThan => CompareNumeric(value, text) > 0,
+                TextFilterOperator.GreaterThanOrEqual => CompareNumeric(value, text) >= 0,
+                TextFilterOperator.LessThan => CompareNumeric(value, text) < 0,
+                TextFilterOperator.LessThanOrEqual => CompareNumeric(value, text) <= 0,
                 _ => true
             };
         }
@@ -116,18 +116,18 @@ namespace BreakersOfE.Filtering
 
         public static string OperatorLabel(TextFilterOperator op) => op switch
         {
-            TextFilterOperator.Contains          => "Contains",
-            TextFilterOperator.DoesNotContain    => "Does Not Contain",
-            TextFilterOperator.Equals            => "Equals",
-            TextFilterOperator.DoesNotEqual      => "Does Not Equal",
-            TextFilterOperator.BeginsWith        => "Begins With",
-            TextFilterOperator.EndsWith          => "Ends With",
-            TextFilterOperator.IsBlank           => "Is Blank",
-            TextFilterOperator.IsNotBlank        => "Is Not Blank",
-            TextFilterOperator.GreaterThan       => "Greater Than",
-            TextFilterOperator.GreaterThanOrEqual=> "Greater Than Or Equal",
-            TextFilterOperator.LessThan          => "Less Than",
-            TextFilterOperator.LessThanOrEqual   => "Less Than Or Equal",
+            TextFilterOperator.Contains => "Contains",
+            TextFilterOperator.DoesNotContain => "Does Not Contain",
+            TextFilterOperator.Equals => "Equals",
+            TextFilterOperator.DoesNotEqual => "Does Not Equal",
+            TextFilterOperator.BeginsWith => "Begins With",
+            TextFilterOperator.EndsWith => "Ends With",
+            TextFilterOperator.IsBlank => "Is Blank",
+            TextFilterOperator.IsNotBlank => "Is Not Blank",
+            TextFilterOperator.GreaterThan => "Greater Than",
+            TextFilterOperator.GreaterThanOrEqual => "Greater Than Or Equal",
+            TextFilterOperator.LessThan => "Less Than",
+            TextFilterOperator.LessThanOrEqual => "Less Than Or Equal",
             _ => "Contains"
         };
 
@@ -191,6 +191,22 @@ namespace BreakersOfE.Filtering
             foreach (var f in _filters.Values) f.Clear();
         }
 
+        /// <summary>
+        /// Property-name prefix for legality columns: "Legality.commander" reads
+        /// the row's Legality["commander"] chip text (Legal / Ban / Res / No).
+        /// </summary>
+        public const string LegalityPrefix = "Legality.";
+
+        /// <summary>A row's display value for a column (property or legality).</summary>
+        private string? ValueOf(object item, string propertyName)
+        {
+            if (propertyName.StartsWith(LegalityPrefix, StringComparison.Ordinal))
+                return item is Models.ILegalityRow row
+                    ? row.Legality[propertyName.Substring(LegalityPrefix.Length)].Text
+                    : null;
+            return PropFor(item.GetType(), propertyName)?.GetValue(item)?.ToString();
+        }
+
         private PropertyInfo? PropFor(Type t, string propertyName)
         {
             string key = t.FullName + "::" + propertyName;
@@ -215,12 +231,9 @@ namespace BreakersOfE.Filtering
 
             return list.Where(item =>
             {
-                var t = item.GetType();
                 foreach (var f in active)
                 {
-                    var p = PropFor(t, f.PropertyName);
-                    string? val = p?.GetValue(item)?.ToString();
-                    if (!f.Matches(val)) return false;
+                    if (!f.Matches(ValueOf(item, f.PropertyName))) return false;
                 }
                 return true;
             }).ToList();
@@ -246,24 +259,17 @@ namespace BreakersOfE.Filtering
             {
                 cascaded = all.Where(item =>
                 {
-                    var t = item.GetType();
                     foreach (var f in others)
                     {
-                        var p = PropFor(t, f.PropertyName);
-                        string? val = p?.GetValue(item)?.ToString();
-                        if (!f.Matches(val)) return false;
+                        if (!f.Matches(ValueOf(item, f.PropertyName))) return false;
                     }
                     return true;
                 });
             }
 
             var set = new HashSet<string>(StringComparer.Ordinal);
-            PropertyInfo? prop = null;
             foreach (var item in cascaded)
-            {
-                prop ??= PropFor(item.GetType(), propertyName);
-                set.Add(prop?.GetValue(item)?.ToString() ?? string.Empty);
-            }
+                set.Add(ValueOf(item, propertyName) ?? string.Empty);
 
             // Merge previously-checked values for this column so they stay visible
             var self = Get(columnName);
