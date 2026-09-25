@@ -36,6 +36,35 @@ namespace BreakersOfE.Data
         public void EnsureSchema()
         {
             Database.EnsureCreated();
+
+            // Conversion for pools built before a column existed: add it (no
+            // data lost). Checked first, so there are no "duplicate column"
+            // exceptions. The next Full Database Update fills it in.
+            AddColumnIfMissing("PoolCards", "IsGameChanger", "INTEGER NOT NULL DEFAULT 0");
+        }
+
+        private void AddColumnIfMissing(string table, string column, string definition)
+        {
+            var conn = Database.GetDbConnection();
+            bool opened = false;
+            if (conn.State != System.Data.ConnectionState.Open) { conn.Open(); opened = true; }
+            try
+            {
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = '{column}'";
+                    if (System.Convert.ToInt32(cmd.ExecuteScalar()) > 0) return;
+                }
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {definition}";
+                    cmd.ExecuteNonQuery();
+                }
+            }
+            finally
+            {
+                if (opened) conn.Close();
+            }
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

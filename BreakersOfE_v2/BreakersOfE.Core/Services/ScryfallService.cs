@@ -874,6 +874,7 @@ namespace BreakersOfE.Services
                 PricesJson = GetRawJson(c, "prices"),
                 LegalitiesJson = GetRawJson(c, "legalities"),
                 Keywords = GetStringArray(c, "keywords", "|"),
+                IsGameChanger = GetBool(c, "game_changer"),
                 LocalImagePath = string.Empty,
                 PriceUsd = prices.usd,
                 PriceUsdFoil = prices.usdFoil,

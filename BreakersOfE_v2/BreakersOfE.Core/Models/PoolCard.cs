@@ -47,6 +47,9 @@ namespace BreakersOfE.Models
         public bool IsFavorite { get; set; }
         public string Keywords { get; set; } = string.Empty;
 
+        /// <summary>On the Commander Game Changers list (Scryfall's game_changer flag).</summary>
+        public bool IsGameChanger { get; set; }
+
         // ── Pricing fields ───────────────────────────────────────────────────
         public decimal? PriceUsd { get; set; }
         public decimal? PriceUsdFoil { get; set; }

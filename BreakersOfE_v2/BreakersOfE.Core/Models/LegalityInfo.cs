@@ -129,17 +129,33 @@ namespace BreakersOfE.Models
     /// </summary>
     public sealed class LegalityAccessor
     {
+        /// <summary>
+        /// Alias for "the row's own format": a deck card maps "deck" to its
+        /// deck's format (commander / standard), so one "Legal" column works
+        /// for every deck type.
+        /// </summary>
+        public const string DeckFormatKey = "deck";
+
         private readonly Func<string> _json;
+        private readonly Func<string>? _deckFormat;
         private Dictionary<string, string>? _status;
         private readonly Dictionary<string, LegalityCell> _cells =
             new(StringComparer.OrdinalIgnoreCase);
 
-        public LegalityAccessor(Func<string> legalitiesJson) => _json = legalitiesJson;
+        public LegalityAccessor(Func<string> legalitiesJson, Func<string>? deckFormat = null)
+        {
+            _json = legalitiesJson;
+            _deckFormat = deckFormat;
+        }
 
         public LegalityCell this[string formatKey]
         {
             get
             {
+                if (_deckFormat != null &&
+                    string.Equals(formatKey, DeckFormatKey, StringComparison.OrdinalIgnoreCase))
+                    formatKey = _deckFormat();
+
                 if (!_cells.TryGetValue(formatKey, out var cell))
                 {
                     _status ??= LegalityInfo.ParseAll(_json());

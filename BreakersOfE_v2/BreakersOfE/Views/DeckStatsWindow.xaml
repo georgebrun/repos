@@ -1,0 +1,364 @@
+﻿<ui:FluentWindow x:Class="BreakersOfE.Views.DeckStatsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="Deck Statistics"
+        Width="1000" Height="780"
+        MinWidth="720" MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        ExtendsContentIntoTitleBar="True">
+
+    <ui:FluentWindow.Resources>
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+        </Style>
+
+        <Style x:Key="Note" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Opacity" Value="0.75"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,6,0,0"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+
+        <!-- One summary number -->
+        <DataTemplate x:Key="SummaryTile">
+            <Border Width="170" Margin="0,0,10,10" Padding="12,10" CornerRadius="8"
+                    Background="#18808080">
+                <StackPanel>
+                    <TextBlock Text="{Binding Value}" FontSize="20" FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis" ToolTip="{Binding Value}"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    <TextBlock Text="{Binding Label}" FontSize="12" Margin="0,2,0,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- One bar row: label · bar · count · extra -->
+        <DataTemplate x:Key="BarRow">
+            <Grid Margin="0,2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="110"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="50"/>
+                    <ColumnDefinition Width="90"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" ToolTip="{Binding Label}"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                <Border Grid.Column="1" Height="14" Background="#20808080" CornerRadius="3"
+                        VerticalAlignment="Center" Margin="0,0,8,0" ClipToBounds="True">
+                    <Border HorizontalAlignment="Left" CornerRadius="3" Background="#4CA0FF"
+                            Width="{Binding BarWidth}"/>
+                </Border>
+                <TextBlock Grid.Column="2" Text="{Binding CountText}" TextAlignment="Right"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                <TextBlock Grid.Column="3" Text="{Binding ExtraText}" TextAlignment="Right"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            </Grid>
+        </DataTemplate>
+
+        <!-- One format check: status chip, title, detail lines -->
+        <DataTemplate x:Key="CheckRow">
+            <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="90"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" CornerRadius="4" Padding="8,2" Margin="0,1,12,0"
+                        HorizontalAlignment="Left" VerticalAlignment="Top"
+                        Background="{Binding ChipBackground}">
+                    <TextBlock Text="{Binding StatusText}" FontSize="12" FontWeight="SemiBold"
+                               Foreground="{Binding ChipForeground}"/>
+                </Border>
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    <TextBlock Text="{Binding Summary}" FontSize="13" Margin="0,2,0,0" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <ItemsControl ItemsSource="{Binding Details}" Margin="12,4,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding StringFormat='• {0}'}" FontSize="13"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+    </ui:FluentWindow.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" x:Name="WindowTitleBar" Title="Deck Statistics"/>
+
+        <StackPanel Grid.Row="1" Margin="16,0,16,8">
+            <TextBlock x:Name="DeckNameText" FontSize="20" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+            <TextBlock x:Name="ScopeText" FontSize="13" Margin="0,2,0,0"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </StackPanel>
+
+        <TabControl Grid.Row="2" Margin="16,0,16,0">
+
+            <!-- ═══ OVERVIEW ═══ -->
+            <TabItem Header="Overview">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,8,0">
+                    <StackPanel>
+                        <!-- Color identity as mana symbols -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                            <TextBlock x:Name="IdentityLabel" Text="Color identity" FontSize="15" FontWeight="SemiBold"
+                                       VerticalAlignment="Center" Margin="0,0,12,0"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <ContentPresenter x:Name="IdentitySymbols" VerticalAlignment="Center">
+                                <ContentPresenter.LayoutTransform>
+                                    <ScaleTransform ScaleX="1.8" ScaleY="1.8"/>
+                                </ContentPresenter.LayoutTransform>
+                            </ContentPresenter>
+                        </StackPanel>
+
+                        <ItemsControl x:Name="SummaryList" ItemTemplate="{StaticResource SummaryTile}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="24"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,20">
+                                <TextBlock Text="By color" Style="{StaticResource SectionHeader}"/>
+                                <ItemsControl x:Name="ColorBars" ItemTemplate="{StaticResource BarRow}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,0,20">
+                                <TextBlock Text="By card type" Style="{StaticResource SectionHeader}"/>
+                                <ItemsControl x:Name="TypeBars" ItemTemplate="{StaticResource BarRow}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,0,20">
+                                <TextBlock Text="By rarity" Style="{StaticResource SectionHeader}"/>
+                                <ItemsControl x:Name="RarityBars" ItemTemplate="{StaticResource BarRow}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,20">
+                                <TextBlock Text="Editions (top 10)" Style="{StaticResource SectionHeader}"/>
+                                <ItemsControl x:Name="EditionBars" ItemTemplate="{StaticResource BarRow}"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Style="{StaticResource Note}"
+                                   Text="Main deck only (commander included, sideboard not). Bars show card counts; the right-hand number is value. Lands count under Land, not their color. A card counts once in Type (Artifact Creature → Creature)."/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══ MANA ═══ -->
+            <TabItem Header="Mana">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,8,0">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="24"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Mana curve (non-land cards)" Style="{StaticResource SectionHeader}"/>
+                                <ItemsControl x:Name="CurveBars" ItemTemplate="{StaticResource BarRow}"/>
+                                <TextBlock x:Name="CurveNote" Style="{StaticResource Note}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Lands" Style="{StaticResource SectionHeader}"/>
+                                <ItemsControl x:Name="LandSummary" ItemTemplate="{StaticResource SummaryTile}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock Text="Colors: symbols needed vs. sources" Margin="0,16,0,8"
+                                   Style="{StaticResource SectionHeader}"/>
+                        <DataGrid x:Name="ColorGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                                  HeadersVisibility="Column" GridLinesVisibility="None"
+                                  RowHeaderWidth="0" RowHeight="28" CanUserSortColumns="False"
+                                  CanUserReorderColumns="False"
+                                  ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Color"          Binding="{Binding Color}"        Width="110"/>
+                                <DataGridTextColumn Header="Symbols"        Binding="{Binding Pips}"         Width="90"/>
+                                <DataGridTextColumn Header="% of symbols"   Binding="{Binding PipShare}"     Width="110"/>
+                                <DataGridTextColumn Header="Land sources"   Binding="{Binding LandSources}"  Width="110"/>
+                                <DataGridTextColumn Header="% of lands"     Binding="{Binding LandShare}"    Width="100"/>
+                                <DataGridTextColumn Header="Other sources"  Binding="{Binding OtherSources}" Width="110"/>
+                                <DataGridTemplateColumn Header="Check" Width="*">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Border CornerRadius="4" Padding="8,1" HorizontalAlignment="Left"
+                                                    VerticalAlignment="Center"
+                                                    Background="{Binding ChipBackground}">
+                                                <TextBlock Text="{Binding Check}" FontSize="12" FontWeight="SemiBold"
+                                                           Foreground="{Binding ChipForeground}"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <TextBlock Style="{StaticResource Note}"
+                                   Text="Symbols: colored mana symbols in the main deck's costs (hybrid symbols count for each color). Land sources: land copies that can make that color (from their rules text or basic land type; fetch lands count for the land types they find). Other sources: non-land cards that add that color. Check: Short when a color's share of lands is more than 10 points below its share of symbols; No sources when nothing makes it."/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══ DRAW ODDS ═══ -->
+            <TabItem Header="Draw Odds">
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="320"/>
+                        <ColumnDefinition Width="24"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Pick the cards to look for -->
+                    <DockPanel Grid.Column="0">
+                        <TextBlock DockPanel.Dock="Top" Text="Cards to look for" Style="{StaticResource SectionHeader}"/>
+                        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                            <Button Content="All lands" Padding="10,3" Margin="0,0,6,0" Click="OddsPickLands_Click"/>
+                            <Button Content="All creatures" Padding="10,3" Margin="0,0,6,0" Click="OddsPickCreatures_Click"/>
+                            <Button Content="Clear" Padding="10,3" Click="OddsClear_Click"/>
+                        </WrapPanel>
+                        <TextBlock x:Name="OddsSelectedText" DockPanel.Dock="Bottom" Margin="0,6,0,0" FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <ListBox x:Name="OddsCardList" BorderThickness="0" Background="Transparent">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" Click="OddsCard_Click">
+                                        <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
+                                    </CheckBox>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+
+                    <!-- Options + results -->
+                    <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+                        <StackPanel>
+                            <TextBlock Text="Chance to have them" Style="{StaticResource SectionHeader}"/>
+                            <WrapPanel Margin="0,0,0,12">
+                                <TextBlock Text="At least" VerticalAlignment="Center" Margin="0,0,8,0"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                <ComboBox x:Name="OddsAtLeast" Width="80" Margin="0,0,8,0"
+                                          SelectionChanged="OddsOption_Changed"/>
+                                <TextBlock Text="copies," VerticalAlignment="Center" Margin="0,0,16,0"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                <RadioButton x:Name="OddsOnPlay" Content="On the play" IsChecked="True"
+                                             GroupName="OddsPlayDraw" Margin="0,0,12,0" Checked="OddsOption_Changed"/>
+                                <RadioButton x:Name="OddsOnDraw" Content="On the draw"
+                                             GroupName="OddsPlayDraw" Checked="OddsOption_Changed"/>
+                            </WrapPanel>
+                            <ItemsControl x:Name="OddsBars" ItemTemplate="{StaticResource BarRow}"/>
+                            <TextBlock x:Name="OddsNote" Style="{StaticResource Note}"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+
+            <!-- ═══ SAMPLE HAND ═══ -->
+            <TabItem Header="Sample Hand">
+                <DockPanel Margin="0,12,0,0">
+                    <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                        <Button Content="New hand" Padding="12,4" Margin="0,0,8,0" Click="HandNew_Click"/>
+                        <Button x:Name="BtnMulligan" Content="Mulligan" Padding="12,4" Margin="0,0,8,0" Click="HandMulligan_Click"/>
+                        <Button x:Name="BtnDraw" Content="Draw a card" Padding="12,4" Margin="0,0,16,0" Click="HandDraw_Click"/>
+                        <TextBlock x:Name="HandInfo" VerticalAlignment="Center" FontSize="13"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    </WrapPanel>
+                    <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Note}"
+                               Text="London mulligan: each mulligan draws a fresh 7; put that many cards on the bottom. In Commander decks the commander starts in the command zone, so it isn't in the library."/>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="HandCards">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="{Binding TileWidth}" Height="{Binding TileHeight}"
+                                            Margin="4" CornerRadius="10" Background="#18808080"
+                                            ToolTip="{Binding Name}">
+                                        <Grid>
+                                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap" TextAlignment="Center"
+                                                       FontSize="12" VerticalAlignment="Center" Margin="8"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                            <Image Source="{Binding Image}" Stretch="Uniform"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </TabItem>
+
+            <!-- ═══ BRACKET (Commander decks only) ═══ -->
+            <TabItem Header="Bracket" x:Name="BracketTab">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,8,0">
+                    <StackPanel>
+                        <Border CornerRadius="8" Padding="14,10" Margin="0,0,0,16" Background="#18808080">
+                            <StackPanel>
+                                <TextBlock x:Name="BracketHeadline" FontSize="20" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                <TextBlock x:Name="BracketReason" FontSize="13" Margin="0,4,0,0" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </Border>
+                        <ItemsControl x:Name="BracketChecks" ItemTemplate="{StaticResource CheckRow}"/>
+                        <TextBlock Style="{StaticResource Note}"
+                                   Text="Based on the Commander Brackets (beta): Bracket 1–2 no Game Changers; Bracket 3 up to 3; Bracket 4–5 any, plus mass land denial. Game Changers come from Scryfall (run a Full Database Update to refresh them). Extra turns and land denial are read from rules text; land denial is a best guess, so check the cards listed. Two-card combos aren't checked yet. 1 vs 2 and 4 vs 5 depend on how the deck is meant to play, which cards can't tell."/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══ FORMAT CHECK ═══ -->
+            <TabItem Header="Format Check">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,8,0">
+                    <StackPanel>
+                        <ItemsControl x:Name="CheckList" ItemTemplate="{StaticResource CheckRow}"/>
+                        <TextBlock Style="{StaticResource Note}"
+                                   Text="Copies are counted by card name across all printings. Basic lands and cards that allow any number of copies are exempt. Legality comes from the pool's Scryfall data."/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <DockPanel Grid.Row="3" Margin="16,8,16,16" LastChildFill="False">
+            <Button DockPanel.Dock="Right" Content="Close" Padding="16,5" Click="BtnClose_Click"/>
+        </DockPanel>
+    </Grid>
+</ui:FluentWindow>

@@ -20,8 +20,22 @@ namespace BreakersOfE.ViewModels
         // Full unfiltered table (the single source the filters cascade over)
         private List<object> _allRows = new();
 
-        /// <summary>The per-column filter engine for this grid.</summary>
-        public PoolColumnFilters Filters { get; } = new();
+        /// <summary>
+        /// The column filters of the table on screen. Each table (pool page,
+        /// Collection, each deck, the set view) has its own, kept while the app
+        /// is open — switch away and back and they're still there.
+        /// </summary>
+        public PoolColumnFilters Filters { get; private set; } = new();
+
+        private readonly Dictionary<string, PoolColumnFilters> _filtersByTable = new();
+
+        /// <summary>Switch to this table's filters (created empty the first time).</summary>
+        public void UseFilters(string tableKey)
+        {
+            if (!_filtersByTable.TryGetValue(tableKey, out var f))
+                _filtersByTable[tableKey] = f = new PoolColumnFilters();
+            Filters = f;
+        }
 
         /// <summary>
         /// The full unfiltered table. The set browser builds its tiles from
@@ -56,7 +70,7 @@ namespace BreakersOfE.ViewModels
             EmptyMessage = "";
             Title = TitleFor(tag);
             StatusText = "Loading...";
-            Filters.ClearAll();  // fresh table → drop any prior filters
+            // Filters are NOT cleared: this table's remembered filters re-apply.
 
             Task.Run(() =>
             {
@@ -99,6 +113,49 @@ namespace BreakersOfE.ViewModels
                                           .OrderBy(c => c.Name).ThenBy(c => c.SetCode)
                                           .ToList().Cast<object>().ToList();
                             label = "collection rows"; break;
+                        // ── Other collection tables (view-only) ──
+                        case "CollTokens":
+                            using (var cdb = new CollectionDbContext())
+                                rows = cdb.TokenCollectionEntries.AsNoTracking().OrderBy(c => c.Name)
+                                          .ToList().Cast<object>().ToList();
+                            label = "token rows"; break;
+                        case "CollPlanes":
+                            using (var cdb = new CollectionDbContext())
+                                rows = cdb.PlanarCollectionEntries.AsNoTracking().OrderBy(c => c.Name)
+                                          .ToList().Cast<object>().ToList();
+                            label = "plane rows"; break;
+                        case "CollSchemes":
+                            using (var cdb = new CollectionDbContext())
+                                rows = cdb.SchemeCollectionEntries.AsNoTracking().OrderBy(c => c.Name)
+                                          .ToList().Cast<object>().ToList();
+                            label = "scheme rows"; break;
+                        case "CollVanguards":
+                            using (var cdb = new CollectionDbContext())
+                                rows = cdb.VanguardCollectionEntries.AsNoTracking().OrderBy(c => c.Name)
+                                          .ToList().Cast<object>().ToList();
+                            label = "vanguard rows"; break;
+                        case "CollArtSeries":
+                            using (var cdb = new CollectionDbContext())
+                                rows = cdb.ArtSeriesCollectionEntries.AsNoTracking().OrderBy(c => c.Name)
+                                          .ToList().Cast<object>().ToList();
+                            label = "art series rows"; break;
+                        case "CollConspiracies":
+                            using (var cdb = new CollectionDbContext())
+                                rows = cdb.ConspiracyCollectionEntries.AsNoTracking().OrderBy(c => c.Name)
+                                          .ToList().Cast<object>().ToList();
+                            label = "conspiracy rows"; break;
+                        case "TradeBinder":
+                            using (var cdb = new CollectionDbContext())
+                                rows = cdb.TradeBinderEntries.AsNoTracking()
+                                          .OrderBy(c => c.Name).ThenBy(c => c.SetCode)
+                                          .ToList().Cast<object>().ToList();
+                            label = "trade binder rows"; break;
+                        case "WantList":
+                            using (var cdb = new CollectionDbContext())
+                                rows = cdb.WantListEntries.AsNoTracking()
+                                          .OrderBy(c => c.Name).ThenBy(c => c.SetCode)
+                                          .ToList().Cast<object>().ToList();
+                            label = "want list rows"; break;
                         case "Cards":
                         default:
                             rows = db.PoolCards.AsNoTracking()
@@ -120,13 +177,14 @@ namespace BreakersOfE.ViewModels
                 {
                     _allRows = rows;
                     _label = label;
-                    Items = rows;
                     IsLoading = false;
 
                     if (rows.Count == 0)
                     {
+                        Items = rows;
                         IsEmpty = true;
-                        EmptyMessage =
+                        EmptyMessage = tag.StartsWith("Coll") || tag is "TradeBinder" or "WantList"
+                            ? "Nothing here yet." :
                             "No cards in this pool yet.\n\n" +
                             "Use \"Update Database\" (bottom-left) to download " +
                             "the card data from Scryfall.";
@@ -135,10 +193,25 @@ namespace BreakersOfE.ViewModels
                     else
                     {
                         IsEmpty = false;
-                        StatusText = $"{rows.Count:N0} {label}";
+                        ApplyFilters();   // this table's remembered filters (or none)
                     }
                 });
             });
+        }
+
+        /// <summary>
+        /// Show rows that are already in memory (an opened deck). Same result
+        /// as LoadPool: fresh filters, row indices, status text.
+        /// </summary>
+        public void LoadRows(string title, List<object> rows, string label)
+        {
+            Title = title;
+            _allRows = rows;
+            _label = label;
+            IsLoading = false;
+            IsEmpty = rows.Count == 0;
+            EmptyMessage = rows.Count == 0 ? "This deck has no cards." : "";
+            ApplyFilters();   // this table's remembered filters (or none)
         }
 
         /// <summary>Distinct values for a column, cascaded by other active filters.</summary>
@@ -169,14 +242,22 @@ namespace BreakersOfE.ViewModels
 
         private static string TitleFor(string tag) => tag switch
         {
-            "Tokens"       => "Card Pool — Tokens",
-            "Planes"       => "Card Pool — Planes",
-            "Schemes"      => "Card Pool — Schemes",
-            "Vanguards"    => "Card Pool — Vanguards",
-            "ArtSeries"    => "Card Pool — Art Series",
+            "Tokens" => "Card Pool — Tokens",
+            "Planes" => "Card Pool — Planes",
+            "Schemes" => "Card Pool — Schemes",
+            "Vanguards" => "Card Pool — Vanguards",
+            "ArtSeries" => "Card Pool — Art Series",
             "Conspiracies" => "Card Pool — Conspiracies",
-            "Collection"   => "Collection",
-            _              => "Card Pool — Cards"
+            "Collection" => "Collection — Cards",
+            "CollTokens" => "Collection — Tokens",
+            "CollPlanes" => "Collection — Planes",
+            "CollSchemes" => "Collection — Schemes",
+            "CollVanguards" => "Collection — Vanguards",
+            "CollArtSeries" => "Collection — Art Series",
+            "CollConspiracies" => "Collection — Conspiracies",
+            "TradeBinder" => "Trade Binder",
+            "WantList" => "Want List",
+            _ => "Card Pool — Cards"
         };
     }
 }

@@ -69,6 +69,7 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
             <!-- ═══ HEADER ═══ -->
@@ -91,6 +92,16 @@
                         Visibility="Collapsed"
                         Click="BtnBackToSets_Click"
                         ToolTip="Back to the set browser"/>
+                    <Button x:Name="BtnStatistics" Content="Statistics"
+                        Padding="10,4" Margin="0,0,8,0"
+                        Visibility="Collapsed"
+                        Click="BtnStatistics_Click"
+                        ToolTip="Collection: statistics for the rows on screen (filters narrow it). Deck: statistics for the whole deck."/>
+                    <Button x:Name="BtnSetCompletion" Content="Set Completion"
+                        Padding="10,4" Margin="0,0,8,0"
+                        Visibility="Collapsed"
+                        Click="BtnSetCompletion_Click"
+                        ToolTip="How much of each set you own (by printing)"/>
                     <Button x:Name="BtnEditionOrder" Content="Edition: Chrono"
                         Padding="10,4" Margin="0,0,8,0"
                         Click="BtnEditionOrder_Click"
@@ -196,6 +207,33 @@
                     <DataGridTextColumn Header="Edition Name" Binding="{Binding SetName}"         Width="170"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
 
+                    <!-- DECK ONLY: sideboard marker and counts, as in v1's deck grid. -->
+                    <DataGridTextColumn Header="SB"       Binding="{Binding SideboardDisplay}" Width="60"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Non-Foil" Binding="{Binding Quantity}"         Width="95"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Foil"     Binding="{Binding FoilQuantity}"     Width="70"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Total"    Binding="{Binding TotalQuantity}"    Width="75"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <!-- DECK ONLY: deck vs. collection (Owned / Free / Missing / Wanted). -->
+                    <DataGridTextColumn Header="Owned" Binding="{Binding CollectionOwned}" Width="85"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Free" Binding="{Binding CollectionFree}" Width="70"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Missing" Binding="{Binding CollectionMissing}" Width="90"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Wanted" Binding="{Binding WantedCount}" Width="85"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+
                     <!-- COLLECTION ONLY: per-finish counts and value (same order as v1). -->
                     <DataGridTextColumn Header="Qty"       Binding="{Binding Quantity}"        Width="75"
                                     Visibility="Collapsed"
@@ -210,6 +248,13 @@
                                     Visibility="Collapsed"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
                     <DataGridTextColumn Header="Value"     Binding="{Binding RowValueDisplay}" Width="80"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <!-- TRADE BINDER / WANT LIST ONLY -->
+                    <DataGridTextColumn Header="Asking" Binding="{Binding AskingPriceDisplay}" Width="85"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <DataGridTextColumn Header="Offer"  Binding="{Binding OfferPriceDisplay}"  Width="80"
                                     Visibility="Collapsed"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
 
@@ -369,7 +414,7 @@
                                     <DataTemplate>
                                         <Border Width="300" Height="72" Margin="4" CornerRadius="8"
                                             BorderThickness="2" Cursor="Hand"
-                                            ToolTip="{Binding Name}"
+                                            ToolTip="{Binding ToolTipText}"
                                             MouseLeftButtonDown="SetTile_MouseLeftButtonDown">
                                             <Border.Style>
                                                 <Style TargetType="Border">
@@ -399,6 +444,120 @@
                                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
                                                            TextTrimming="CharacterEllipsis"
                                                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                    <TextBlock Text="{Binding Summary}" FontSize="12" Margin="0,3,0,0"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                    <!-- Completion: printings owned / in the set -->
+                                                    <ProgressBar Height="4" Margin="0,6,0,0" Maximum="100"
+                                                             Value="{Binding CompletionPercent, Mode=OneWay}"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <!-- ═══ DECK BROWSER (virtualized: section headers + rows of deck tiles) ═══
+             Lists every .deck file under Documents\BoE_V2\Decks (subfolders
+             included), grouped Commander / Standard. Click a tile → open it. -->
+            <ListBox Grid.Row="1" x:Name="DeckList"
+                 Visibility="Collapsed"
+                 Background="Transparent" BorderThickness="0"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 ScrollViewer.CanContentScroll="True"
+                 VirtualizingPanel.IsVirtualizing="True"
+                 VirtualizingPanel.VirtualizationMode="Recycling"
+                 VirtualizingPanel.ScrollUnit="Pixel"
+                 SizeChanged="DeckList_SizeChanged">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Focusable" Value="False"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <ContentPresenter/>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <!-- Section header -->
+                            <Border Visibility="{Binding IsHeader, Converter={StaticResource BoolToVisibilityConverter}}"
+                                Margin="4,18,12,8" Padding="0,0,0,6"
+                                BorderBrush="#40808080" BorderThickness="0,0,0,1">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding HeaderText}" FontSize="16" FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                    <Border Margin="10,0,0,0" CornerRadius="9" Padding="8,1"
+                                        Background="#40808080" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding HeaderCount}" FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Row of deck tiles -->
+                            <ItemsControl ItemsSource="{Binding Tiles}"
+                                      Visibility="{Binding IsTileRow, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Width="300" Height="72" Margin="4" CornerRadius="8"
+                                            BorderThickness="2" Cursor="Hand"
+                                            ToolTip="{Binding FilePath}"
+                                            MouseLeftButtonDown="DeckTile_MouseLeftButtonDown">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="#18808080"/>
+                                                    <Setter Property="BorderBrush" Value="Transparent"/>
+                                                    <Style.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter Property="Background" Value="#30808080"/>
+                                                        </Trigger>
+                                                        <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                                                            <Setter Property="BorderBrush" Value="#4CA0FF"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="64"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <!-- Card count -->
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center"
+                                                        HorizontalAlignment="Center">
+                                                    <TextBlock Text="{Binding CountText}" FontSize="18" FontWeight="SemiBold"
+                                                           HorizontalAlignment="Center"
+                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                    <TextBlock Text="cards" FontSize="11" HorizontalAlignment="Center"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center"
+                                                        Margin="0,0,10,0">
+                                                    <!-- Name, with the deck's color identity symbols on the right -->
+                                                    <DockPanel LastChildFill="True">
+                                                        <ContentPresenter DockPanel.Dock="Right" Margin="6,0,0,0"
+                                                                      VerticalAlignment="Center"
+                                                                      Content="{Binding IdentitySymbols,
+                                                                                Converter={StaticResource ManaCostConverter}}"/>
+                                                        <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                    </DockPanel>
                                                     <TextBlock Text="{Binding Summary}" FontSize="12" Margin="0,3,0,0"
                                                            TextTrimming="CharacterEllipsis"
                                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
@@ -432,8 +591,37 @@
                 </StackPanel>
             </Border>
 
+            <!-- ═══ TOTALS ROW (Collection grid only) ═══
+             One green row under the grid, like v1. Columns mirror the grid's
+             (width, order, hidden) and scroll sideways with it — kept in sync
+             by the code-behind. Totals follow the active filters. -->
+            <DataGrid Grid.Row="2" x:Name="TotalsGrid"
+                  Visibility="Collapsed"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  IsHitTestVisible="False"
+                  Focusable="False"
+                  HeadersVisibility="None"
+                  GridLinesVisibility="None"
+                  RowHeaderWidth="0"
+                  RowHeight="26"
+                  CanUserResizeColumns="False"
+                  CanUserReorderColumns="False"
+                  CanUserSortColumns="False"
+                  EnableColumnVirtualization="False"
+                  ScrollViewer.HorizontalScrollBarVisibility="Hidden"
+                  ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                <DataGrid.RowStyle>
+                    <Style TargetType="DataGridRow">
+                        <Setter Property="Background" Value="#D6E8D6"/>
+                        <Setter Property="Foreground" Value="Black"/>
+                        <Setter Property="FontWeight" Value="SemiBold"/>
+                    </Style>
+                </DataGrid.RowStyle>
+            </DataGrid>
+
             <!-- ═══ STATUS BAR ═══ -->
-            <DockPanel Grid.Row="2" Margin="0,6,0,0" LastChildFill="True">
+            <DockPanel Grid.Row="3" Margin="0,6,0,0" LastChildFill="True">
                 <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                        FontSize="13" Opacity="0.7"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>

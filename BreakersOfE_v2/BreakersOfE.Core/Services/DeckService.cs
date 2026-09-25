@@ -87,16 +87,22 @@ namespace BreakersOfE.Services
                 using var pdb = new Data.AppDbContext();
                 var map = pdb.PoolCards.AsNoTracking()
                     .Where(p => scryfallIds.Contains(p.ScryfallId))
-                    .Select(p => new { p.ScryfallId, p.PoolId })
+                    .Select(p => new { p.ScryfallId, p.PoolId, p.LegalitiesJson, p.IsGameChanger })
                     .ToList()
                     .GroupBy(p => p.ScryfallId)
-                    .ToDictionary(g => g.Key, g => g.First().PoolId);
+                    .ToDictionary(g => g.Key, g => g.First());
 
                 foreach (var card in deck.Cards)
                 {
-                    if (!string.IsNullOrEmpty(card.ScryfallId) &&
-                        map.TryGetValue(card.ScryfallId, out int newPoolId))
-                        card.PoolId = newPoolId;
+                    if (string.IsNullOrEmpty(card.ScryfallId) ||
+                        !map.TryGetValue(card.ScryfallId, out var pc))
+                        continue;
+                    card.PoolId = pc.PoolId;
+                    // Deck files don't carry legality: take it from the pool
+                    // (in memory — the deck file isn't changed by loading).
+                    if (string.IsNullOrWhiteSpace(card.LegalitiesJson))
+                        card.LegalitiesJson = pc.LegalitiesJson ?? string.Empty;
+                    card.IsGameChanger = pc.IsGameChanger;   // for Commander brackets
                 }
             }
             catch (Exception ex)

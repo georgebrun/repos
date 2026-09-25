@@ -13,9 +13,62 @@ namespace BreakersOfE.Views
             RootNavigation.Navigated += RootNavigation_Navigated;
             UpdateModeSwitch();
 
+            // Sections start closed and stacked: click View to open the listings.
+            ApplySection(NavSection.None);
+
             // Land on the main Cards pool by default.
             Loaded += (_, _) =>
                 RootNavigation.Navigate(typeof(PoolPage));
+        }
+
+        // ── View / Edit section accordion ───────────────────────────────
+        // Like an accordion panel: at most one section open. Closed section
+        // buttons stack at the top; opening View drops Edit to the bottom of
+        // the pane (above Update Database) with View's items between them;
+        // opening Edit puts it right under View with its items below. Click
+        // an open section again to close it.
+        private enum NavSection { None, View, Edit }
+        private NavSection _openSection = NavSection.View;   // the XAML's starting layout
+
+        /// <summary>Update Database (pane footer, always last): open the update page.</summary>
+        private void BtnUpdateDatabase_Click(object sender, RoutedEventArgs e) =>
+            RootNavigation.Navigate(typeof(DatabaseUpdatePage));
+
+        private void BtnSectionView_Click(object sender, RoutedEventArgs e) => ToggleSection(NavSection.View);
+        private void BtnSectionEdit_Click(object sender, RoutedEventArgs e) => ToggleSection(NavSection.Edit);
+
+        private void ToggleSection(NavSection section) =>
+            ApplySection(_openSection == section ? NavSection.None : section);
+
+        private void ApplySection(NavSection open)
+        {
+            _openSection = open;
+
+            // View items
+            var viewVis = open == NavSection.View ? Visibility.Visible : Visibility.Collapsed;
+            NavCardPool.Visibility = viewVis;
+            NavSets.Visibility = viewVis;
+            NavCollection.Visibility = viewVis;
+            NavDecks.Visibility = viewVis;
+
+            // Edit items (placeholder until editing exists)
+            NavEditComingSoon.Visibility = open == NavSection.Edit ? Visibility.Visible : Visibility.Collapsed;
+
+            // Edit button: at the bottom only while View is open; otherwise
+            // stacked at the top under View.
+            if (BtnSectionEdit.Parent is System.Windows.Controls.Panel from)
+                from.Children.Remove(BtnSectionEdit);
+            (open == NavSection.View ? BottomSections : TopSections).Children.Add(BtnSectionEdit);
+
+            // Arrows: ▾ open, ▸ closed
+            BtnSectionView.Icon = new SymbolIcon
+            {
+                Symbol = open == NavSection.View ? SymbolRegular.ChevronDown24 : SymbolRegular.ChevronRight24
+            };
+            BtnSectionEdit.Icon = new SymbolIcon
+            {
+                Symbol = open == NavSection.Edit ? SymbolRegular.ChevronDown24 : SymbolRegular.ChevronRight24
+            };
         }
 
         // ── Grid / Gallery switch ───────────────────────────────────────
@@ -76,6 +129,8 @@ namespace BreakersOfE.Views
 
                 if (poolTag == "Sets")
                     page.ShowSets();
+                else if (poolTag == "Decks")
+                    page.ShowDecks();
                 else
                     page.LoadPool(poolTag);
             }), System.Windows.Threading.DispatcherPriority.Loaded);

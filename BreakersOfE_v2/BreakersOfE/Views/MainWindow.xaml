@@ -44,30 +44,31 @@
                  App-wide: decides whether card pages show the grid or the
                  gallery. The highlighted side is the current mode. -->
             <ui:NavigationView.PaneHeader>
-                <Grid>
-                    <!-- Pane open: full two-sided switch -->
-                    <Grid Margin="8,4,8,10"
+                <StackPanel>
+                    <Grid>
+                        <!-- Pane open: full two-sided switch -->
+                        <Grid Margin="8,4,8,10"
                           Visibility="{Binding IsPaneOpen, ElementName=RootNavigation,
                                        Converter={StaticResource BoolToVisibilityConverter}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <ui:Button x:Name="BtnModeGrid" Grid.Column="0"
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <ui:Button x:Name="BtnModeGrid" Grid.Column="0"
                                    Content="Grid" HorizontalAlignment="Stretch"
                                    Margin="0,0,2,0" Click="BtnModeGrid_Click"
                                    Icon="{ui:SymbolIcon Grid24}"
                                    ToolTip="Show cards in the data grid"/>
-                        <ui:Button x:Name="BtnModeGallery" Grid.Column="1"
+                            <ui:Button x:Name="BtnModeGallery" Grid.Column="1"
                                    Content="Gallery" HorizontalAlignment="Stretch"
                                    Margin="2,0,0,0" Click="BtnModeGallery_Click"
                                    Icon="{ui:SymbolIcon Image24}"
                                    ToolTip="Show cards as images"/>
-                    </Grid>
+                        </Grid>
 
-                    <!-- Pane collapsed: one icon button showing the current
+                        <!-- Pane collapsed: one icon button showing the current
                          mode; click flips it. -->
-                    <ui:Button x:Name="BtnModeCompact"
+                        <ui:Button x:Name="BtnModeCompact"
                                Width="36" Height="36" Padding="0"
                                HorizontalAlignment="Left" Margin="6,4,0,10"
                                Appearance="Primary"
@@ -75,13 +76,71 @@
                                Visibility="{Binding IsPaneOpen, ElementName=RootNavigation,
                                             Converter={StaticResource BoolToVisibilityConverter},
                                             ConverterParameter=Invert}"/>
-                </Grid>
+                    </Grid>
+
+                    <!-- ═══ SECTION ACCORDION (top) ═══
+                     View / Edit section buttons. The open section's button sits
+                     here with its items below it; a closed section's button
+                     drops to the pane footer. The code-behind moves them. -->
+                    <StackPanel x:Name="TopSections"
+                            Visibility="{Binding IsPaneOpen, ElementName=RootNavigation,
+                                         Converter={StaticResource BoolToVisibilityConverter}}">
+                        <ui:Button x:Name="BtnSectionView" Content="View"
+                               Icon="{ui:SymbolIcon ChevronDown24}"
+                               Appearance="Transparent"
+                               HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                               FontWeight="SemiBold" Margin="4,0,8,4"
+                               Click="BtnSectionView_Click"
+                               ToolTip="Look at the card pool, sets, collection, and decks (read-only)"/>
+                    </StackPanel>
+                </StackPanel>
             </ui:NavigationView.PaneHeader>
+
+            <!-- ═══ PANE FOOTER: closed sections, then Update Database (always last) ═══ -->
+            <ui:NavigationView.PaneFooter>
+                <StackPanel>
+                    <StackPanel x:Name="BottomSections"
+                            Visibility="{Binding IsPaneOpen, ElementName=RootNavigation,
+                                         Converter={StaticResource BoolToVisibilityConverter}}">
+                        <ui:Button x:Name="BtnSectionEdit" Content="Edit"
+                               Icon="{ui:SymbolIcon ChevronRight24}"
+                               Appearance="Transparent"
+                               HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                               FontWeight="SemiBold" Margin="4,4,8,4"
+                               Click="BtnSectionEdit_Click"
+                               ToolTip="Edit your collection and decks"/>
+                    </StackPanel>
+
+                    <!-- Update Database: always the very last thing in the pane.
+                     A plain button (not a tree item) so nothing can sit below it. -->
+                    <ui:Button x:Name="BtnUpdateDatabase" Content="Update Database"
+                           Icon="{ui:SymbolIcon ArrowDownload24}"
+                           Appearance="Transparent"
+                           HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                           Margin="4,4,8,8"
+                           Click="BtnUpdateDatabase_Click"
+                           ToolTip="Download card data and prices from Scryfall"
+                           Visibility="{Binding IsPaneOpen, ElementName=RootNavigation,
+                                        Converter={StaticResource BoolToVisibilityConverter}}"/>
+                    <!-- Pane collapsed: icon only -->
+                    <ui:Button Width="36" Height="36" Padding="0"
+                           HorizontalAlignment="Left" Margin="6,4,0,8"
+                           Appearance="Transparent"
+                           Icon="{ui:SymbolIcon ArrowDownload24}"
+                           Click="BtnUpdateDatabase_Click"
+                           ToolTip="Update Database"
+                           Visibility="{Binding IsPaneOpen, ElementName=RootNavigation,
+                                        Converter={StaticResource BoolToVisibilityConverter},
+                                        ConverterParameter=Invert}"/>
+                </StackPanel>
+            </ui:NavigationView.PaneFooter>
 
             <ui:NavigationView.MenuItems>
 
+                <!-- ═══ VIEW section items (shown while View is open) ═══ -->
+
                 <!-- ═══ CARD POOL (expandable) ═══ -->
-                <ui:NavigationViewItem Content="Card Pool"
+                <ui:NavigationViewItem x:Name="NavCardPool" Content="Card Pool"
                                        Icon="{ui:SymbolIcon Library24}"
                                        IsExpanded="True">
 
@@ -126,27 +185,84 @@
                 </ui:NavigationViewItem>
 
                 <!-- ═══ SETS (set browser over the Cards pool) ═══ -->
-                <ui:NavigationViewItem Content="Sets"
+                <ui:NavigationViewItem x:Name="NavSets" Content="Sets"
                                        Tag="Sets"
                                        TargetPageType="{x:Type pages:PoolPage}"
                                        Icon="{ui:SymbolIcon Layer24}" />
 
-                <!-- ═══ COLLECTION (view-only for now) ═══ -->
-                <ui:NavigationViewItem Content="Collection"
-                                       Tag="Collection"
+                <!-- ═══ COLLECTION (expandable, view-only for now) ═══
+                     Same sub-items as the Card Pool, plus Trade Binder and Want List.
+                     "Collection" stays the main collection's tag (saved layouts/filters). -->
+                <ui:NavigationViewItem x:Name="NavCollection" Content="Collection"
+                                       Icon="{ui:SymbolIcon Folder24}"
+                                       IsExpanded="True">
+
+                    <ui:NavigationViewItem.MenuItems>
+
+                        <ui:NavigationViewItem Content="Cards"
+                                               Tag="Collection"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Grid24}" />
+
+                        <ui:NavigationViewItem Content="Tokens"
+                                               Tag="CollTokens"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Star24}" />
+
+                        <ui:NavigationViewItem Content="Planes"
+                                               Tag="CollPlanes"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Globe24}" />
+
+                        <ui:NavigationViewItem Content="Schemes"
+                                               Tag="CollSchemes"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Flowchart24}" />
+
+                        <ui:NavigationViewItem Content="Vanguards"
+                                               Tag="CollVanguards"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Person24}" />
+
+                        <ui:NavigationViewItem Content="Art Series"
+                                               Tag="CollArtSeries"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Image24}" />
+
+                        <ui:NavigationViewItem Content="Conspiracies"
+                                               Tag="CollConspiracies"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon EyeTracking24}" />
+
+                        <ui:NavigationViewItem Content="Trade Binder"
+                                               Tag="TradeBinder"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon BookOpen24}" />
+
+                        <ui:NavigationViewItem Content="Want List"
+                                               Tag="WantList"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon List24}" />
+
+                    </ui:NavigationViewItem.MenuItems>
+                </ui:NavigationViewItem>
+
+                <!-- ═══ DECKS (deck browser → open a deck, view-only for now) ═══ -->
+                <ui:NavigationViewItem x:Name="NavDecks" Content="Decks"
+                                       Tag="Decks"
                                        TargetPageType="{x:Type pages:PoolPage}"
-                                       Icon="{ui:SymbolIcon Folder24}" />
+                                       Icon="{ui:SymbolIcon Stack24}" />
+
+                <!-- ═══ EDIT section items (shown while Edit is open) ═══ -->
+                <ui:NavigationViewItem x:Name="NavEditComingSoon"
+                                       Content="Editing is coming soon"
+                                       Icon="{ui:SymbolIcon Edit24}"
+                                       IsEnabled="False"
+                                       Visibility="Collapsed" />
 
             </ui:NavigationView.MenuItems>
 
             <!-- ═══ FOOTER ═══ -->
-            <ui:NavigationView.FooterMenuItems>
-
-                <ui:NavigationViewItem Content="Update Database"
-                                       TargetPageType="{x:Type pages:DatabaseUpdatePage}"
-                                       Icon="{ui:SymbolIcon ArrowDownload24}" />
-
-            </ui:NavigationView.FooterMenuItems>
 
         </ui:NavigationView>
     </Grid>

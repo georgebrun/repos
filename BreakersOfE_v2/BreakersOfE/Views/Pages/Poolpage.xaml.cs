@@ -60,20 +60,75 @@ namespace BreakersOfE.Views.Pages
             ["Toughness"] = "Toughness",
             ["CMC"] = "ManaValue",
             ["Row"] = "RowIndex",
+            // Deck-only columns
+            ["SB"] = "SideboardDisplay",
+            ["Non-Foil"] = "Quantity",
+            ["Foil"] = "FoilQuantity",
+            ["Total"] = "TotalQuantity",
+            ["Owned"] = "CollectionOwned",
+            ["Free"] = "CollectionFree",
+            ["Missing"] = "CollectionMissing",
+            ["Wanted"] = "WantedCount",
+            // Trade Binder / Want List
+            ["Asking"] = "AskingPriceDisplay",
+            ["Offer"] = "OfferPriceDisplay",
         };
 
-        // Which columns belong to which kind of table. Everything else is shared.
-        private static readonly HashSet<string> CollectionOnlyColumns =
-            new()
-            {
-                "Qty", "Used", "Available", "Price", "Value",
-                "Buy At", "Sell At", "Sell At Value", "Needed", "Excess", "Target",
-                "Condition", "Notes", "Storage", "Desired", "Group", "Print Type",
-                "Buy", "Sell", "Added", "Color", "Flavor",
-                "Power", "Toughness", "CMC", "Row",
-            };
-        private static readonly HashSet<string> PoolOnlyColumns =
-            new() { "USD", "Foil $" };
+        // ── Table kinds ─────────────────────────────────────────────────
+        // Pool (Cards, Tokens, …), the collections, and Deck share one grid;
+        // each kind shows its own columns. Tags: "Collection" (main
+        // collection), "Coll…" (tokens, planes, … collections), "TradeBinder",
+        // "WantList", "Deck", else a pool.
+        private enum TableKind { Pool, Collection, SpecialCollection, TradeBinder, WantList, Deck }
+
+        private static TableKind KindOf(string tag) => tag switch
+        {
+            "Collection" => TableKind.Collection,
+            "TradeBinder" => TableKind.TradeBinder,
+            "WantList" => TableKind.WantList,
+            DeckTableTag => TableKind.Deck,
+            _ when tag.StartsWith("Coll", StringComparison.Ordinal) => TableKind.SpecialCollection,
+            _ => TableKind.Pool,
+        };
+
+        /// <summary>Any collection table (main, special, binder, want list).</summary>
+        private static bool IsCollectionKind(TableKind k) =>
+            k is TableKind.Collection or TableKind.SpecialCollection or TableKind.TradeBinder or TableKind.WantList;
+
+        /// <summary>All open decks share one table (and one saved layout).</summary>
+        private const string DeckTableTag = "Deck";
+
+        // Columns that only some kinds have. Columns not listed are shared.
+        private static readonly Dictionary<string, TableKind[]> ColumnKinds = BuildColumnKinds();
+
+        private static Dictionary<string, TableKind[]> BuildColumnKinds()
+        {
+            var C = TableKind.Collection; var S = TableKind.SpecialCollection;
+            var B = TableKind.TradeBinder; var W = TableKind.WantList; var D = TableKind.Deck;
+            var cs = new[] { C, S };                  // main + special collections
+            var csb = new[] { C, S, B };              // + trade binder
+            var all = new[] { C, S, B, W };           // every collection table
+            var allD = new[] { C, S, B, W, D };       // + decks
+            var pd = new[] { TableKind.Pool, D };
+            var d = new[] { D };
+            var map = new Dictionary<string, TableKind[]>();
+            foreach (var h in new[] { "Used", "Available",
+                                      "Buy At", "Sell At", "Sell At Value", "Needed", "Excess", "Target",
+                                      "Storage", "Desired", "Group", "Print Type", "Buy", "Sell" })
+                map[h] = cs;
+            foreach (var h in new[] { "Qty", "Price", "Notes", "Added" })
+                map[h] = all;
+            map["Condition"] = csb;
+            foreach (var h in new[] { "Value", "Color", "Flavor", "Power", "Toughness", "CMC", "Row" })
+                map[h] = allD;
+            map["Asking"] = new[] { B };
+            map["Offer"] = new[] { W };
+            foreach (var h in new[] { "USD", "Foil $" })
+                map[h] = pd;
+            foreach (var h in new[] { "SB", "Non-Foil", "Foil", "Total", "Owned", "Free", "Missing", "Wanted" })
+                map[h] = d;
+            return map;
+        }
 
         // Legality columns (one per format, collection only). Built in code
         // from LegalityInfo.Formats; listed by the Legality button, not Columns.
@@ -88,27 +143,27 @@ namespace BreakersOfE.Views.Pages
             foreach (var fmt in Models.LegalityInfo.Formats)
             {
                 LegalityHeaders.Add(fmt.Header);
-                CollectionOnlyColumns.Add(fmt.Header);
+                ColumnKinds[fmt.Header] = new[] { TableKind.Collection };
                 ColumnToProperty[fmt.Header] = PoolColumnFilters.LegalityPrefix + fmt.Key;
                 if (!fmt.DefaultVisible) DefaultHiddenColumns.Add(fmt.Header);
             }
+
+            // Decks: one "Legal" column = legality in the deck's own format
+            // (Commander decks → commander, Standard decks → standard).
+            ColumnKinds[DeckLegalHeader] = new[] { TableKind.Deck };
+            ColumnToProperty[DeckLegalHeader] =
+                PoolColumnFilters.LegalityPrefix + Models.LegalityAccessor.DeckFormatKey;
         }
 
-        /// <summary>
-        /// Show the column set for this table: collection rows get Qty, Used,
-        /// Available, per-finish Price, and Value; pool rows get the pool's USD
-        /// and Foil $ columns instead. Finish shows in both.
-        /// </summary>
-        private void ApplyColumnSet(bool collection)
+        private const string DeckLegalHeader = "Legal";
+
+        /// <summary>Hide the columns this kind of table doesn't have.</summary>
+        private void ApplyColumnSet(TableKind kind)
         {
             foreach (var col in PoolGrid.Columns)
             {
-                string h = col.Header?.ToString() ?? "";
-                if (CollectionOnlyColumns.Contains(h))
-                    col.Visibility = collection && !DefaultHiddenColumns.Contains(h)
-                        ? Visibility.Visible : Visibility.Collapsed;
-                else if (PoolOnlyColumns.Contains(h))
-                    col.Visibility = collection ? Visibility.Collapsed : Visibility.Visible;
+                if (!ColumnApplies(col.Header?.ToString() ?? "", kind))
+                    col.Visibility = Visibility.Collapsed;
             }
         }
 
@@ -147,15 +202,20 @@ namespace BreakersOfE.Views.Pages
             // Per-table column layout: remember the XAML defaults, then save
             // whenever the user reorders or resizes a column.
             InitColumnLayout();
+
+            // Collection totals row under the grid (mirrors the grid's columns).
+            BuildTotalsColumns();
         }
 
         private string _currentTag = "";
         private bool _inSetsContext;          // true while the "Sets" nav item is active
+        private bool _inDecksContext;         // true while the "Decks" nav item is active
 
         /// <summary>Card Pool nav items (Cards, Tokens, …): always a card view.</summary>
         public void LoadPool(string tag)
         {
             _inSetsContext = false;
+            _inDecksContext = false;
             LoadPoolCore(tag);
             SetViewMode(SwitchMode);
         }
@@ -167,14 +227,19 @@ namespace BreakersOfE.Views.Pages
         public void ShowSets()
         {
             _inSetsContext = true;
+            _inDecksContext = false;
+
+            // The set view has its own filters (separate from Cards). Coming
+            // back to the browser drops the set's Edition filter.
+            _vm.UseFilters(SetsFilterKey);
+            _vm.Filters.ClearAll();
+
             if (_currentTag != "Cards" || _vm.AllRows.Count == 0)
             {
                 LoadPoolCore("Cards");          // tiles build when the data arrives
             }
-            else if (_vm.Filters.HasActiveFilters)
+            else
             {
-                // Coming back from a set: drop its filter so card views start whole.
-                _vm.Filters.ClearAll();
                 _vm.ApplyFilters();
                 RefreshFunnelIcons();
             }
@@ -182,30 +247,45 @@ namespace BreakersOfE.Views.Pages
             SetViewMode(PoolViewMode.Sets);
         }
 
-        private void BtnBackToSets_Click(object sender, RoutedEventArgs e) => ShowSets();
+        /// <summary>"◀ All Sets" / "◀ All Decks": back to whichever browser we came from.</summary>
+        private void BtnBackToSets_Click(object sender, RoutedEventArgs e)
+        {
+            if (_inDecksContext) ShowDecks();
+            else ShowSets();
+        }
+
+        private const string SetsFilterKey = "Sets";
 
         private void LoadPoolCore(string tag)
         {
-            bool isCollection = tag == "Collection";
-            if ((_currentTag == "Collection") != isCollection)
+            // Each table keeps its own filters while the app is open.
+            _vm.UseFilters(_inSetsContext ? SetsFilterKey : tag);
+            PrepareTable(tag);
+            _vm.LoadPool(tag);
+            // Sort is applied in OnItemsChanged when the binding propagates.
+        }
+
+        /// <summary>
+        /// Switch the grid to another table: save the one we're leaving, show
+        /// this table's own layout, and clear per-table state.
+        /// </summary>
+        private void PrepareTable(string tag)
+        {
+            if (KindOf(_currentTag) != KindOf(tag))
             {
-                // Switching between pool and collection: a sort on a column the
-                // other table doesn't have (e.g. Qty) falls back to Name.
+                // A sort on a column the other kind doesn't have (e.g. Qty)
+                // falls back to Name.
                 _lastSortProp = "Name";
                 _lastSortAsc = true;
             }
-            // Save the table we're leaving, then show this table's own layout
-            // (its column set + saved order/visibility/width, or the defaults).
             SaveColumnLayoutNow();
             ApplyColumnLayout(tag);
 
             _currentTag = tag;
-            _vm.LoadPool(tag);
             ResetSearch();
             ClearDetail();
-            Gallery.Reset();         // new card objects for this pool type
-            _setTiles = null;        // set tiles come from the new pool too
-            // Sort is applied in OnItemsChanged when the binding propagates.
+            Gallery.Reset();         // new card objects for this table
+            _setTiles = null;        // set tiles come from the Cards pool
         }
 
         // Called when the ViewModel's Items property changes (data loaded).
@@ -230,6 +310,9 @@ namespace BreakersOfE.Views.Pages
                 else
                     col.SortDirection = null;
             }
+
+            // Totals row follows the rows on screen (filters applied)
+            UpdateTotals();
 
             // Pre-build name cache for fast search
             RebuildSearchIndex();
@@ -495,9 +578,8 @@ namespace BreakersOfE.Views.Pages
             PoolGrid.Columns.FirstOrDefault(c => ColumnHeader(c) == header);
 
         /// <summary>Does this column exist for this kind of table?</summary>
-        private static bool ColumnApplies(string header, bool collection) =>
-            !(CollectionOnlyColumns.Contains(header) && !collection) &&
-            !(PoolOnlyColumns.Contains(header) && collection);
+        private static bool ColumnApplies(string header, TableKind kind) =>
+            !ColumnKinds.TryGetValue(header, out var kinds) || Array.IndexOf(kinds, kind) >= 0;
 
         /// <summary>
         /// Show a table's layout: defaults first (XAML widths and order, plus the
@@ -508,7 +590,7 @@ namespace BreakersOfE.Views.Pages
             _applyingLayout = true;
             try
             {
-                bool collection = table == "Collection";
+                var kind = KindOf(table);
 
                 // 1. Defaults. Set positions in ascending order so each
                 //    assignment lands where intended.
@@ -521,7 +603,7 @@ namespace BreakersOfE.Views.Pages
                     col.Visibility = DefaultHiddenColumns.Contains(kv.Key)   // defaults show every
                         ? Visibility.Collapsed : Visibility.Visible;          // column but the hidden-by-default ones
                 }
-                ApplyColumnSet(collection);                // then hide what this table doesn't have
+                ApplyColumnSet(kind);                      // then hide what this table doesn't have
 
                 // 2. This table's saved layout, if any.
                 var saved = Services.GridLayoutService.Get(table);
@@ -539,7 +621,7 @@ namespace BreakersOfE.Views.Pages
 
                         // Only user choices: a column this table doesn't have
                         // stays hidden, and Name always shows.
-                        if (ColumnApplies(cl.Header, collection) && cl.Header != "Name")
+                        if (ColumnApplies(cl.Header, kind) && cl.Header != "Name")
                             col.Visibility = cl.Visible ? Visibility.Visible : Visibility.Collapsed;
                     }
                 }
@@ -554,6 +636,7 @@ namespace BreakersOfE.Views.Pages
             // Headers may be rebuilt: funnel colors must match the filters.
             Dispatcher.BeginInvoke(new Action(RefreshFunnelIcons),
                 System.Windows.Threading.DispatcherPriority.Loaded);
+            QueueTotalsSync();
         }
 
         /// <summary>Save shortly after the user stops dragging (one write, not hundreds).</summary>
@@ -606,7 +689,7 @@ namespace BreakersOfE.Views.Pages
         private void ShowColumnChecklist(FrameworkElement anchor, bool legality)
         {
             if (string.IsNullOrEmpty(_layoutTable)) return;
-            bool collection = _layoutTable == "Collection";
+            var kind = KindOf(_layoutTable);
 
             // Which columns this list covers
             IEnumerable<DataGridColumn> columns = legality
@@ -616,7 +699,7 @@ namespace BreakersOfE.Views.Pages
                 : PoolGrid.Columns
                     .OrderBy(c => c.DisplayIndex)
                     .Where(c => !LegalityHeaders.Contains(ColumnHeader(c)));
-            columns = columns.Where(c => ColumnApplies(ColumnHeader(c!), collection)).ToList();
+            columns = columns.Where(c => ColumnApplies(ColumnHeader(c!), kind)).ToList();
 
             var list = new StackPanel { Margin = new Thickness(10, 8, 10, 8) };
             var boxes = new List<(CheckBox box, DataGridColumn col)>();
@@ -745,6 +828,19 @@ namespace BreakersOfE.Views.Pages
                 };
                 PoolGrid.Columns.Insert(insertAt++, col);
             }
+
+            // Deck "Legal" column right after Name (v1's spot).
+            var name = FindColumn("Name");
+            int legalAt = name != null ? PoolGrid.Columns.IndexOf(name) + 1 : 0;
+            PoolGrid.Columns.Insert(legalAt, new DataGridTemplateColumn
+            {
+                Header = DeckLegalHeader,
+                HeaderTemplate = headerTemplate,
+                Width = new DataGridLength(90),
+                CellTemplate = CreateLegalityCellTemplate(Models.LegalityAccessor.DeckFormatKey),
+                CanUserSort = false,               // sort from the funnel popup
+                Visibility = Visibility.Collapsed,
+            });
         }
 
         /// <summary>The colored status chip for one format (same look as v1).</summary>
@@ -801,6 +897,210 @@ namespace BreakersOfE.Views.Pages
             popup.Left = left;
             popup.Top = top;
         }
+
+        // ══════════════════════════════════════════════════════════════════
+        // TOTALS ROW (Collection) — one green row under the grid, like v1.
+        // Each grid column has a twin here: same width, position, and hidden
+        // state, and the row scrolls sideways with the grid. Totals are for the
+        // rows on screen, so they follow the filters.
+        // ══════════════════════════════════════════════════════════════════
+        private readonly List<(DataGridColumn src, DataGridColumn sum)> _totalsColumns = new();
+        private bool _totalsSyncQueued;
+        private ScrollViewer? _gridScroll;
+
+        // Grid column header → CollectionTotalsRow property.
+        private static readonly Dictionary<string, string> TotalsBindings = new()
+        {
+            ["Name"] = nameof(CollectionTotalsRow.Label),
+            ["Qty"] = nameof(CollectionTotalsRow.Qty),
+            ["Used"] = nameof(CollectionTotalsRow.Used),
+            ["Available"] = nameof(CollectionTotalsRow.Available),
+            ["Value"] = nameof(CollectionTotalsRow.Value),
+            ["Buy At"] = nameof(CollectionTotalsRow.BuyAt),
+            ["Sell At"] = nameof(CollectionTotalsRow.SellAt),
+            ["Sell At Value"] = nameof(CollectionTotalsRow.SellAtValue),
+            ["Needed"] = nameof(CollectionTotalsRow.Needed),
+            ["Excess"] = nameof(CollectionTotalsRow.Excess),
+            ["Target"] = nameof(CollectionTotalsRow.Target),
+            // Deck totals
+            ["Legal"] = nameof(CollectionTotalsRow.Legal),
+            ["Non-Foil"] = nameof(CollectionTotalsRow.NonFoil),
+            ["Foil"] = nameof(CollectionTotalsRow.Foil),
+            ["Total"] = nameof(CollectionTotalsRow.Total),
+            ["Owned"] = nameof(CollectionTotalsRow.Owned),
+            ["Missing"] = nameof(CollectionTotalsRow.Missing),
+            ["Wanted"] = nameof(CollectionTotalsRow.Wanted),
+            ["Asking"] = nameof(CollectionTotalsRow.Asking),
+            ["Offer"] = nameof(CollectionTotalsRow.Offer),
+        };
+
+        private void BuildTotalsColumns()
+        {
+            var widthDescriptor = DependencyPropertyDescriptor.FromProperty(
+                DataGridColumn.ActualWidthProperty, typeof(DataGridColumn));
+            var visDescriptor = DependencyPropertyDescriptor.FromProperty(
+                DataGridColumn.VisibilityProperty, typeof(DataGridColumn));
+
+            foreach (var src in PoolGrid.Columns)
+            {
+                var sum = new DataGridTextColumn { IsReadOnly = true, Width = src.Width };
+                if (TotalsBindings.TryGetValue(ColumnHeader(src), out var prop))
+                    sum.Binding = new Binding(prop);
+                TotalsGrid.Columns.Add(sum);
+                _totalsColumns.Add((src, sum));
+
+                widthDescriptor?.AddValueChanged(src, (_, _) => QueueTotalsSync());
+                visDescriptor?.AddValueChanged(src, (_, _) => QueueTotalsSync());
+            }
+            PoolGrid.ColumnReordered += (_, _) => QueueTotalsSync();
+        }
+
+        /// <summary>Coalesce many column changes into one sync after layout.</summary>
+        private void QueueTotalsSync()
+        {
+            if (_totalsSyncQueued) return;
+            _totalsSyncQueued = true;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _totalsSyncQueued = false;
+                SyncTotalsColumns();
+            }), System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
+        /// <summary>Totals columns take the grid's widths, hidden state, and order.</summary>
+        private void SyncTotalsColumns()
+        {
+            if (TotalsGrid.Visibility != Visibility.Visible) return;
+
+            foreach (var (src, sum) in _totalsColumns)
+            {
+                sum.Visibility = src.Visibility;
+                double w = src.ActualWidth > 0 ? src.ActualWidth
+                         : src.Width.IsAbsolute ? src.Width.Value : 0;
+                if (w > 0) sum.Width = new DataGridLength(w);
+            }
+            // Positions in ascending order so each lands where intended.
+            foreach (var (src, sum) in _totalsColumns.OrderBy(p => p.src.DisplayIndex))
+            {
+                if (src.DisplayIndex >= 0 && src.DisplayIndex < TotalsGrid.Columns.Count)
+                    sum.DisplayIndex = src.DisplayIndex;
+            }
+            MatchTotalsScroll();
+        }
+
+        /// <summary>Scroll the totals row sideways with the grid.</summary>
+        private void HookTotalsScroll()
+        {
+            if (_gridScroll != null) return;
+            PoolGrid.ApplyTemplate();
+            _gridScroll = FindVisualChild<ScrollViewer>(PoolGrid);
+            if (_gridScroll == null) return;
+            _gridScroll.ScrollChanged += (_, e) =>
+            {
+                if (e.HorizontalChange != 0 || e.ViewportWidthChange != 0 || e.ExtentWidthChange != 0)
+                    MatchTotalsScroll();
+            };
+        }
+
+        private void MatchTotalsScroll()
+        {
+            if (_gridScroll == null) return;
+            // Same visible width as the grid (the grid loses some to its
+            // vertical scroll bar), so both scroll the same distance.
+            double gap = Math.Max(0, _gridScroll.ActualWidth - _gridScroll.ViewportWidth);
+            TotalsGrid.Margin = new Thickness(0, 0, gap, 0);
+            FindVisualChild<ScrollViewer>(TotalsGrid)?
+                .ScrollToHorizontalOffset(_gridScroll.HorizontalOffset);
+        }
+
+        /// <summary>Recompute totals from the rows currently shown.</summary>
+        private void UpdateTotals()
+        {
+            static string Money(decimal v) => v > 0 ? $"${v:N2}" : "";
+            static string Count(int v) => v > 0 ? v.ToString("N0") : "";
+
+            if (_currentTag == DeckTableTag)
+            {
+                var cards = _vm.Items.OfType<Models.DeckCard>().ToList();
+                int missing = cards.Sum(c => c.CollectionMissing);
+                // Cost to finish: missing copies at the card's price (non-foil, else foil).
+                decimal missingCost = cards.Sum(c => c.CollectionMissing * (c.PriceUsd ?? c.PriceUsdFoil ?? 0m));
+                int illegal = cards.Count(c =>
+                    c.Legality[Models.LegalityAccessor.DeckFormatKey].Status is "banned" or "not_legal");
+                TotalsGrid.ItemsSource = new[]
+                {
+                    new CollectionTotalsRow
+                    {
+                        Label = missing == 0
+                            ? $"Totals ({cards.Count:N0} lines) · buildable from collection"
+                            : $"Totals ({cards.Count:N0} lines) · {missing:N0} missing",
+                        Owned = cards.Sum(c => c.CollectionOwned).ToString("N0"),
+                        Missing = missing == 0 ? "0" : $"{missing:N0} (${missingCost:N2})",
+                        Wanted = Count(cards.Sum(c => c.WantedCount)),
+                        Legal = illegal == 0 ? "All legal" : $"{illegal} illegal",
+                        NonFoil = cards.Sum(c => c.Quantity).ToString("N0"),
+                        Foil = cards.Sum(c => c.FoilQuantity).ToString("N0"),
+                        Total = cards.Sum(c => c.TotalQuantity).ToString("N0"),
+                        Value = $"${cards.Sum(c => c.RowValue):N2}",
+                    }
+                };
+                QueueTotalsSync();
+                return;
+            }
+
+            if (!IsCollectionKind(KindOf(_currentTag)))
+            {
+                TotalsGrid.ItemsSource = null;
+                return;
+            }
+
+            // Every collection table (main, tokens, …, Trade Binder, Want List):
+            // the tables differ, so read the fields by name; a field a table
+            // doesn't have totals as blank.
+            var rows = _vm.Items.Cast<object>().Where(r => r != null).ToList();
+            int foil = rows.Where(r => (Str(r, "Finish") ?? "nonfoil") != Models.CardFinish.NonFoil)
+                           .Sum(r => Int(r, "Quantity"));
+
+            TotalsGrid.ItemsSource = new[]
+            {
+                new CollectionTotalsRow
+                {
+                    Label = $"Totals ({rows.Count:N0} rows, {foil:N0} foil)",
+                    Qty = rows.Sum(r => Int(r, "Quantity")).ToString("N0"),
+                    Used = Count(rows.Sum(r => Int(r, "UsedCount"))),
+                    Available = Count(rows.Sum(r => Int(r, "AvailableCount"))),
+                    Value = $"${rows.Sum(r => Dec(r, "RowValue")):N2}",
+                    BuyAt = Money(rows.Sum(r => Dec(r, "BuyAt"))),
+                    SellAt = Money(rows.Sum(r => Dec(r, "SellAt"))),
+                    SellAtValue = Money(rows.Sum(r => Dec(r, "SellAtValue"))),
+                    Needed = Count(rows.Sum(r => Int(r, "Needed"))),
+                    Excess = Count(rows.Sum(r => Int(r, "Excess"))),
+                    Target = Count(rows.Sum(r => Int(r, "Target"))),
+                    // Asking / offer prices are per copy.
+                    Asking = Money(rows.Sum(r => Dec(r, "AskingPrice") * Int(r, "Quantity"))),
+                    Offer = Money(rows.Sum(r => Dec(r, "OfferPrice") * Int(r, "Quantity"))),
+                }
+            };
+            QueueTotalsSync();
+        }
+
+        // ── Field readers for the totals (cached per type + property) ──
+        private static readonly Dictionary<(Type, string), System.Reflection.PropertyInfo?> _totalsProps = new();
+
+        private static object? Val(object row, string prop)
+        {
+            var key = (row.GetType(), prop);
+            if (!_totalsProps.TryGetValue(key, out var pi))
+                _totalsProps[key] = pi = row.GetType().GetProperty(prop);
+            return pi?.GetValue(row);
+        }
+        private static int Int(object row, string prop) => Val(row, prop) is int i ? i : 0;
+        private static decimal Dec(object row, string prop) => Val(row, prop) switch
+        {
+            decimal d => d,
+            _ => 0m,
+        };
+        private static string? Str(object row, string prop) => Val(row, prop) as string;
 
         // ── Edition sort order toggle ──────────────────────────────────
         private bool _editionChronological = true;
@@ -950,6 +1250,12 @@ namespace BreakersOfE.Views.Pages
                 if (!string.IsNullOrEmpty(text)) SearchSets(text);
                 return;
             }
+            // Deck browser: jump to a deck by name (never hides anything)
+            if (_viewMode == PoolViewMode.Decks)
+            {
+                if (!string.IsNullOrEmpty(text)) SearchDecks(text);
+                return;
+            }
             if (string.IsNullOrEmpty(text) || PoolGrid.Items.Count == 0)
             {
                 _lastSearchTerm = string.Empty;
@@ -1004,8 +1310,11 @@ namespace BreakersOfE.Views.Pages
         // ══════════════════════════════════════════════════════════════════
         private bool _galleryMode => _viewMode == PoolViewMode.Gallery;
 
-        // ── View modes: Grid, Gallery, Sets ─────────────────────────────
-        private enum PoolViewMode { Grid, Gallery, Sets }
+        // ── View modes: Grid, Gallery, Sets, Decks ──────────────────────
+        private enum PoolViewMode { Grid, Gallery, Sets, Decks }
+
+        /// <summary>A browser (set or deck tiles), not a card view.</summary>
+        private static bool IsBrowser(PoolViewMode m) => m == PoolViewMode.Sets || m == PoolViewMode.Decks;
         private PoolViewMode _viewMode = PoolViewMode.Grid;
 
         /// <summary>The card view the switch above the navigation is set to.</summary>
@@ -1019,7 +1328,7 @@ namespace BreakersOfE.Views.Pages
         /// </summary>
         private void OnCardViewModeChanged(Services.CardViewMode _)
         {
-            if (_viewMode != PoolViewMode.Sets) SetViewMode(SwitchMode);
+            if (!IsBrowser(_viewMode)) SetViewMode(SwitchMode);
         }
 
         private void SetViewMode(PoolViewMode mode)
@@ -1032,21 +1341,41 @@ namespace BreakersOfE.Views.Pages
             PoolGrid.Visibility = mode == PoolViewMode.Grid ? Visibility.Visible : Visibility.Collapsed;
             Gallery.Visibility = mode == PoolViewMode.Gallery ? Visibility.Visible : Visibility.Collapsed;
             SetList.Visibility = mode == PoolViewMode.Sets ? Visibility.Visible : Visibility.Collapsed;
+            DeckList.Visibility = mode == PoolViewMode.Decks ? Visibility.Visible : Visibility.Collapsed;
 
-            // Header buttons: Edition sort only matters in the grid; the set
-            // browser uses none of the card-view buttons.
-            bool cardView = mode != PoolViewMode.Sets;
+            // Header buttons: Edition sort only matters in the grid; the
+            // browsers use none of the card-view buttons.
+            bool cardView = !IsBrowser(mode);
             BtnClearFilters.Visibility = cardView ? Visibility.Visible : Visibility.Collapsed;
             BtnEditionOrder.Visibility = mode == PoolViewMode.Grid ? Visibility.Visible : Visibility.Collapsed;
             BtnColumns.Visibility = mode == PoolViewMode.Grid ? Visibility.Visible : Visibility.Collapsed;
+            BtnSetCompletion.Visibility = mode == PoolViewMode.Sets ? Visibility.Visible : Visibility.Collapsed;
+            BtnStatistics.Visibility = cardView && (_currentTag == "Collection" || _currentTag == DeckTableTag)
+                ? Visibility.Visible : Visibility.Collapsed;
             BtnLegality.Visibility = mode == PoolViewMode.Grid && _currentTag == "Collection"
                 ? Visibility.Visible : Visibility.Collapsed;
-            BtnBackToSets.Visibility = cardView && _inSetsContext ? Visibility.Visible : Visibility.Collapsed;
+            bool showTotals = mode == PoolViewMode.Grid &&
+                              (IsCollectionKind(KindOf(_currentTag)) || _currentTag == DeckTableTag);
+            TotalsGrid.Visibility = showTotals ? Visibility.Visible : Visibility.Collapsed;
+            if (showTotals)
+            {
+                HookTotalsScroll();
+                QueueTotalsSync();
+            }
+            BtnBackToSets.Visibility = cardView && (_inSetsContext || _inDecksContext)
+                ? Visibility.Visible : Visibility.Collapsed;
+            BtnBackToSets.Content = _inDecksContext ? "◀  All Decks" : "◀  All Sets";
+            BtnBackToSets.ToolTip = _inDecksContext ? "Back to the deck browser" : "Back to the set browser";
 
             if (mode == PoolViewMode.Sets)
             {
                 _vm.Title = "Sets";
                 if (_setTiles != null) _vm.StatusText = $"{_setTiles.Count:N0} sets";
+            }
+            else if (mode == PoolViewMode.Decks)
+            {
+                _vm.Title = "Decks";
+                _vm.StatusText = _deckTiles.Count == 1 ? "1 deck" : $"{_deckTiles.Count:N0} decks";
             }
 
             // Wait for layout so the new view has a real width to size rows.
@@ -1068,8 +1397,200 @@ namespace BreakersOfE.Views.Pages
                         RebuildSetRows();
                         _vm.StatusText = $"{_setTiles!.Count:N0} sets";
                         break;
+                    case PoolViewMode.Decks:
+                        RebuildDeckRows();
+                        break;
                 }
             }), System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // DECK BROWSER — every .deck file under Documents\BoE_V2\Decks
+        // (subfolders too), grouped Commander / Standard, A→Z. Click a tile →
+        // the deck opens read-only in the grid or gallery (per the switch).
+        // ══════════════════════════════════════════════════════════════════
+        private List<DeckTile> _deckTiles = new();
+        private List<(string section, List<DeckTile> tiles)> _deckGroups = new();
+        private List<DeckBrowserRow> _deckRows = new();
+        private int _decksPerRow = 1;
+        private DeckTile? _deckHighlighted;
+        private string _openDeckFormat = "standard";
+        private Models.Deck? _openDeck;            // the deck on screen (for Statistics)
+
+        /// <summary>"Decks" nav item: the deck browser (re-reads the folder each time).</summary>
+        public void ShowDecks()
+        {
+            _inSetsContext = false;
+            _inDecksContext = true;
+            _vm.IsEmpty = false;             // the grid's empty message doesn't apply here
+            BuildDeckTiles();
+            ResetSearch();
+            SetViewMode(PoolViewMode.Decks);
+        }
+
+        private void BuildDeckTiles()
+        {
+            var tiles = new List<DeckTile>();
+            string root = Services.AppFolderService.DecksFolder;
+
+            IEnumerable<string> files;
+            try { files = Directory.EnumerateFiles(root, "*.deck", SearchOption.AllDirectories).ToList(); }
+            catch { files = Array.Empty<string>(); }
+
+            foreach (var path in files)
+            {
+                try
+                {
+                    // Read the file directly — no pool lookups — so the browser is fast.
+                    var deck = System.Text.Json.JsonSerializer.Deserialize<Models.Deck>(File.ReadAllText(path));
+                    if (deck == null) continue;
+
+                    string folder = Path.GetRelativePath(root, Path.GetDirectoryName(path) ?? root);
+
+                    // Color identity: the commander's (Commander decks), else the main deck's.
+                    var main = deck.Cards.Where(c => c.Category != Models.DeckCardCategory.Sideboard).ToList();
+                    var commanders = main.Where(c => c.IsCommander || c.Category == Models.DeckCardCategory.Commander).ToList();
+                    var identitySource = deck.DeckType == Models.DeckType.Commander && commanders.Count > 0
+                        ? commanders : main;
+                    var identity = new HashSet<char>(identitySource.SelectMany(c => c.ColorIdentity));
+                    string symbols = string.Concat("WUBRG".Where(identity.Contains).Select(c => $"{{{c}}}"));
+                    if (symbols.Length == 0) symbols = "{C}";
+                    tiles.Add(new DeckTile
+                    {
+                        Name = string.IsNullOrWhiteSpace(deck.Name)
+                            ? Path.GetFileNameWithoutExtension(path) : deck.Name,
+                        FilePath = path,
+                        IsCommander = deck.DeckType == Models.DeckType.Commander,
+                        CommanderName = string.Join(" & ",
+                            deck.Cards.Where(c => c.IsCommander).Select(c => c.Name)),
+                        Folder = folder == "." ? "" : folder,
+                        IdentitySymbols = symbols,
+                        CardCount = deck.Cards.Sum(c => c.TotalQuantity),
+                        TotalValue = deck.Cards.Sum(c => c.RowValue),
+                    });
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Deck browser skipped {path}: {ex.Message}");
+                }
+            }
+
+            _deckTiles = tiles;
+            _deckGroups = tiles
+                .GroupBy(t => t.IsCommander ? "Commander" : "Standard")
+                .OrderBy(g => g.Key == "Commander" ? 0 : 1)
+                .Select(g => (section: g.Key,
+                              tiles: g.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ToList()))
+                .ToList();
+        }
+
+        /// <summary>Flatten sections into header rows + rows of N tiles.</summary>
+        private void RebuildDeckRows()
+        {
+            double avail = DeckList.ActualWidth - SystemParameters.VerticalScrollBarWidth - 4;
+            int perRow = Math.Max(1, (int)(avail / (SetTileWidth + SetTileMargin)));
+            _decksPerRow = perRow;
+
+            var rows = new List<DeckBrowserRow>();
+            if (_deckTiles.Count == 0)
+            {
+                rows.Add(new DeckBrowserRow
+                {
+                    IsHeader = true,
+                    HeaderText = $"No decks yet — copy .deck files into {Services.AppFolderService.DecksFolder}",
+                    HeaderCount = "0",
+                });
+            }
+            foreach (var (section, tiles) in _deckGroups)
+            {
+                rows.Add(new DeckBrowserRow
+                {
+                    IsHeader = true,
+                    HeaderText = section,
+                    HeaderCount = tiles.Count.ToString("N0"),
+                });
+                for (int i = 0; i < tiles.Count; i += perRow)
+                    rows.Add(new DeckBrowserRow
+                    {
+                        Tiles = tiles.GetRange(i, Math.Min(perRow, tiles.Count - i))
+                    });
+            }
+            _deckRows = rows;
+            DeckList.ItemsSource = rows;
+        }
+
+        private void DeckList_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (_viewMode != PoolViewMode.Decks || !e.WidthChanged) return;
+            double avail = DeckList.ActualWidth - SystemParameters.VerticalScrollBarWidth - 4;
+            int perRow = Math.Max(1, (int)(avail / (SetTileWidth + SetTileMargin)));
+            if (perRow != _decksPerRow) RebuildDeckRows();
+        }
+
+        private void DeckTile_MouseLeftButtonDown(object sender,
+            System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.DataContext is DeckTile tile)
+                OpenDeck(tile);
+        }
+
+        /// <summary>Open a deck read-only in the shared grid (Deck columns + layout).</summary>
+        private void OpenDeck(DeckTile tile)
+        {
+            Models.Deck? deck;
+            try
+            {
+                deck = Services.DeckService.Load(tile.FilePath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(Window.GetWindow(this),
+                    $"Could not open this deck.\n\n{ex.Message}", "Open Deck",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            if (deck == null) return;
+
+            // Legal column checks each card against this deck's format.
+            string format = deck.DeckType == Models.DeckType.Commander ? "commander" : "standard";
+            foreach (var card in deck.Cards) card.DeckFormat = format;
+            _openDeckFormat = format;
+            _openDeck = deck;
+
+            // Deck vs. collection: Owned / Free / Missing / Wanted per card (read-only).
+            Services.DeckCollectionService.Annotate(deck);
+
+            _vm.UseFilters("Deck:" + tile.FilePath);     // each deck keeps its own filters
+            PrepareTable(DeckTableTag);
+            PoolGrid.SelectedItem = null;
+            _vm.LoadRows($"Decks — {deck.Name}",
+                         deck.Cards.Cast<object>().ToList(),
+                         deck.Cards.Count == 1 ? "line" : "lines");
+            SetViewMode(SwitchMode);          // grid or gallery, per the switch
+        }
+
+        /// <summary>Search in the deck browser: jump to the first deck name that begins with the text.</summary>
+        private void SearchDecks(string text)
+        {
+            for (int r = 0; r < _deckRows.Count; r++)
+            {
+                var row = _deckRows[r];
+                if (row.IsHeader) continue;
+                var match = row.Tiles.FirstOrDefault(t =>
+                    t.Name.StartsWith(text, StringComparison.OrdinalIgnoreCase));
+                if (match == null) continue;
+
+                if (_deckHighlighted != null) _deckHighlighted.IsHighlighted = false;
+                match.IsHighlighted = true;
+                _deckHighlighted = match;
+
+                DeckList.UpdateLayout();
+                int jump = Math.Min(r + 10, _deckRows.Count - 1);
+                DeckList.ScrollIntoView(_deckRows[jump]);
+                DeckList.UpdateLayout();
+                DeckList.ScrollIntoView(row);
+                return;
+            }
         }
 
         // ══════════════════════════════════════════════════════════════════
@@ -1090,8 +1611,9 @@ namespace BreakersOfE.Views.Pages
             if (_setTiles != null) return;
 
             var bySet = new Dictionary<string, SetTile>(StringComparer.OrdinalIgnoreCase);
+            var owned = LoadOwnedScryfallIds();
             System.Reflection.PropertyInfo? pCode = null, pName = null, pType = null,
-                                            pDate = null, pUsd = null;
+                                            pDate = null, pUsd = null, pFoil = null, pSid = null;
             Type? lastType = null;
 
             foreach (var card in _vm.AllRows)
@@ -1106,6 +1628,8 @@ namespace BreakersOfE.Views.Pages
                     pType = t.GetProperty("SetType");
                     pDate = t.GetProperty("ReleasedAt");
                     pUsd = t.GetProperty("PriceUsd");
+                    pFoil = t.GetProperty("PriceUsdFoil");
+                    pSid = t.GetProperty("ScryfallId");
                 }
 
                 string code = pCode?.GetValue(card) as string ?? "";
@@ -1128,7 +1652,15 @@ namespace BreakersOfE.Views.Pages
                 }
 
                 tile.CardCount++;
-                if (pUsd?.GetValue(card) is decimal usd) tile.TotalValue += usd;
+                decimal? usd = pUsd?.GetValue(card) as decimal?;
+                if (usd is decimal u) tile.TotalValue += u;
+
+                // Completion: one pool row = one printing of this set.
+                string sid = pSid?.GetValue(card) as string ?? "";
+                if (sid.Length > 0 && owned.Contains(sid))
+                    tile.OwnedCount++;
+                else
+                    tile.MissingValue += usd ?? (pFoil?.GetValue(card) as decimal?) ?? 0m;
                 // A set's date = its earliest card (ISO dates compare as text).
                 if (!string.IsNullOrEmpty(date) &&
                     (string.IsNullOrEmpty(tile.ReleasedAt) ||
@@ -1144,6 +1676,60 @@ namespace BreakersOfE.Views.Pages
                                       .ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
                                       .ToList()))
                 .ToList();
+        }
+
+        /// <summary>
+        /// ScryfallIds of every printing in the collection with at least one
+        /// copy (any finish). Read-only; an empty set if the collection can't
+        /// be read.
+        /// </summary>
+        private static HashSet<string> LoadOwnedScryfallIds()
+        {
+            try
+            {
+                using var cdb = new Data.CollectionDbContext();
+                return cdb.CollectionEntries
+                    .Where(e => e.Quantity > 0 && e.ScryfallId != "")
+                    .Select(e => e.ScryfallId)
+                    .ToList()
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Set completion: collection not read: {ex.Message}");
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
+        }
+
+        /// <summary>Statistics button: overview of the rows on screen (Collection).</summary>
+        private void BtnStatistics_Click(object sender, RoutedEventArgs e)
+        {
+            // Deck: statistics for the whole open deck.
+            if (_currentTag == DeckTableTag)
+            {
+                if (_openDeck != null)
+                    new DeckStatsWindow(_openDeck, Window.GetWindow(this)).Show();
+                return;
+            }
+            if (_currentTag != "Collection") return;
+            var rows = _vm.Items.OfType<Models.CollectionEntry>().ToList();
+            new CollectionStatsWindow(rows, _vm.Filters.HasActiveFilters, _vm.AllRows.Count,
+                                      Window.GetWindow(this)).Show();
+        }
+
+        /// <summary>Set Completion button (set browser): the sortable completion table.</summary>
+        private void BtnSetCompletion_Click(object sender, RoutedEventArgs e)
+        {
+            if (_setTiles == null) return;
+            var win = new SetCompletionWindow(_setTiles, Window.GetWindow(this));
+            win.SetOpened += tile =>
+            {
+                win.Close();
+                // Left the set browser meanwhile? Go back to it (Cards pool) first.
+                if (!_inSetsContext || _currentTag != "Cards") ShowSets();
+                OpenSet(tile);
+            };
+            win.Show();
         }
 
         /// <summary>Flatten sections into header rows + rows of N tiles.</summary>
@@ -1434,5 +2020,31 @@ namespace BreakersOfE.Views.Pages
             Models.CardFinish.Etched => 2,
             _ => 0      // non-foil first
         };
+    }
+
+    /// <summary>The Collection totals row's values (display strings).</summary>
+    public sealed class CollectionTotalsRow
+    {
+        public string Label { get; init; } = "";
+        public string Qty { get; init; } = "";
+        public string Used { get; init; } = "";
+        public string Available { get; init; } = "";
+        public string Value { get; init; } = "";
+        public string BuyAt { get; init; } = "";
+        public string SellAt { get; init; } = "";
+        public string SellAtValue { get; init; } = "";
+        public string Needed { get; init; } = "";
+        public string Excess { get; init; } = "";
+        public string Target { get; init; } = "";
+        // Deck totals
+        public string Legal { get; init; } = "";
+        public string NonFoil { get; init; } = "";
+        public string Foil { get; init; } = "";
+        public string Total { get; init; } = "";
+        public string Owned { get; init; } = "";
+        public string Missing { get; init; } = "";
+        public string Wanted { get; init; } = "";
+        public string Asking { get; init; } = "";
+        public string Offer { get; init; } = "";
     }
 }

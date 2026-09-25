@@ -38,7 +38,7 @@ namespace BreakersOfE.Models
     }
 
     // ── Individual card in a deck ─────────────────────────────────────────────
-    public class DeckCard
+    public class DeckCard : ILegalityRow
     {
         public int PoolId { get; set; }
         public string ScryfallId { get; set; } = string.Empty;  // stable key for collection relink
@@ -83,6 +83,33 @@ namespace BreakersOfE.Models
             catch { }
             return string.Empty;
         }
+
+        // ── Deck vs. collection (filled when the deck opens; not saved) ──────
+        /// <summary>Copies of this exact printing in the collection (all finishes).</summary>
+        [JsonIgnore] public int CollectionOwned { get; set; }
+        /// <summary>Of those, copies not used by other decks or the Trade Binder.</summary>
+        [JsonIgnore] public int CollectionFree { get; set; }
+        /// <summary>Copies still needed after free copies of any printing of this card.</summary>
+        [JsonIgnore] public int CollectionMissing { get; set; }
+        /// <summary>Copies of this card (any printing) on the Want List.</summary>
+        [JsonIgnore] public int WantedCount { get; set; }
+
+        /// <summary>On the Commander Game Changers list. Filled from the pool when the deck opens; not saved.</summary>
+        [JsonIgnore]
+        public bool IsGameChanger { get; set; }
+
+        /// <summary>
+        /// The Scryfall format this card is checked against — the deck's own
+        /// ("commander" or "standard"). Set when the deck opens; not saved.
+        /// </summary>
+        [JsonIgnore]
+        public string DeckFormat { get; set; } = "standard";
+
+        private LegalityAccessor? _legality;
+        /// <summary>{Binding Legality[deck].Text} = legality in the deck's format.</summary>
+        [JsonIgnore]
+        public LegalityAccessor Legality =>
+            _legality ??= new LegalityAccessor(() => LegalitiesJson, () => DeckFormat);
 
         // ── Sideboard ─────────────────────────────────────────────────────────
         [JsonIgnore]
@@ -161,6 +188,20 @@ namespace BreakersOfE.Models
 
         [JsonIgnore]
         public int TotalQuantity => Quantity + FoilQuantity;
+
+        /// <summary>Gold "F" when any copies in the deck are foil.</summary>
+        [JsonIgnore]
+        public string FinishPill => FoilQuantity > 0 ? "F" : string.Empty;
+
+        /// <summary>Deck value of this line: non-foil copies × USD + foil copies × foil USD.</summary>
+        [JsonIgnore]
+        public decimal RowValue =>
+            (PriceUsd ?? PriceUsdFoil ?? 0m) * Quantity +
+            (PriceUsdFoil ?? PriceUsd ?? 0m) * FoilQuantity;
+
+        [JsonIgnore]
+        public string RowValueDisplay =>
+            PriceUsd.HasValue || PriceUsdFoil.HasValue ? $"${RowValue:F2}" : "—";
 
         [JsonIgnore]
         public string ValueDisplay =>
@@ -295,6 +336,11 @@ namespace BreakersOfE.Models
     public class Deck
     {
         // ── Identity ──────────────────────────────────────────────────────────
+        /// <summary>Stable deck GUID written by v1 (used for collection deck
+        /// usage). Read so it isn't lost; v2 doesn't create or change it yet.</summary>
+        public string DeckId { get; set; } = string.Empty;
+        /// <summary>Legacy v1 flag, kept only so the file round-trips. Nothing reads it.</summary>
+        public bool CollectionLinked { get; set; }
         public string Name { get; set; } = "New Deck";
         public string Description { get; set; } = string.Empty;
         public DeckType DeckType { get; set; } = DeckType.Standard;

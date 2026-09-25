@@ -25,21 +25,37 @@ namespace BreakersOfE.ViewModels
         public int CardCount { get; set; }
         public decimal TotalValue { get; set; }
 
+        // ── Completion: printings of this set in your collection ──────────
+        /// <summary>Printings (collector numbers) you own at least one copy of, any finish.</summary>
+        public int OwnedCount { get; set; }
+        /// <summary>Value of the printings you don't own (non-foil price, else foil).</summary>
+        public decimal MissingValue { get; set; }
+
+        public double CompletionPercent =>
+            CardCount == 0 ? 0 : Math.Round(OwnedCount * 100.0 / CardCount, 1);
+
+        public string CompletionText =>
+            CompletionPercent >= 10 || CompletionPercent == 0
+                ? $"{CompletionPercent:0}%" : $"{CompletionPercent:0.#}%";
+
+        public string OwnedText => $"{OwnedCount:N0} / {CardCount:N0}";
+
+        public string MissingValueText =>
+            MissingValue > 0 ? MissingValue.ToString("C2", CultureInfo.GetCultureInfo("en-US")) : "—";
+
+        public string TotalValueText =>
+            TotalValue > 0 ? TotalValue.ToString("C2", CultureInfo.GetCultureInfo("en-US")) : "—";
+
+        public string ToolTipText =>
+            $"{Name}\nOwned {OwnedText} ({CompletionText})\nSet value {TotalValueText} · Missing {MissingValueText}";
+
         public string YearText => ReleasedAt.Length >= 4 ? ReleasedAt[..4] : "";
 
-        public string Summary
-        {
-            get
-            {
-                string cards = CardCount == 1 ? "1 card" : $"{CardCount:N0} cards";
-                string value = TotalValue > 0
-                    ? TotalValue.ToString("C2", CultureInfo.GetCultureInfo("en-US"))
-                    : "—";
-                return string.IsNullOrEmpty(YearText)
-                    ? $"{cards} · {value}"
-                    : $"{YearText} · {cards} · {value}";
-            }
-        }
+        /// <summary>"2024 · 123 / 281 · 44%" — year, owned/total printings, completion.</summary>
+        public string Summary =>
+            string.IsNullOrEmpty(YearText)
+                ? $"{OwnedText} · {CompletionText}"
+                : $"{YearText} · {OwnedText} · {CompletionText}";
 
         private bool _isHighlighted;
         public bool IsHighlighted
