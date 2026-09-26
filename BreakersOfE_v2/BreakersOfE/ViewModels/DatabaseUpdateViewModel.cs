@@ -48,6 +48,10 @@ namespace BreakersOfE.ViewModels
         [ObservableProperty]
         private bool canStart = true;
 
+        /// <summary>Cancel button: on while an update runs, off once Cancel is clicked.</summary>
+        [ObservableProperty]
+        private bool canCancel;
+
         [ObservableProperty]
         private string schemaWarning = "";
 
@@ -104,6 +108,7 @@ namespace BreakersOfE.ViewModels
 
             IsRunning = true;
             CanStart = false;
+            CanCancel = true;
             _cts = new CancellationTokenSource();
             _coordinator.SetAppUpdating("updating_pool");
 
@@ -117,16 +122,19 @@ namespace BreakersOfE.ViewModels
                 });
 
                 // Run the full update (download + import + prices + symbols)
-                // Skip keywords — they'll run in the background after completion
-                var result = await _scryfall.RunFullUpdateAsync(progress, _cts.Token,
-                    skipKeywords: true);
+                // OFF the UI thread, so the window stays responsive and Cancel
+                // works. Skip keywords — they run in the background afterwards.
+                var token = _cts.Token;
+                var result = await Task.Run(() => _scryfall.RunFullUpdateAsync(progress, token,
+                    skipKeywords: true));
 
                 if (result.Success)
                 {
                     // Propagate prices to collection
+                    CanCancel = false;                 // the card database is already saved
                     StatusText = "Propagating prices to collection...";
                     ProgressPercent = 95;
-                    PropagatePoolPricesToCollection();
+                    await Task.Run(PropagatePoolPricesToCollection);
 
                     StatusText = "Update complete!";
                     ProgressPercent = 100;
@@ -138,6 +146,12 @@ namespace BreakersOfE.ViewModels
                     // Fire keyword rebuild in background (low priority)
                     _ = Task.Run(() => RebuildKeywordDictionaryBackground(), CancellationToken.None);
                 }
+                else if (result.Cancelled)
+                {
+                    StatusText = "Update cancelled.";
+                    DetailText = result.ErrorMessage;
+                    ProgressPercent = 0;
+                }
                 else
                 {
                     StatusText = "Update failed.";
@@ -147,7 +161,8 @@ namespace BreakersOfE.ViewModels
             catch (OperationCanceledException)
             {
                 StatusText = "Update cancelled.";
-                DetailText = "";
+                DetailText = "Your card database was not changed.";
+                ProgressPercent = 0;
             }
             catch (Exception ex)
             {
@@ -165,6 +180,7 @@ namespace BreakersOfE.ViewModels
             {
                 IsRunning = false;
                 CanStart = true;
+                CanCancel = false;
                 _coordinator.SetIdle();
                 RefreshTimestamps();
                 _cts?.Dispose();
@@ -183,6 +199,7 @@ namespace BreakersOfE.ViewModels
 
             IsRunning = true;
             CanStart = false;
+            CanCancel = true;
             _cts = new CancellationTokenSource();
             _coordinator.SetAppUpdating("updating_prices");
 
@@ -195,17 +212,26 @@ namespace BreakersOfE.ViewModels
                     DetailText = p.Detail;
                 });
 
-                var result = await _scryfall.RunPriceUpdateAsync(progress, _cts.Token);
+                // Off the UI thread (responsive window, working Cancel).
+                var token = _cts.Token;
+                var result = await Task.Run(() => _scryfall.RunPriceUpdateAsync(progress, token));
 
                 if (result.Success)
                 {
+                    CanCancel = false;                 // the card database is already saved
                     StatusText = "Propagating prices to collection...";
                     ProgressPercent = 95;
-                    PropagatePoolPricesToCollection();
+                    await Task.Run(PropagatePoolPricesToCollection);
 
                     StatusText = "Price update complete!";
                     ProgressPercent = 100;
                     _coordinator.RecordPriceUpdate();
+                }
+                else if (result.Cancelled)
+                {
+                    StatusText = "Price update cancelled.";
+                    DetailText = result.ErrorMessage;
+                    ProgressPercent = 0;
                 }
                 else
                 {
@@ -216,6 +242,8 @@ namespace BreakersOfE.ViewModels
             catch (OperationCanceledException)
             {
                 StatusText = "Price update cancelled.";
+                DetailText = "Your card database was not changed.";
+                ProgressPercent = 0;
             }
             catch (Exception ex)
             {
@@ -226,6 +254,7 @@ namespace BreakersOfE.ViewModels
             {
                 IsRunning = false;
                 CanStart = true;
+                CanCancel = false;
                 _coordinator.SetIdle();
                 RefreshTimestamps();
                 _cts?.Dispose();
@@ -234,13 +263,17 @@ namespace BreakersOfE.ViewModels
         }
 
         /// <summary>
-        /// Cancel the current update.
+        /// Cancel the current update. The button greys out and the status
+        /// shows "Cancelling..." until the update has actually stopped.
         /// </summary>
         [RelayCommand]
         private void Cancel()
         {
-            _cts?.Cancel();
+            if (_cts == null || !CanCancel) return;
+            CanCancel = false;
+            _cts.Cancel();
             StatusText = "Cancelling...";
+            DetailText = "Stopping safely — your databases are not being changed.";
         }
 
         /// <summary>
@@ -254,6 +287,7 @@ namespace BreakersOfE.ViewModels
 
             IsRunning = true;
             CanStart = false;
+            CanCancel = true;
             _cts = new CancellationTokenSource();
 
             try
@@ -265,7 +299,9 @@ namespace BreakersOfE.ViewModels
                     DetailText = p.Detail;
                 });
 
-                int count = await _scryfall.DownloadRulingsAsync(progress, _cts.Token);
+                // Off the UI thread (responsive window, working Cancel).
+                var token = _cts.Token;
+                int count = await Task.Run(() => _scryfall.DownloadRulingsAsync(progress, token));
                 StatusText = "Rulings download complete!";
                 DetailText = $"{count:N0} rulings imported into rulings.db";
                 ProgressPercent = 100;
@@ -273,6 +309,8 @@ namespace BreakersOfE.ViewModels
             catch (OperationCanceledException)
             {
                 StatusText = "Rulings download cancelled.";
+                DetailText = "Your rulings were not changed.";
+                ProgressPercent = 0;
             }
             catch (Exception ex)
             {
@@ -283,6 +321,7 @@ namespace BreakersOfE.ViewModels
             {
                 IsRunning = false;
                 CanStart = true;
+                CanCancel = false;
                 _cts?.Dispose();
                 _cts = null;
             }

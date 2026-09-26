@@ -89,37 +89,41 @@
             <TextBlock Text="Individual Downloads" FontSize="12" Opacity="0.5"
                        Margin="0,0,0,6"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,24"
+            <!-- The start buttons are disabled while an update runs; Cancel sits
+                 OUTSIDE that panel (a disabled panel disables everything in it). -->
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,24">
+                <StackPanel Orientation="Horizontal"
                         IsEnabled="{Binding CanStart}">
 
-                <ui:Button Content="Full Database Update"
+                    <ui:Button Content="Full Database Update"
                            Command="{Binding StartFullUpdateCommand}"
                            Margin="0,0,12,0">
-                    <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="ArrowDownload24" />
-                    </ui:Button.Icon>
-                </ui:Button>
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="ArrowDownload24" />
+                        </ui:Button.Icon>
+                    </ui:Button>
 
-                <ui:Button Content="Update Prices Only"
+                    <ui:Button Content="Update Prices Only"
                            Command="{Binding StartPriceUpdateCommand}"
                            Margin="0,0,12,0">
-                    <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="CurrencyDollarEuro24" />
-                    </ui:Button.Icon>
-                </ui:Button>
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="CurrencyDollarEuro24" />
+                        </ui:Button.Icon>
+                    </ui:Button>
 
-                <ui:Button Content="Download Rulings"
+                    <ui:Button Content="Download Rulings"
                            Command="{Binding DownloadRulingsCommand}"
                            Margin="0,0,24,0"
                            ToolTip="Download all card rulings from Scryfall (optional)">
-                    <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="BookOpen24" />
-                    </ui:Button.Icon>
-                </ui:Button>
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="BookOpen24" />
+                        </ui:Button.Icon>
+                    </ui:Button>
+                </StackPanel>
 
                 <ui:Button Content="Cancel"
                            Command="{Binding CancelCommand}"
-                           IsEnabled="{Binding IsRunning}"
+                           IsEnabled="{Binding CanCancel}"
                            Appearance="Danger">
                     <ui:Button.Icon>
                         <ui:SymbolIcon Symbol="Dismiss24" />

@@ -113,6 +113,12 @@
                         Visibility="Collapsed"
                         Click="BtnLegality_Click"
                         ToolTip="Show or hide format legality columns — saved per table."/>
+                    <!-- Set checklist: only while viewing a set's cards -->
+                    <ToggleButton x:Name="BtnMissingOnly" Content="Missing Only"
+                              Padding="10,4" Margin="0,0,8,0"
+                              Visibility="Collapsed"
+                              Click="BtnMissingOnly_Click"
+                              ToolTip="Show only the printings in this set you don't own"/>
                     <Button x:Name="BtnClearFilters" Content="Clear All Filters" Padding="10,4"
                         Click="ClearAllFilters_Click"/>
                 </StackPanel>
@@ -220,8 +226,9 @@
                     <DataGridTextColumn Header="Total"    Binding="{Binding TotalQuantity}"    Width="75"
                                     Visibility="Collapsed"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
-                    <!-- DECK ONLY: deck vs. collection (Owned / Free / Missing / Wanted). -->
-                    <DataGridTextColumn Header="Owned" Binding="{Binding CollectionOwned}" Width="85"
+                    <!-- DECK: deck vs. collection (Owned / Free / Missing / Wanted).
+                     Owned is shared with the Pool (copies of that printing you own). -->
+                    <DataGridTextColumn Header="Owned" Binding="{Binding OwnedDisplay}" Width="95"
                                     Visibility="Collapsed"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
                     <DataGridTextColumn Header="Free" Binding="{Binding CollectionFree}" Width="70"
@@ -233,6 +240,17 @@
                     <DataGridTextColumn Header="Wanted" Binding="{Binding WantedCount}" Width="85"
                                     Visibility="Collapsed"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <!-- DECK: cards shared between decks — how many of your other decks
+                     use this card (any printing); hover for the deck names. -->
+                    <DataGridTextColumn Header="Other Decks" Binding="{Binding OtherDecksCount}" Width="110"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="ToolTip" Value="{Binding OtherDecksTip}"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
 
                     <!-- COLLECTION ONLY: per-finish counts and value (same order as v1). -->
                     <DataGridTextColumn Header="Qty"       Binding="{Binding Quantity}"        Width="75"
@@ -258,25 +276,10 @@
                                     Visibility="Collapsed"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
 
-                    <!-- COLLECTION ONLY: the rest of v1's collection columns, v1 order. -->
-                    <DataGridTextColumn Header="Buy At" Binding="{Binding BuyAtDisplay}" Width="85"
-                                    Visibility="Collapsed"
-                                    HeaderTemplate="{StaticResource FilterableHeader}" />
-                    <DataGridTextColumn Header="Sell At" Binding="{Binding SellAtDisplay}" Width="85"
-                                    Visibility="Collapsed"
-                                    HeaderTemplate="{StaticResource FilterableHeader}" />
-                    <DataGridTextColumn Header="Sell At Value" Binding="{Binding SellAtValueDisplay}" Width="120"
-                                    Visibility="Collapsed"
-                                    HeaderTemplate="{StaticResource FilterableHeader}" />
-                    <DataGridTextColumn Header="Needed" Binding="{Binding Needed}" Width="85"
-                                    Visibility="Collapsed"
-                                    HeaderTemplate="{StaticResource FilterableHeader}" />
-                    <DataGridTextColumn Header="Excess" Binding="{Binding Excess}" Width="80"
-                                    Visibility="Collapsed"
-                                    HeaderTemplate="{StaticResource FilterableHeader}" />
-                    <DataGridTextColumn Header="Target" Binding="{Binding Target}" Width="80"
-                                    Visibility="Collapsed"
-                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                    <!-- COLLECTION ONLY: the rest of v1's collection columns, v1 order.
+                     (MTG Studio's Buy At / Sell At / Sell At Value / Needed / Excess /
+                     Target were dropped from the grid; the fields stay in the database
+                     for imports until the v1→v2 conversion decides their fate.) -->
                     <DataGridTextColumn Header="Condition" Binding="{Binding Condition}" Width="105"
                                     Visibility="Collapsed"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />

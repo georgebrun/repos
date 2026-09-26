@@ -20,10 +20,15 @@ namespace BreakersOfE.Views
         private IList<object>? _allItems;
         private int _currentIndex;
 
+        /// <summary>Opened from a deck: that deck's file, left out of the deck list.</summary>
+        private readonly string? _currentDeckPath;
+
         public CardDetailWindow(object card, Window? owner = null,
-            IList<object>? allItems = null, int currentIndex = -1)
+            IList<object>? allItems = null, int currentIndex = -1,
+            string? currentDeckPath = null)
         {
             InitializeComponent();
+            _currentDeckPath = currentDeckPath;
             _card = card;
             _allItems = allItems;
             _currentIndex = currentIndex;
@@ -154,6 +159,105 @@ namespace BreakersOfE.Views
             RulingsHeader.Visibility = Visibility.Collapsed;
             RulingsBorder.Visibility = Visibility.Collapsed;
             RulingsPanel.Children.Clear();
+
+            // Price history (last 5 snapshots)
+            ShowPriceHistory();
+
+            // Cards shared between decks: every deck that uses this card
+            ShowDeckUses();
+        }
+
+        /// <summary>
+        /// Every deck that uses this card (any printing). Opened from a deck:
+        /// only the OTHER decks, so it matches that deck's Other Decks column.
+        /// </summary>
+        private void ShowDeckUses()
+        {
+            bool fromDeck = !string.IsNullOrEmpty(_currentDeckPath);
+            var uses = Services.DeckIndexService.DecksUsing(Get("Name"), _currentDeckPath);
+            int scanned = Services.DeckIndexService.DeckCount - (fromDeck ? 1 : 0);
+
+            string title = fromDeck ? "IN YOUR OTHER DECKS" : "IN YOUR DECKS";
+            DecksHeader.Text = uses.Count == 0 ? $"▸ {title}" : $"▸ {title} ({uses.Count})";
+            DecksList.ItemsSource = uses;
+
+            // Say how many decks were checked, so "none" can be trusted.
+            DecksEmpty.Text = fromDeck
+                ? $"Not in any of your other {scanned:N0} decks."
+                : $"Not in any of your {scanned:N0} decks.";
+            DecksEmpty.Visibility = uses.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // ── Price history ───────────────────────────────────────────────
+        /// <summary>One row under the price chart.</summary>
+        public sealed class PriceHistoryRow
+        {
+            public string Date { get; init; } = "";
+            public string NonFoil { get; init; } = "";
+            public string Foil { get; init; } = "";
+        }
+
+        private static readonly Brush NonFoilBrush = new SolidColorBrush(Color.FromRgb(0x4C, 0xA0, 0xFF));
+        private static readonly Brush FoilBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xC0, 0x00));
+        private static readonly Brush EtchedBrush = new SolidColorBrush(Color.FromRgb(0xB0, 0x8C, 0xFF));
+
+        private void ShowPriceHistory()
+        {
+            var points = Services.PriceHistoryService.GetCardHistory(Get("ScryfallId"), 5);
+
+            if (points.Count == 0)
+            {
+                PriceChart.Visibility = Visibility.Collapsed;
+                PriceHistoryChange.Visibility = Visibility.Collapsed;
+                PriceHistoryList.ItemsSource = null;
+                PriceHistoryEmpty.Text = "No price history for this card yet. Prices are saved each time you run Update Database.";
+                PriceHistoryEmpty.Visibility = Visibility.Visible;
+                return;
+            }
+
+            var labels = points.Select(p => p.Date.ToString("MMM d")).ToList();
+            var series = new List<Controls.ChartSeries>();
+            var changes = new List<string>();
+
+            void Add(string name, Brush brush, List<decimal?> values)
+            {
+                if (!values.Any(v => v.HasValue)) return;
+                series.Add(new Controls.ChartSeries { Name = name, Stroke = brush, Values = values });
+
+                // First → last known value
+                var known = values.Select((v, i) => (v, i)).Where(x => x.v.HasValue).ToList();
+                if (known.Count < 2) return;
+                decimal a = known[0].v!.Value, b = known[^1].v!.Value, d = b - a;
+                string sign = d > 0 ? "+" : d < 0 ? "−" : "";
+                string pct = a != 0m ? $", {sign}{Math.Abs(d / a * 100m):0.0}%" : "";
+                changes.Add($"{name}: ${a:F2} → ${b:F2} ({sign}${Math.Abs(d):F2}{pct})");
+            }
+
+            Add("Non-Foil", NonFoilBrush, points.Select(p => p.Usd).ToList());
+            Add("Foil", FoilBrush, points.Select(p => p.UsdFoil).ToList());
+            if (!points.Any(p => p.UsdFoil.HasValue))
+                Add("Etched", EtchedBrush, points.Select(p => p.UsdEtched).ToList());
+
+            PriceChart.SetData(labels, series);
+            PriceChart.Visibility = series.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+            string since = points.Count > 1 ? $"   (since {points[0].Date:yyyy-MM-dd})" : "";
+            PriceHistoryChange.Text = changes.Count > 0 ? string.Join("\n", changes) + since : "";
+            PriceHistoryChange.Visibility = changes.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+            // Newest first in the list
+            PriceHistoryList.ItemsSource = points.AsEnumerable().Reverse().Select(p => new PriceHistoryRow
+            {
+                Date = p.Date.ToString("yyyy-MM-dd"),
+                NonFoil = p.Usd.HasValue ? $"${p.Usd.Value:F2}" : "—",
+                Foil = p.UsdFoil.HasValue ? $"F ${p.UsdFoil.Value:F2}"
+                     : p.UsdEtched.HasValue ? $"E ${p.UsdEtched.Value:F2}" : "",
+            }).ToList();
+
+            PriceHistoryEmpty.Text = points.Count == 1
+                ? "Only one snapshot so far. The line starts after your next Update Database on another day."
+                : "";
+            PriceHistoryEmpty.Visibility = points.Count == 1 ? Visibility.Visible : Visibility.Collapsed;
         }
 
         // ── Format legality badges ──────────────────────────────────────

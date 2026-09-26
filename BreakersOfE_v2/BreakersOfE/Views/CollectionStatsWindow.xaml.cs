@@ -33,6 +33,51 @@ namespace BreakersOfE.Views
                 : $"Whole collection: {list.Count:N0} rows.";
 
             Build(list);
+            BuildValueHistory();
+        }
+
+        /// <summary>Collection value at the last 15 price snapshots (whole collection).</summary>
+        private void BuildValueHistory()
+        {
+            var points = Services.PriceHistoryService.GetCollectionHistory(15);
+            if (points.Count == 0)
+            {
+                ValueHistoryText.Text = "No history yet. Your collection's value is saved each time you run Update Database.";
+                ValueChart.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            ValueChart.Visibility = Visibility.Visible;
+            ValueChart.SetData(
+                points.Select(p => p.Date.ToString("MMM d")).ToList(),
+                new[]
+                {
+                    new Controls.ChartSeries
+                    {
+                        Name = "Value",
+                        Stroke = new System.Windows.Media.SolidColorBrush(
+                            System.Windows.Media.Color.FromRgb(0x4C, 0xA0, 0xFF)),
+                        Values = points.Select(p => (decimal?)p.Value).ToList(),
+                    },
+                });
+
+            var first = points[0];
+            var last = points[^1];
+            if (points.Count == 1)
+            {
+                ValueHistoryText.Text =
+                    $"{last.Date:yyyy-MM-dd}: ${last.Value:N2} ({last.Cards:N0} cards). " +
+                    "The line starts after your next Update Database on another day.";
+                return;
+            }
+
+            decimal d = last.Value - first.Value;
+            string sign = d > 0 ? "+" : d < 0 ? "−" : "";
+            string pct = first.Value != 0m ? $", {sign}{Math.Abs(d / first.Value * 100m):0.0}%" : "";
+            ValueHistoryText.Text =
+                $"{first.Date:yyyy-MM-dd} → {last.Date:yyyy-MM-dd}:  ${first.Value:N2} → ${last.Value:N2}  " +
+                $"({sign}${Math.Abs(d):N2}{pct})   ·   {first.Cards:N0} → {last.Cards:N0} cards   ·   " +
+                $"last {points.Count} snapshots, whole collection";
         }
 
         private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
@@ -60,7 +105,9 @@ namespace BreakersOfE.Views
 
             // By color: lands are their own bucket; otherwise the card's colors.
             string[] colorOrder = { "White", "Blue", "Black", "Red", "Green", "Multicolor", "Colorless", "Land" };
-            ColorBars.ItemsSource = Bars(rows, ColorBucket, colorOrder);
+            var colorBars = Bars(rows, ColorBucket, colorOrder);
+            foreach (var bar in colorBars) bar.Symbols = ColorSymbols(bar.Label);
+            ColorBars.ItemsSource = colorBars;
 
             string[] rarityOrder = { "Common", "Uncommon", "Rare", "Mythic", "Special", "Bonus", "Other" };
             RarityBars.ItemsSource = Bars(rows, r => RarityBucket(r.Rarity), rarityOrder);
@@ -100,6 +147,27 @@ namespace BreakersOfE.Views
                 "M" => "Multicolor",
                 _ => "Colorless",
             };
+        }
+
+        /// <summary>Mana symbols shown before a "By color" label (none for Land).</summary>
+        private static object? ColorSymbols(string bucket)
+        {
+            string cost = bucket switch
+            {
+                "White" => "{W}",
+                "Blue" => "{U}",
+                "Black" => "{B}",
+                "Red" => "{R}",
+                "Green" => "{G}",
+                "Multicolor" => "{W}{U}{B}{R}{G}",
+                "Colorless" => "{C}",
+                _ => "",
+            };
+            if (cost.Length == 0) return null;
+            var symbols = new Services.ManaCostConverter().Convert(
+                cost, typeof(object), null!, System.Globalization.CultureInfo.CurrentCulture);
+            if (symbols is FrameworkElement fe) fe.Margin = new Thickness(0, 0, 6, 0);
+            return symbols;
         }
 
         private static string RarityBucket(string? rarity) => (rarity ?? "").ToLowerInvariant() switch
@@ -155,6 +223,8 @@ namespace BreakersOfE.Views
             public string CountText { get; init; } = "";
             public string ValueText { get; init; } = "";
             public double BarWidth { get; init; }
+            /// <summary>Mana symbols before the label ("By color" only).</summary>
+            public object? Symbols { get; set; }
         }
     }
 }

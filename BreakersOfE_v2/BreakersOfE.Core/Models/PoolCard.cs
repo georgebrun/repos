@@ -6,7 +6,7 @@ using System.Windows.Media;
 
 namespace BreakersOfE.Models
 {
-    public class PoolCard
+    public class PoolCard : IOwnedCard
     {
         [Key]
         public int PoolId { get; set; }
@@ -40,6 +40,16 @@ namespace BreakersOfE.Models
         public bool IsNonFoil { get; set; }
         /// <summary>Gold "F" for foil-only printings (no non-foil version exists).</summary>
         [NotMapped] public string FinishPill => IsFoil && !IsNonFoil ? "F" : string.Empty;
+
+        // ── Owned (from the matching collection table; filled when the pool loads) ──
+        [NotMapped] public int OwnedNonFoil { get; set; }
+        [NotMapped] public int OwnedFoil { get; set; }
+        /// <summary>Copies of this printing you own, any finish (sort / filter value).</summary>
+        [NotMapped] public int OwnedTotal => OwnedNonFoil + OwnedFoil;
+        /// <summary>"3", "3 (1F)" or blank when not owned.</summary>
+        [NotMapped]
+        public string OwnedDisplay =>
+            OwnedTotal == 0 ? string.Empty : OwnedFoil > 0 ? $"{OwnedTotal} ({OwnedFoil}F)" : OwnedTotal.ToString();
         public bool IsToken { get; set; }
         public bool IsMeld { get; set; }
         public string ReleasedAt { get; set; } = string.Empty;

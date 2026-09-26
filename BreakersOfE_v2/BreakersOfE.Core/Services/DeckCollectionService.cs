@@ -12,9 +12,10 @@ namespace BreakersOfE.Services
     /// Trade Binder), how many you'd still need, and how many are already on
     /// the Want List.
     ///
-    /// "Missing" is counted by card name: free copies of other printings of
-    /// the same card fill in before a copy counts as missing (any printing
-    /// plays the same). Exact printings are used first.
+    /// "Missing" is counted by EXACT PRINTING (ScryfallId): only free copies
+    /// of the printing the deck lists count. Other printings never fill in —
+    /// this is a collection with monetary value (an LEA Sol Ring is not a
+    /// stand-in for an FRC one).
     /// </summary>
     public static class DeckCollectionService
     {
@@ -31,7 +32,6 @@ namespace BreakersOfE.Services
             if (deck.Cards.Count == 0) return;
 
             Dictionary<string, int> ownedById;          // ScryfallId → copies owned (all finishes)
-            Dictionary<string, string> nameById;        // ScryfallId → card name
             Dictionary<string, int> usedElsewhereById;  // ScryfallId → copies entered for OTHER decks / binder
             Dictionary<string, int> wantedByName;       // card name → copies on the Want List (any printing)
 
@@ -51,8 +51,6 @@ namespace BreakersOfE.Services
 
                 ownedById = owned.GroupBy(e => e.ScryfallId, StringComparer.OrdinalIgnoreCase)
                                  .ToDictionary(g => g.Key, g => g.Sum(e => e.Quantity), StringComparer.OrdinalIgnoreCase);
-                nameById = owned.GroupBy(e => e.ScryfallId, StringComparer.OrdinalIgnoreCase)
-                                .ToDictionary(g => g.Key, g => g.First().Name, StringComparer.OrdinalIgnoreCase);
 
                 var ids = ownedById.Keys.ToList();
                 string thisDeck = deck.DeckId ?? string.Empty;
@@ -89,32 +87,16 @@ namespace BreakersOfE.Services
                 c.WantedCount = wantedByName.GetValueOrDefault(c.Name);
             }
 
-            // Per card name: exact printings first, then other free printings fill the gaps.
-            foreach (var group in deck.Cards.GroupBy(c => c.Name, StringComparer.OrdinalIgnoreCase))
+            // Per printing: lines that list the same printing share its free copies.
+            foreach (var group in deck.Cards.GroupBy(c => c.ScryfallId ?? "", StringComparer.OrdinalIgnoreCase))
             {
-                var lines = group.ToList();
-
-                // Free copies per printing, shared by the lines using that printing.
-                var freeLeft = nameById
-                    .Where(kv => string.Equals(kv.Value, group.Key, StringComparison.OrdinalIgnoreCase))
-                    .ToDictionary(kv => kv.Key, kv => FreeOf(kv.Key), StringComparer.OrdinalIgnoreCase);
-
-                var short_ = new Dictionary<DeckCard, int>();
-                foreach (var line in lines)
+                int freeLeft = FreeOf(group.Key);
+                foreach (var line in group)
                 {
                     int need = line.TotalQuantity;
-                    int take = Math.Min(need, freeLeft.GetValueOrDefault(line.ScryfallId));
-                    if (take > 0) freeLeft[line.ScryfallId] -= take;
-                    short_[line] = need - take;
-                }
-
-                // Remaining free copies of any printing of this name.
-                int spare = freeLeft.Values.Sum();
-                foreach (var line in lines)
-                {
-                    int fill = Math.Min(short_[line], spare);
-                    spare -= fill;
-                    line.CollectionMissing = short_[line] - fill;
+                    int take = Math.Min(need, freeLeft);
+                    freeLeft -= take;
+                    line.CollectionMissing = need - take;
                 }
             }
         }

@@ -18,9 +18,17 @@ namespace BreakersOfE.Data
         // ── Other Tables ────────────────────────────────────────────────────
         public DbSet<AppSetting> AppSettings { get; set; }
 
+        /// <summary>Null = the real pool database; otherwise this file (an update's temporary copy).</summary>
+        private readonly string? _path;
+
+        public AppDbContext() { }
+
+        /// <summary>Open a specific file (Database Update works on a temporary copy).</summary>
+        public AppDbContext(string path) { _path = path; }
+
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            string dbPath = Services.AppFolderService.DatabasePath;
+            string dbPath = _path ?? Services.AppFolderService.DatabasePath;
             optionsBuilder.UseSqlite($"Data Source={dbPath}");
         }
 

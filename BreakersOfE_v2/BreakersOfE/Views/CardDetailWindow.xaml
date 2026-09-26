@@ -2,12 +2,13 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:ctl="clr-namespace:BreakersOfE.Views.Controls"
         Title="{Binding ElementName=CardName, Path=Text}"
         Width="1050" Height="750"
         MinWidth="700" MinHeight="500"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize"
-        ExtendsContentIntoTitleBar="False">
+        ExtendsContentIntoTitleBar="True">
 
     <ui:FluentWindow.Resources>
         <Style x:Key="SectionHeader" TargetType="TextBlock">
@@ -40,174 +41,236 @@
         </Style>
     </ui:FluentWindow.Resources>
 
-    <Grid Margin="16">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="280"/>
-        </Grid.ColumnDefinitions>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
 
-        <!-- ═══ LEFT: Card image ═══ -->
-        <StackPanel Grid.Column="0" VerticalAlignment="Top" Margin="0,0,16,0"
-                    Width="360">
-            <Border CornerRadius="12" Background="#20808080">
-                <Image x:Name="CardImage" Stretch="Uniform"
+        <!-- Title bar: card name, drag to move, minimize / maximize / close (X) -->
+        <ui:TitleBar Grid.Row="0" Title="{Binding ElementName=CardName, Path=Text}"/>
+
+        <Grid Grid.Row="1" Margin="16,4,16,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="280"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ═══ LEFT: Card image + price (current price and history together) ═══ -->
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Margin="0,0,16,0">
+                <StackPanel VerticalAlignment="Top" Width="360">
+                    <Border CornerRadius="12" Background="#20808080">
+                        <Image x:Name="CardImage" Stretch="Uniform"
                        MaxHeight="500"
                        RenderOptions.BitmapScalingMode="HighQuality"/>
-            </Border>
-            <Button x:Name="BtnFlipFace" Content="🔄 Show Back Face"
+                    </Border>
+                    <Button x:Name="BtnFlipFace" Content="🔄 Show Back Face"
                     HorizontalAlignment="Center" Margin="0,8,0,0"
                     Padding="10,5" FontSize="12"
                     Visibility="Collapsed"
                     Click="BtnFlipFace_Click"/>
-        </StackPanel>
 
-        <!-- ═══ CENTER: Card information ═══ -->
-        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
+                    <!-- ── PRICE: today's price, then the last 5 snapshots (one per Update Database) ── -->
+                    <TextBlock Text="▸ PRICE" Style="{StaticResource SectionHeader}"/>
+                    <Border Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
+                        <StackPanel>
+                            <TextBlock x:Name="CardPriceMain" FontSize="20" FontWeight="Bold"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <TextBlock x:Name="CardPriceDetails" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Margin="0,2,0,8"/>
+
+                            <ctl:MiniLineChart x:Name="PriceChart" Height="130" Margin="0,0,0,6"/>
+                            <TextBlock x:Name="PriceHistoryChange" FontSize="12" FontWeight="SemiBold"
+                               TextWrapping="Wrap" Margin="0,0,0,6"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <!-- Date · Non-Foil · Foil (newest first) -->
+                            <ItemsControl x:Name="PriceHistoryList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="100"/>
+                                                <ColumnDefinition Width="100"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding Date}" FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding NonFoil}" FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding Foil}" FontSize="12"
+                                               Foreground="#FFC000"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock x:Name="PriceHistoryEmpty" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ── IN YOUR DECKS: every deck that uses this card (any printing) ── -->
+                    <TextBlock x:Name="DecksHeader" Text="▸ IN YOUR DECKS" Style="{StaticResource SectionHeader}"/>
+                    <Border Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
+                        <StackPanel>
+                            <ItemsControl x:Name="DecksList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel Margin="0,1">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding Copies, StringFormat='×{0}'}"
+                                               FontSize="12" FontWeight="SemiBold" Margin="8,0,0,0"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                            <TextBlock Text="{Binding DeckName}" FontSize="12"
+                                               TextTrimming="CharacterEllipsis" ToolTip="{Binding FilePath}"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock x:Name="DecksEmpty" FontSize="12" TextWrapping="Wrap"
+                               Text="Not in any of your decks."
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- ═══ CENTER: Card information ═══ -->
+            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
                       Margin="0,0,12,0">
-            <StackPanel>
+                <StackPanel>
 
-                <!-- Card name + navigation -->
-                <DockPanel Margin="0,0,0,4">
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <Button Content="◀" Padding="8,4" Margin="0,0,4,0"
+                    <!-- Card name + navigation -->
+                    <DockPanel Margin="0,0,0,4">
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button Content="◀" Padding="8,4" Margin="0,0,4,0"
                                 Click="BtnPrev_Click" ToolTip="Previous card"/>
-                        <Button x:Name="BtnRulings" Content="📜 Rulings" Padding="10,4"
+                            <Button x:Name="BtnRulings" Content="📜 Rulings" Padding="10,4"
                                 Margin="0,0,4,0" Click="BtnRulings_Click"/>
-                        <Button Content="▶" Padding="8,4"
+                            <Button Content="▶" Padding="8,4"
                                 Click="BtnNext_Click" ToolTip="Next card"/>
-                    </StackPanel>
-                    <TextBlock x:Name="CardName" FontSize="22" FontWeight="Bold"
+                        </StackPanel>
+                        <TextBlock x:Name="CardName" FontSize="22" FontWeight="Bold"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                TextWrapping="Wrap" VerticalAlignment="Center"/>
-                </DockPanel>
+                    </DockPanel>
 
-                <!-- ── INFORMATION ── -->
-                <TextBlock Text="▸ INFORMATION" Style="{StaticResource SectionHeader}"/>
-                <Border Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition/>
-                            <RowDefinition/>
-                            <RowDefinition/>
-                            <RowDefinition/>
-                            <RowDefinition/>
-                            <RowDefinition/>
-                            <RowDefinition/>
-                            <RowDefinition/>
-                            <RowDefinition/>
-                        </Grid.RowDefinitions>
+                    <!-- ── INFORMATION ── -->
+                    <TextBlock Text="▸ INFORMATION" Style="{StaticResource SectionHeader}"/>
+                    <Border Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                            </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="RARITY" Style="{StaticResource FieldLabel}"/>
-                        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Margin="0,4,0,0">
-                            <Border x:Name="RarityBadge" Style="{StaticResource Badge}">
-                                <TextBlock x:Name="RarityText" Style="{StaticResource BadgeText}"/>
-                            </Border>
-                        </StackPanel>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="RARITY" Style="{StaticResource FieldLabel}"/>
+                            <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Margin="0,4,0,0">
+                                <Border x:Name="RarityBadge" Style="{StaticResource Badge}">
+                                    <TextBlock x:Name="RarityText" Style="{StaticResource BadgeText}"/>
+                                </Border>
+                            </StackPanel>
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="TYPE" Style="{StaticResource FieldLabel}"/>
-                        <TextBlock Grid.Row="1" Grid.Column="1" x:Name="CardType" Style="{StaticResource FieldValue}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="TYPE" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" x:Name="CardType" Style="{StaticResource FieldValue}"/>
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="COLOR" Style="{StaticResource FieldLabel}"/>
-                        <TextBlock Grid.Row="2" Grid.Column="1" x:Name="CardColor" Style="{StaticResource FieldValue}"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="COLOR" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" x:Name="CardColor" Style="{StaticResource FieldValue}"/>
 
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="MANA COST" Style="{StaticResource FieldLabel}"/>
-                        <ItemsControl Grid.Row="3" Grid.Column="1" x:Name="ManaCostPanel" Margin="0,4,0,0">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                        </ItemsControl>
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="MANA COST" Style="{StaticResource FieldLabel}"/>
+                            <ItemsControl Grid.Row="3" Grid.Column="1" x:Name="ManaCostPanel" Margin="0,4,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="MANA VALUE" Style="{StaticResource FieldLabel}"/>
-                        <TextBlock Grid.Row="4" Grid.Column="1" x:Name="CardMV" Style="{StaticResource FieldValue}"/>
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="MANA VALUE" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Grid.Row="4" Grid.Column="1" x:Name="CardMV" Style="{StaticResource FieldValue}"/>
 
-                        <TextBlock Grid.Row="5" Grid.Column="0" x:Name="PTLabel" Text="POWER" Style="{StaticResource FieldLabel}"/>
-                        <TextBlock Grid.Row="5" Grid.Column="1" x:Name="CardPT" Style="{StaticResource FieldValue}"/>
+                            <TextBlock Grid.Row="5" Grid.Column="0" x:Name="PTLabel" Text="POWER" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Grid.Row="5" Grid.Column="1" x:Name="CardPT" Style="{StaticResource FieldValue}"/>
 
-                        <TextBlock Grid.Row="6" Grid.Column="0" Text="ARTIST" Style="{StaticResource FieldLabel}"/>
-                        <TextBlock Grid.Row="6" Grid.Column="1" x:Name="CardArtist" Style="{StaticResource FieldValue}"/>
+                            <TextBlock Grid.Row="6" Grid.Column="0" Text="ARTIST" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Grid.Row="6" Grid.Column="1" x:Name="CardArtist" Style="{StaticResource FieldValue}"/>
 
-                        <TextBlock Grid.Row="7" Grid.Column="0" Text="FOIL STATE" Style="{StaticResource FieldLabel}"/>
-                        <TextBlock Grid.Row="7" Grid.Column="1" x:Name="CardFinishes" Style="{StaticResource FieldValue}"/>
+                            <TextBlock Grid.Row="7" Grid.Column="0" Text="FOIL STATE" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Grid.Row="7" Grid.Column="1" x:Name="CardFinishes" Style="{StaticResource FieldValue}"/>
 
-                        <TextBlock Grid.Row="8" Grid.Column="0" Text="NUMBER" Style="{StaticResource FieldLabel}"/>
-                        <TextBlock Grid.Row="8" Grid.Column="1" x:Name="CardNumber" Style="{StaticResource FieldValue}"/>
-                    </Grid>
-                </Border>
+                            <TextBlock Grid.Row="8" Grid.Column="0" Text="NUMBER" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Grid.Row="8" Grid.Column="1" x:Name="CardNumber" Style="{StaticResource FieldValue}"/>
+                        </Grid>
+                    </Border>
 
-                <!-- ── PRICING ── -->
-                <TextBlock Text="▸ PRICING" Style="{StaticResource SectionHeader}"/>
-                <Border Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
-                    <StackPanel>
-                        <TextBlock x:Name="CardPriceMain" FontSize="20" FontWeight="Bold"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                        <TextBlock x:Name="CardPriceDetails" FontSize="12"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Margin="0,2,0,0"/>
-                    </StackPanel>
-                </Border>
-
-                <!-- ── ORACLE TEXT ── -->
-                <TextBlock Text="▸ ORACLE TEXT" Style="{StaticResource SectionHeader}"/>
-                <Border Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
-                    <TextBlock x:Name="CardOracle" Style="{StaticResource FieldValue}"
+                    <!-- ── ORACLE TEXT ── -->
+                    <TextBlock Text="▸ ORACLE TEXT" Style="{StaticResource SectionHeader}"/>
+                    <Border Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
+                        <TextBlock x:Name="CardOracle" Style="{StaticResource FieldValue}"
                                FontSize="13" TextWrapping="Wrap"/>
-                </Border>
+                    </Border>
 
-                <!-- ── FLAVOR TEXT ── -->
-                <TextBlock x:Name="FlavorHeader" Text="▸ FLAVOR TEXT" Style="{StaticResource SectionHeader}"/>
-                <Border x:Name="FlavorBorder" Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
-                    <TextBlock x:Name="CardFlavor" Style="{StaticResource FieldValue}"
+                    <!-- ── FLAVOR TEXT ── -->
+                    <TextBlock x:Name="FlavorHeader" Text="▸ FLAVOR TEXT" Style="{StaticResource SectionHeader}"/>
+                    <Border x:Name="FlavorBorder" Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
+                        <TextBlock x:Name="CardFlavor" Style="{StaticResource FieldValue}"
                                FontSize="13" FontStyle="Italic" Opacity="0.7"
                                TextWrapping="Wrap"/>
-                </Border>
+                    </Border>
 
-                <!-- ── RULINGS (shown on demand) ── -->
-                <TextBlock x:Name="RulingsHeader" Text="▸ RULINGS"
+                    <!-- ── RULINGS (shown on demand) ── -->
+                    <TextBlock x:Name="RulingsHeader" Text="▸ RULINGS"
                            Style="{StaticResource SectionHeader}" Visibility="Collapsed"/>
-                <Border x:Name="RulingsBorder" Background="#15808080" CornerRadius="8"
+                    <Border x:Name="RulingsBorder" Background="#15808080" CornerRadius="8"
                         Padding="12,8" Margin="0,0,0,4" Visibility="Collapsed">
-                    <StackPanel x:Name="RulingsPanel"/>
-                </Border>
+                        <StackPanel x:Name="RulingsPanel"/>
+                    </Border>
 
-                <Button Content="Close" HorizontalAlignment="Right"
+                    <Button Content="Close" HorizontalAlignment="Right"
                         Margin="0,12,0,0" Padding="16,6"
                         Click="BtnClose_Click"/>
-            </StackPanel>
-        </ScrollViewer>
+                </StackPanel>
+            </ScrollViewer>
 
-        <!-- ═══ RIGHT: Set info + Legality ═══ -->
-        <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
+            <!-- ═══ RIGHT: Set info + Legality ═══ -->
+            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
 
-                <!-- ── SET ── -->
-                <TextBlock Text="▸ SET" Style="{StaticResource SectionHeader}"/>
-                <Border Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
-                    <StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                            <Image x:Name="SetSymbol" Width="20" Height="20"
+                    <!-- ── SET ── -->
+                    <TextBlock Text="▸ SET" Style="{StaticResource SectionHeader}"/>
+                    <Border Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <Image x:Name="SetSymbol" Width="20" Height="20"
                                    Margin="0,0,8,0" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="CardSet" Style="{StaticResource FieldValue}"
+                                <TextBlock x:Name="CardSet" Style="{StaticResource FieldValue}"
                                        FontWeight="SemiBold"/>
-                        </StackPanel>
-                        <TextBlock x:Name="CardSetDetail" FontSize="11"
+                            </StackPanel>
+                            <TextBlock x:Name="CardSetDetail" FontSize="11"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                    </StackPanel>
-                </Border>
+                        </StackPanel>
+                    </Border>
 
-                <!-- ── FORMAT LEGALITY ── -->
-                <TextBlock Text="▸ FORMAT LEGALITY" Style="{StaticResource SectionHeader}"/>
-                <Border Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
-                    <WrapPanel x:Name="LegalityPanel"/>
-                </Border>
+                    <!-- ── FORMAT LEGALITY ── -->
+                    <TextBlock Text="▸ FORMAT LEGALITY" Style="{StaticResource SectionHeader}"/>
+                    <Border Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
+                        <WrapPanel x:Name="LegalityPanel"/>
+                    </Border>
 
-            </StackPanel>
-        </ScrollViewer>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
     </Grid>
 </ui:FluentWindow>

@@ -56,6 +56,12 @@ namespace BreakersOfE.Views.Controls
         // ── Host API ────────────────────────────────────────────────────
 
         /// <summary>
+        /// Tiles for which this returns true show dimmed (set checklist:
+        /// printings you don't own). Null = nothing dimmed. Applied on Show.
+        /// </summary>
+        public Func<object, bool>? DimWhen { get; set; }
+
+        /// <summary>
         /// Show these cards in this order (the host's sorted, filtered view),
         /// starting at the top, highlighting <paramref name="selected"/>.
         /// </summary>
@@ -70,6 +76,7 @@ namespace BreakersOfE.Views.Controls
                     gi = GalleryItem.FromCard(card);
                     _items[card] = gi;
                 }
+                gi.IsDimmed = DimWhen?.Invoke(card) ?? false;
                 _ordered.Add(gi);
             }
             RebuildRows(keepPosition: false);

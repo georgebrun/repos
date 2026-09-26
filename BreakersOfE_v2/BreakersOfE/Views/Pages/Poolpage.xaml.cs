@@ -39,12 +39,6 @@ namespace BreakersOfE.Views.Pages
             ["Available"] = "AvailableCount",
             ["Price"] = "PriceDisplay",
             ["Value"] = "RowValueDisplay",
-            ["Buy At"] = "BuyAtDisplay",
-            ["Sell At"] = "SellAtDisplay",
-            ["Sell At Value"] = "SellAtValueDisplay",
-            ["Needed"] = "Needed",
-            ["Excess"] = "Excess",
-            ["Target"] = "Target",
             ["Condition"] = "Condition",
             ["Notes"] = "Notes",
             ["Storage"] = "StorageLocation",
@@ -65,10 +59,11 @@ namespace BreakersOfE.Views.Pages
             ["Non-Foil"] = "Quantity",
             ["Foil"] = "FoilQuantity",
             ["Total"] = "TotalQuantity",
-            ["Owned"] = "CollectionOwned",
+            ["Owned"] = "OwnedTotal",           // Pool + Deck: copies of this printing you own
             ["Free"] = "CollectionFree",
             ["Missing"] = "CollectionMissing",
             ["Wanted"] = "WantedCount",
+            ["Other Decks"] = "OtherDecksCount",   // cards shared between decks
             // Trade Binder / Want List
             ["Asking"] = "AskingPriceDisplay",
             ["Offer"] = "OfferPriceDisplay",
@@ -113,7 +108,6 @@ namespace BreakersOfE.Views.Pages
             var d = new[] { D };
             var map = new Dictionary<string, TableKind[]>();
             foreach (var h in new[] { "Used", "Available",
-                                      "Buy At", "Sell At", "Sell At Value", "Needed", "Excess", "Target",
                                       "Storage", "Desired", "Group", "Print Type", "Buy", "Sell" })
                 map[h] = cs;
             foreach (var h in new[] { "Qty", "Price", "Notes", "Added" })
@@ -125,8 +119,9 @@ namespace BreakersOfE.Views.Pages
             map["Offer"] = new[] { W };
             foreach (var h in new[] { "USD", "Foil $" })
                 map[h] = pd;
-            foreach (var h in new[] { "SB", "Non-Foil", "Foil", "Total", "Owned", "Free", "Missing", "Wanted" })
+            foreach (var h in new[] { "SB", "Non-Foil", "Foil", "Total", "Free", "Missing", "Wanted", "Other Decks" })
                 map[h] = d;
+            map["Owned"] = new[] { TableKind.Pool, D };
             return map;
         }
 
@@ -378,8 +373,10 @@ namespace BreakersOfE.Views.Pages
                 if (item == card) idx = items.Count - 1;
             }
 
+            // From a deck: the pop-up lists the OTHER decks (matches the Other Decks column).
             _cardDetailWindow = new CardDetailWindow(
-                card, Window.GetWindow(this), items, idx);
+                card, Window.GetWindow(this), items, idx,
+                _currentTag == DeckTableTag ? _openDeckPath : null);
             _cardDetailWindow.CardChanged += newCard =>
             {
                 PoolGrid.SelectedItem = newCard;
@@ -916,12 +913,6 @@ namespace BreakersOfE.Views.Pages
             ["Used"] = nameof(CollectionTotalsRow.Used),
             ["Available"] = nameof(CollectionTotalsRow.Available),
             ["Value"] = nameof(CollectionTotalsRow.Value),
-            ["Buy At"] = nameof(CollectionTotalsRow.BuyAt),
-            ["Sell At"] = nameof(CollectionTotalsRow.SellAt),
-            ["Sell At Value"] = nameof(CollectionTotalsRow.SellAtValue),
-            ["Needed"] = nameof(CollectionTotalsRow.Needed),
-            ["Excess"] = nameof(CollectionTotalsRow.Excess),
-            ["Target"] = nameof(CollectionTotalsRow.Target),
             // Deck totals
             ["Legal"] = nameof(CollectionTotalsRow.Legal),
             ["Non-Foil"] = nameof(CollectionTotalsRow.NonFoil),
@@ -930,6 +921,7 @@ namespace BreakersOfE.Views.Pages
             ["Owned"] = nameof(CollectionTotalsRow.Owned),
             ["Missing"] = nameof(CollectionTotalsRow.Missing),
             ["Wanted"] = nameof(CollectionTotalsRow.Wanted),
+            ["Other Decks"] = nameof(CollectionTotalsRow.OtherDecks),
             ["Asking"] = nameof(CollectionTotalsRow.Asking),
             ["Offer"] = nameof(CollectionTotalsRow.Offer),
         };
@@ -1037,6 +1029,7 @@ namespace BreakersOfE.Views.Pages
                         Owned = cards.Sum(c => c.CollectionOwned).ToString("N0"),
                         Missing = missing == 0 ? "0" : $"{missing:N0} (${missingCost:N2})",
                         Wanted = Count(cards.Sum(c => c.WantedCount)),
+                        OtherDecks = $"{cards.Count(c => c.OtherDecksCount > 0):N0} shared",
                         Legal = illegal == 0 ? "All legal" : $"{illegal} illegal",
                         NonFoil = cards.Sum(c => c.Quantity).ToString("N0"),
                         Foil = cards.Sum(c => c.FoilQuantity).ToString("N0"),
@@ -1070,12 +1063,6 @@ namespace BreakersOfE.Views.Pages
                     Used = Count(rows.Sum(r => Int(r, "UsedCount"))),
                     Available = Count(rows.Sum(r => Int(r, "AvailableCount"))),
                     Value = $"${rows.Sum(r => Dec(r, "RowValue")):N2}",
-                    BuyAt = Money(rows.Sum(r => Dec(r, "BuyAt"))),
-                    SellAt = Money(rows.Sum(r => Dec(r, "SellAt"))),
-                    SellAtValue = Money(rows.Sum(r => Dec(r, "SellAtValue"))),
-                    Needed = Count(rows.Sum(r => Int(r, "Needed"))),
-                    Excess = Count(rows.Sum(r => Int(r, "Excess"))),
-                    Target = Count(rows.Sum(r => Int(r, "Target"))),
                     // Asking / offer prices are per copy.
                     Asking = Money(rows.Sum(r => Dec(r, "AskingPrice") * Int(r, "Quantity"))),
                     Offer = Money(rows.Sum(r => Dec(r, "OfferPrice") * Int(r, "Quantity"))),
@@ -1170,6 +1157,9 @@ namespace BreakersOfE.Views.Pages
         private void ClearAllFilters_Click(object sender, RoutedEventArgs e)
         {
             _vm.Filters.ClearAll();
+            _missingOnly = false;
+            BtnMissingOnly.IsChecked = false;
+            UpdateChecklist(reapply: false);
             _vm.ApplyFilters();
 
             // Reset to default multi-level sort (Name → Edition → Collector Number)
@@ -1337,6 +1327,7 @@ namespace BreakersOfE.Views.Pages
             var selected = PoolGrid.SelectedItem;
 
             _viewMode = mode;
+            UpdateChecklist();
 
             PoolGrid.Visibility = mode == PoolViewMode.Grid ? Visibility.Visible : Visibility.Collapsed;
             Gallery.Visibility = mode == PoolViewMode.Gallery ? Visibility.Visible : Visibility.Collapsed;
@@ -1405,6 +1396,55 @@ namespace BreakersOfE.Views.Pages
         }
 
         // ══════════════════════════════════════════════════════════════════
+        // SET CHECKLIST — while viewing cards from the set browser: printings
+        // you own are bright, the rest dimmed (gallery); "Missing Only" hides
+        // the ones you own; the status line shows Owned X of Y. By printing,
+        // like Set Completion. Read-only.
+        // ══════════════════════════════════════════════════════════════════
+        private bool _missingOnly;
+
+        private static bool IsMissingPrinting(object card) =>
+            card is Models.IOwnedCard c && c.OwnedNonFoil + c.OwnedFoil == 0;
+
+        private static string ChecklistNote(IReadOnlyList<object> rows)
+        {
+            int total = rows.Count;
+            if (total == 0) return "";
+            int owned = rows.Count(r => !IsMissingPrinting(r));
+            double pct = owned * 100.0 / total;
+            return $"   ·   Owned {owned:N0} of {total:N0} ({pct:0.#}%)   ·   Missing {total - owned:N0}";
+        }
+
+        /// <summary>
+        /// Turn the checklist on or off for the current view. Re-applies the
+        /// filters when the Missing Only filter actually changed.
+        /// </summary>
+        private void UpdateChecklist(bool reapply = true)
+        {
+            bool checklist = _inSetsContext && !IsBrowser(_viewMode);
+
+            BtnMissingOnly.Visibility = checklist ? Visibility.Visible : Visibility.Collapsed;
+            BtnMissingOnly.IsChecked = _missingOnly;
+            Gallery.DimWhen = checklist ? IsMissingPrinting : null;
+
+            Func<object, bool>? extra = checklist && _missingOnly ? IsMissingPrinting : null;
+            Func<IReadOnlyList<object>, string>? note = checklist ? ChecklistNote : null;
+            bool changed = (_vm.ExtraFilter != null) != (extra != null) ||
+                           (_vm.StatusNote != null) != (note != null);
+            _vm.ExtraFilter = extra;
+            _vm.StatusNote = note;
+
+            if (changed && reapply && _vm.AllRows.Count > 0 && !IsBrowser(_viewMode))
+                _vm.ApplyFilters();
+        }
+
+        private void BtnMissingOnly_Click(object sender, RoutedEventArgs e)
+        {
+            _missingOnly = BtnMissingOnly.IsChecked == true;
+            UpdateChecklist();
+        }
+
+        // ══════════════════════════════════════════════════════════════════
         // DECK BROWSER — every .deck file under Documents\BoE_V2\Decks
         // (subfolders too), grouped Commander / Standard, A→Z. Click a tile →
         // the deck opens read-only in the grid or gallery (per the switch).
@@ -1415,7 +1455,8 @@ namespace BreakersOfE.Views.Pages
         private int _decksPerRow = 1;
         private DeckTile? _deckHighlighted;
         private string _openDeckFormat = "standard";
-        private Models.Deck? _openDeck;            // the deck on screen (for Statistics)
+        private Models.Deck? _openDeck;
+        private string? _openDeckPath;             // its file (the pop-up leaves it out of IN YOUR OTHER DECKS)            // the deck on screen (for Statistics)
 
         /// <summary>"Decks" nav item: the deck browser (re-reads the folder each time).</summary>
         public void ShowDecks()
@@ -1556,9 +1597,13 @@ namespace BreakersOfE.Views.Pages
             foreach (var card in deck.Cards) card.DeckFormat = format;
             _openDeckFormat = format;
             _openDeck = deck;
+            _openDeckPath = tile.FilePath;
 
             // Deck vs. collection: Owned / Free / Missing / Wanted per card (read-only).
             Services.DeckCollectionService.Annotate(deck);
+
+            // Cards shared between decks: Other Decks count + tooltip per card.
+            Services.DeckIndexService.Annotate(deck, tile.FilePath);
 
             _vm.UseFilters("Deck:" + tile.FilePath);     // each deck keeps its own filters
             PrepareTable(DeckTableTag);
@@ -2030,18 +2075,13 @@ namespace BreakersOfE.Views.Pages
         public string Used { get; init; } = "";
         public string Available { get; init; } = "";
         public string Value { get; init; } = "";
-        public string BuyAt { get; init; } = "";
-        public string SellAt { get; init; } = "";
-        public string SellAtValue { get; init; } = "";
-        public string Needed { get; init; } = "";
-        public string Excess { get; init; } = "";
-        public string Target { get; init; } = "";
         // Deck totals
         public string Legal { get; init; } = "";
         public string NonFoil { get; init; } = "";
         public string Foil { get; init; } = "";
         public string Total { get; init; } = "";
         public string Owned { get; init; } = "";
+        public string OtherDecks { get; init; } = "";
         public string Missing { get; init; } = "";
         public string Wanted { get; init; } = "";
         public string Asking { get; init; } = "";

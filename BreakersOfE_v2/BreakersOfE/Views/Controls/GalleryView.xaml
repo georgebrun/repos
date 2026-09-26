@@ -66,17 +66,48 @@
                                                TextAlignment="Center" FontSize="12"
                                                VerticalAlignment="Center" Margin="8"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                        <!-- Set checklist: printings you don't own are dimmed
+                                         (the price badge stays bright). -->
                                         <Image Source="{Binding Image}" Stretch="Uniform"
-                                           RenderOptions.BitmapScalingMode="HighQuality"/>
-                                        <!-- Finish pill (top-right): gold "F" = foil row or
-                                         foil-only printing, "E" = etched -->
-                                        <Border HorizontalAlignment="Right" VerticalAlignment="Top"
-                                            Margin="0,6,6,0" CornerRadius="8" Padding="7,1"
-                                            Background="#D0202020"
-                                            Visibility="{Binding HasFinishPill, Converter={StaticResource BoolToVisibilityConverter}}">
-                                            <TextBlock Text="{Binding FinishPill}" FontSize="12"
-                                                   FontWeight="Bold" Foreground="#FFC000"/>
-                                        </Border>
+                                           RenderOptions.BitmapScalingMode="HighQuality">
+                                            <Image.Style>
+                                                <Style TargetType="Image">
+                                                    <Setter Property="Opacity" Value="1"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDimmed}" Value="True">
+                                                            <Setter Property="Opacity" Value="0.3"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Image.Style>
+                                        </Image>
+                                        <!-- Owned marker + finish pill sit just below the title bar
+                                         (at the top of the art), so the name and mana cost stay
+                                         readable. Proportional rows keep them there at any card size. -->
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="11*"/>
+                                                <RowDefinition Height="89*"/>
+                                            </Grid.RowDefinitions>
+                                            <!-- Count marker (top-left): owned (pool), quantity (collection), copies in deck (deck) -->
+                                            <Border Grid.Row="1" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                Margin="8,2,0,0" CornerRadius="8" Padding="7,1"
+                                                Background="#D0202020"
+                                                ToolTip="{Binding OwnedTip}"
+                                                Visibility="{Binding HasOwned, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <TextBlock Text="{Binding OwnedText}" FontSize="12"
+                                                       FontWeight="Bold" Foreground="White"/>
+                                            </Border>
+                                            <!-- Finish pill (top-right): gold "F" = foil row or
+                                             foil-only printing, "E" = etched -->
+                                            <Border Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                Margin="0,2,8,0" CornerRadius="8" Padding="7,1"
+                                                Background="#D0202020"
+                                                Visibility="{Binding HasFinishPill, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <TextBlock Text="{Binding FinishPill}" FontSize="12"
+                                                       FontWeight="Bold" Foreground="#FFC000"/>
+                                            </Border>
+                                        </Grid>
                                         <!-- Price badge -->
                                         <Border HorizontalAlignment="Center" VerticalAlignment="Bottom"
                                             Margin="0,0,0,6" CornerRadius="8" Padding="8,2"

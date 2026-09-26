@@ -91,8 +91,17 @@ namespace BreakersOfE.Models
         [JsonIgnore] public int CollectionFree { get; set; }
         /// <summary>Copies still needed after free copies of any printing of this card.</summary>
         [JsonIgnore] public int CollectionMissing { get; set; }
+        /// <summary>Owned column (shared with the Pool): this printing's copies in the collection.</summary>
+        [JsonIgnore] public int OwnedTotal => CollectionOwned;
+        [JsonIgnore] public string OwnedDisplay => CollectionOwned.ToString();
         /// <summary>Copies of this card (any printing) on the Want List.</summary>
         [JsonIgnore] public int WantedCount { get; set; }
+
+        // ── Cards shared between decks (filled when the deck opens; not saved) ──
+        /// <summary>How many of your OTHER decks use this card (any printing).</summary>
+        [JsonIgnore] public int OtherDecksCount { get; set; }
+        /// <summary>Tooltip: the other decks and their copies.</summary>
+        [JsonIgnore] public string OtherDecksTip { get; set; } = string.Empty;
 
         /// <summary>On the Commander Game Changers list. Filled from the pool when the deck opens; not saved.</summary>
         [JsonIgnore]

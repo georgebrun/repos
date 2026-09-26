@@ -25,6 +25,8 @@ namespace BreakersOfE.Services
     public class ImportResult
     {
         public bool Success { get; set; }
+        /// <summary>Stopped by Cancel (the real database was left unchanged).</summary>
+        public bool Cancelled { get; set; }
         public string ErrorMessage { get; set; } = string.Empty;
 
         // Card table counts
@@ -86,6 +88,34 @@ namespace BreakersOfE.Services
     // ════════════════════════════════════════════════════════════════════════
     public class ScryfallService
     {
+        // ── Safe updates ─────────────────────────────────────────────────
+        // An update writes to a temporary copy of the card database
+        // (DatabaseStaging); only a finished update swaps it in. While an
+        // update runs, every pool read/write in this service goes to the copy.
+        private static string? _workingDb;
+
+        private static AppDbContext PoolDb() =>
+            _workingDb != null ? new AppDbContext(_workingDb) : new AppDbContext();
+
+        /// <summary>Copy the real card database to a temp file and point this service at it.</summary>
+        private static DatabaseStaging BeginStaging(IProgress<ImportProgress> progress, int pct)
+        {
+            Report(progress, "Preparing a working copy of the card database...", pct);
+            var stage = DatabaseStaging.Begin(AppFolderService.DatabasePath);
+            using (var db = new AppDbContext(stage.WorkingPath))
+                db.EnsureSchema();                         // empty/first run: create tables
+            _workingDb = stage.WorkingPath;
+            return stage;
+        }
+
+        /// <summary>Swap the finished copy in for the real database.</summary>
+        private static void CommitStaging(DatabaseStaging stage, IProgress<ImportProgress> progress, int pct)
+        {
+            Report(progress, "Saving the updated card database...", pct);
+            _workingDb = null;
+            stage.Commit();
+        }
+
         private readonly HttpClient _http;
         private readonly string _setSymbolsFolder;
         private readonly string _manaSymbolsFolder;
@@ -114,6 +144,7 @@ namespace BreakersOfE.Services
             bool skipKeywords = false)
         {
             var result = new ImportResult();
+            DatabaseStaging? stage = null;
 
             try
             {
@@ -137,10 +168,19 @@ namespace BreakersOfE.Services
                 result.ManaSymbolsDownloaded =
                     await DownloadManaSymbolsAsync(progress, 41, 50, ct);
 
-                // Step 4 — Parse and import cards
+                // Step 4 — Parse and import cards (into a temporary copy)
+                ct.ThrowIfCancellationRequested();
+                stage = BeginStaging(progress, 50);
                 Report(progress, "Importing cards into breakersofe.db...", 51);
                 ct.ThrowIfCancellationRequested();
                 await ImportCardsAsync(tempFile, result, progress, 51, 80, ct);
+
+                // A failed import (e.g. Scryfall changed its format) or an empty
+                // one must never replace a working database.
+                if (!string.IsNullOrEmpty(result.ErrorMessage))
+                    throw new InvalidOperationException(result.ErrorMessage + " Your card database was not changed.");
+                if (result.PoolCardsImported == 0)
+                    throw new InvalidOperationException("No cards were imported. Your card database was not changed.");
 
                 // Step 5 — Download set symbols
                 Report(progress, "Downloading set symbols...", 81);
@@ -170,18 +210,33 @@ namespace BreakersOfE.Services
 
                 try { File.Delete(tempFile); } catch { }
 
+                // Finished: the updated copy replaces the real database.
+                ct.ThrowIfCancellationRequested();
+                CommitStaging(stage!, progress, 98);
+
+                // Price history: snapshot of the whole pool (never fails the update).
+                Report(progress, "Saving price history...", 99);
+                PriceHistoryService.TakeSnapshot();
+
                 Report(progress, "Complete!", 100);
                 result.Success = true;
             }
             catch (OperationCanceledException)
             {
                 result.Success = false;
-                result.ErrorMessage = "Import cancelled by user.";
+                result.Cancelled = true;
+                result.ErrorMessage = "Cancelled. Your card database was not changed.";
             }
             catch (Exception ex)
             {
                 result.Success = false;
                 result.ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                // Anything but a finished update: throw the copy away.
+                _workingDb = null;
+                stage?.Abort();
             }
 
             return result;
@@ -195,6 +250,7 @@ namespace BreakersOfE.Services
             CancellationToken ct)
         {
             var result = new ImportResult();
+            DatabaseStaging? stage = null;
 
             try
             {
@@ -212,12 +268,22 @@ namespace BreakersOfE.Services
                 await DownloadWithProgressAsync(
                     bulkUrl, tempFile, progress, 5, 60, ct);
 
-                // Update prices only
+                // Update prices only (in a temporary copy)
+                ct.ThrowIfCancellationRequested();
+                stage = BeginStaging(progress, 60);
                 Report(progress, "Updating prices...", 61);
                 ct.ThrowIfCancellationRequested();
-                await UpdatePricesOnlyAsync(tempFile, progress, 61, 99, ct);
+                await UpdatePricesOnlyAsync(tempFile, progress, 61, 97, ct);
 
                 try { File.Delete(tempFile); } catch { }
+
+                // Finished: the updated copy replaces the real database.
+                ct.ThrowIfCancellationRequested();
+                CommitStaging(stage!, progress, 98);
+
+                // Price history: snapshot of the whole pool (never fails the update).
+                Report(progress, "Saving price history...", 99);
+                PriceHistoryService.TakeSnapshot();
 
                 Report(progress, "Prices updated!", 100);
                 result.Success = true;
@@ -225,12 +291,18 @@ namespace BreakersOfE.Services
             catch (OperationCanceledException)
             {
                 result.Success = false;
-                result.ErrorMessage = "Price update cancelled by user.";
+                result.Cancelled = true;
+                result.ErrorMessage = "Cancelled. Your card database was not changed.";
             }
             catch (Exception ex)
             {
                 result.Success = false;
                 result.ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                _workingDb = null;
+                stage?.Abort();
             }
 
             return result;
@@ -266,7 +338,7 @@ namespace BreakersOfE.Services
 
             // Update in batches of 1000
             const int batchSize = 1000;
-            using var db = new AppDbContext();
+            using var db = PoolDb();
 
             var poolCards = db.PoolCards.ToList();
             int i = 0;
@@ -509,7 +581,7 @@ namespace BreakersOfE.Services
         {
             // Safe to delete and re-insert all card pool tables — collection
             // data is in a completely separate database and is never affected.
-            using (var db = new AppDbContext())
+            using (var db = PoolDb())
             {
                 await db.Database.ExecuteSqlRawAsync("DELETE FROM PoolCards", ct);
                 await db.Database.ExecuteSqlRawAsync("DELETE FROM TokenCards", ct);
@@ -717,7 +789,7 @@ namespace BreakersOfE.Services
             CancellationToken ct)
         {
             int downloaded = 0;
-            using var db = new AppDbContext();
+            using var db = PoolDb();
 
             var setCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var c in db.PoolCards.Select(x => x.SetCode).Distinct())
@@ -773,7 +845,7 @@ namespace BreakersOfE.Services
         // ════════════════════════════════════════════════════════════════════
         private static void BasicVerify(ImportResult result)
         {
-            using var db = new AppDbContext();
+            using var db = PoolDb();
 
             result.DatabaseTotal =
                 db.PoolCards.Count() +
@@ -810,7 +882,7 @@ namespace BreakersOfE.Services
             int startPct, int endPct,
             CancellationToken ct)
         {
-            using var db = new AppDbContext();
+            using var db = PoolDb();
 
             Report(progress,
                 "Deep verification: checking database integrity...",
@@ -1118,7 +1190,7 @@ namespace BreakersOfE.Services
         private static async Task FlushBatchAsync<T>(
             List<T> batch, CancellationToken ct) where T : class
         {
-            using var db = new AppDbContext();
+            using var db = PoolDb();
             await db.Set<T>().AddRangeAsync(batch, ct);
             await db.SaveChangesAsync(ct);
         }
@@ -1394,6 +1466,7 @@ namespace BreakersOfE.Services
                 using var fs = new FileStream(tempFile, FileMode.Create);
                 await stream.CopyToAsync(fs, ct);
             }
+            catch (OperationCanceledException) { throw; }   // Cancel, not a failure
             catch (Exception ex)
             {
                 throw new Exception($"Failed to download rulings: {ex.Message}");
@@ -1403,61 +1476,74 @@ namespace BreakersOfE.Services
             // enumerator that handles card bulk data.
             progress.Report(new ImportProgress { Percentage = 50, Step = "Importing rulings...", Detail = "" });
             int count = 0;
+            // Work on a temporary copy of rulings.db; swapped in only when finished.
+            var stage = DatabaseStaging.Begin(Data.RulingsDbContext.DefaultPath);
             try
             {
-                using var db = new Data.RulingsDbContext();
-                db.EnsureCreated();
-
-                // Clear existing rulings (full refresh)
-                db.Database.ExecuteSqlRaw("DELETE FROM CardRulings");
-
-                var batch = new List<Data.CardRuling>(1000);
-                await foreach (var item in EnumerateCardsAsync(tempFile, isGzip, ct))
+                using (var db = new Data.RulingsDbContext(stage.WorkingPath))
                 {
-                    ct.ThrowIfCancellationRequested();
+                    db.EnsureCreated();
 
-                    // Scryfall rulings bulk has: object, oracle_id, source, published_at, comment
-                    string oracleId = item.TryGetProperty("oracle_id", out var oid)
-                        ? oid.GetString() ?? "" : "";
-                    string publishedAt = item.TryGetProperty("published_at", out var pa)
-                        ? pa.GetString() ?? "" : "";
-                    string comment = item.TryGetProperty("comment", out var cm)
-                        ? cm.GetString() ?? "" : "";
+                    // Clear existing rulings (full refresh)
+                    db.Database.ExecuteSqlRaw("DELETE FROM CardRulings");
 
-                    if (string.IsNullOrEmpty(oracleId) || string.IsNullOrEmpty(comment))
-                        continue;
-
-                    batch.Add(new Data.CardRuling
+                    var batch = new List<Data.CardRuling>(1000);
+                    await foreach (var item in EnumerateCardsAsync(tempFile, isGzip, ct))
                     {
-                        ScryfallId = oracleId, // store oracle_id — we'll look up by it
-                        PublishedAt = publishedAt,
-                        Comment = comment
-                    });
+                        ct.ThrowIfCancellationRequested();
 
-                    if (batch.Count >= 1000)
+                        // Scryfall rulings bulk has: object, oracle_id, source, published_at, comment
+                        string oracleId = item.TryGetProperty("oracle_id", out var oid)
+                            ? oid.GetString() ?? "" : "";
+                        string publishedAt = item.TryGetProperty("published_at", out var pa)
+                            ? pa.GetString() ?? "" : "";
+                        string comment = item.TryGetProperty("comment", out var cm)
+                            ? cm.GetString() ?? "" : "";
+
+                        if (string.IsNullOrEmpty(oracleId) || string.IsNullOrEmpty(comment))
+                            continue;
+
+                        batch.Add(new Data.CardRuling
+                        {
+                            ScryfallId = oracleId, // store oracle_id — we'll look up by it
+                            PublishedAt = publishedAt,
+                            Comment = comment
+                        });
+
+                        if (batch.Count >= 1000)
+                        {
+                            db.CardRulings.AddRange(batch);
+                            await db.SaveChangesAsync(ct);
+                            db.ChangeTracker.Clear();          // don't keep 78K rulings tracked
+                            count += batch.Count;
+                            batch.Clear();
+                            progress.Report(new ImportProgress
+                            {
+                                Percentage = 50 + Math.Min(45, count / 500),
+                                Step = "Importing rulings...",
+                                Detail = $"{count:N0} rulings imported"
+                            });
+                        }
+                    }
+
+                    if (batch.Count > 0)
                     {
                         db.CardRulings.AddRange(batch);
                         await db.SaveChangesAsync(ct);
                         count += batch.Count;
-                        batch.Clear();
-                        progress.Report(new ImportProgress
-                        {
-                            Percentage = 50 + Math.Min(45, count / 500),
-                            Step = "Importing rulings...",
-                            Detail = $"{count:N0} rulings imported"
-                        });
                     }
                 }
 
-                if (batch.Count > 0)
-                {
-                    db.CardRulings.AddRange(batch);
-                    await db.SaveChangesAsync(ct);
-                    count += batch.Count;
-                }
+                if (count == 0)
+                    throw new InvalidOperationException("No rulings were imported. Your rulings were not changed.");
+
+                ct.ThrowIfCancellationRequested();
+                progress.Report(new ImportProgress { Percentage = 98, Step = "Saving rulings...", Detail = $"{count:N0} rulings imported" });
+                stage.Commit();
             }
             finally
             {
+                stage.Abort();                             // no-op after a Commit
                 try { File.Delete(tempFile); } catch { }
             }
 

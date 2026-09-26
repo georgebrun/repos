@@ -23,6 +23,11 @@ namespace BreakersOfE
             // Make sure My Documents\BoE_V2\ and its subfolders exist
             AppFolderService.EnsureAllFolders();
 
+            // An update interrupted by closing/crashing leaves a temporary
+            // copy behind; drop it — the real databases were never touched.
+            DatabaseStaging.CleanupLeftover(AppFolderService.DatabasePath);
+            DatabaseStaging.CleanupLeftover(BreakersOfE.Data.RulingsDbContext.DefaultPath);
+
             // Ensure the pool database file exists with the current schema.
             // If it's the very first run, this creates an empty breakersofe.db
             // that the user then fills via Database Update.

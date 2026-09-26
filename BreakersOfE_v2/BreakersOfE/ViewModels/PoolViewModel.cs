@@ -171,6 +171,10 @@ namespace BreakersOfE.ViewModels
                     label = "cards";
                 }
 
+                // Pool pages: how many of each printing you own (read-only).
+                if (IsPoolTag(tag))
+                    Services.OwnedCountService.Fill(tag, rows);
+
                 AssignRowIndices(rows);
 
                 System.Windows.Application.Current?.Dispatcher?.BeginInvoke(() =>
@@ -214,21 +218,40 @@ namespace BreakersOfE.ViewModels
             ApplyFilters();   // this table's remembered filters (or none)
         }
 
+        /// <summary>Card Pool pages (not the collection tables).</summary>
+        private static bool IsPoolTag(string tag) =>
+            !(tag == "Collection" || tag.StartsWith("Coll") || tag is "TradeBinder" or "WantList");
+
         /// <summary>Distinct values for a column, cascaded by other active filters.</summary>
         public List<string> DistinctValuesFor(string columnName, string propertyName) =>
             Filters.DistinctValuesFor(columnName, propertyName, _allRows);
 
         /// <summary>Recompute Items from the full table using active filters.</summary>
+        /// <summary>
+        /// Page-level filter on top of the column filters (the set checklist's
+        /// "Missing Only"). Null = off. The page sets it; not remembered per table.
+        /// </summary>
+        public System.Func<object, bool>? ExtraFilter { get; set; }
+
+        /// <summary>
+        /// Extra status text computed from the column-filtered rows, before
+        /// ExtraFilter (the set checklist's "Owned X of Y"). Null = none.
+        /// </summary>
+        public System.Func<IReadOnlyList<object>, string>? StatusNote { get; set; }
+
         public void ApplyFilters()
         {
             var filtered = Filters.Apply(_allRows);
+            string note = StatusNote?.Invoke(filtered) ?? "";
+            if (ExtraFilter != null)
+                filtered = filtered.Where(ExtraFilter).ToList();
             AssignRowIndices(filtered);
             Items = filtered;
 
-            if (Filters.HasActiveFilters)
-                StatusText = $"{filtered.Count:N0} of {_allRows.Count:N0} {_label}  (filtered)";
+            if (Filters.HasActiveFilters || ExtraFilter != null)
+                StatusText = $"{filtered.Count:N0} of {_allRows.Count:N0} {_label}  (filtered)" + note;
             else
-                StatusText = $"{_allRows.Count:N0} {_label}";
+                StatusText = $"{_allRows.Count:N0} {_label}" + note;
         }
 
         private static void AssignRowIndices(List<object> rows)

@@ -40,9 +40,21 @@ namespace BreakersOfE.Views
         private void ToggleSection(NavSection section) =>
             ApplySection(_openSection == section ? NavSection.None : section);
 
+        private bool _viewOpenedOnce;
+
         private void ApplySection(NavSection open)
         {
             _openSection = open;
+
+            // First time View opens: Card Pool expanded (the app starts on
+            // Card Pool \ Cards), everything else collapsed. After that the
+            // tree keeps whatever you expanded.
+            if (open == NavSection.View && !_viewOpenedOnce)
+            {
+                _viewOpenedOnce = true;
+                NavCardPool.IsExpanded = true;
+                NavCollection.IsExpanded = false;
+            }
 
             // View items
             var viewVis = open == NavSection.View ? Visibility.Visible : Visibility.Collapsed;

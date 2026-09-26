@@ -6,8 +6,16 @@ namespace BreakersOfE.Data
 {
     public class RulingsDbContext : DbContext
     {
-        private static readonly string _dbPath = System.IO.Path.Combine(
+        /// <summary>The real rulings database file.</summary>
+        public static readonly string DefaultPath = System.IO.Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory, "rulings.db");
+
+        private readonly string _dbPath;
+
+        public RulingsDbContext() : this(DefaultPath) { }
+
+        /// <summary>Open a specific file (the rulings download works on a temporary copy).</summary>
+        public RulingsDbContext(string path) { _dbPath = path; }
 
         public DbSet<CardRuling> CardRulings { get; set; } = null!;
 

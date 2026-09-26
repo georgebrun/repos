@@ -37,6 +37,19 @@ namespace BreakersOfE.ViewModels
         public string FinishPill { get; }
         public bool HasFinishPill => !string.IsNullOrEmpty(FinishPill);
 
+        /// <summary>Owned marker (top-left): "×3" when you own copies of this printing.</summary>
+        public string OwnedText { get; private set; } = "";
+        public bool HasOwned => !string.IsNullOrEmpty(OwnedText);
+        public string OwnedTip { get; private set; } = "";
+
+        /// <summary>Set checklist: a printing you don't own shows dimmed.</summary>
+        private bool _isDimmed;
+        public bool IsDimmed
+        {
+            get => _isDimmed;
+            set { if (_isDimmed != value) { _isDimmed = value; OnPropertyChanged(); } }
+        }
+
         // Set on every row rebuild (size slider / window width).
         public double TileWidth { get; set; }
         public double TileHeight { get; set; }
@@ -110,6 +123,9 @@ namespace BreakersOfE.ViewModels
         {
             public PropertyInfo? Sid, Url, SmallUrl, Name, Usd, UsdFoil;
             public PropertyInfo? Finish, Price, FinishPill;   // collection rows / pill
+            public PropertyInfo? OwnedTotal;                  // pool / deck cards
+            public PropertyInfo? Quantity;                    // collection rows (this finish)
+            public PropertyInfo? TotalQuantity;               // deck cards (non-foil + foil)
         }
 
         public static GalleryItem FromCard(object card)
@@ -125,6 +141,9 @@ namespace BreakersOfE.ViewModels
                 Finish = t.GetProperty("Finish"),
                 Price = t.GetProperty("Price"),
                 FinishPill = t.GetProperty("FinishPill"),
+                OwnedTotal = t.GetProperty("OwnedTotal"),
+                Quantity = t.GetProperty("Quantity"),
+                TotalQuantity = t.GetProperty("TotalQuantity"),
             });
 
             string sid = a.Sid?.GetValue(card) as string ?? "";
@@ -151,7 +170,25 @@ namespace BreakersOfE.ViewModels
 
             string pill = a.FinishPill?.GetValue(card) as string ?? "";
 
-            return new GalleryItem(card, sid, url, name, price, pill);
+            // Count marker, matching what the tile stands for:
+            //   deck cards  → copies in the deck (non-foil + foil);
+            //   collection, Trade Binder, Want List rows → that row's quantity
+            //     (one row per finish, so a foil row's ×N sits next to its F pill);
+            //   pool cards  → copies of this printing you own.
+            int owned; string tip;
+            if (a.TotalQuantity?.GetValue(card) is int d)
+            {
+                owned = d;
+                int have = a.OwnedTotal?.GetValue(card) is int o ? o : 0;
+                tip = $"Copies in this deck (you own {have})";
+            }
+            else if (a.Quantity?.GetValue(card) is int q) { owned = q; tip = "Quantity"; }
+            else { owned = a.OwnedTotal?.GetValue(card) is int n ? n : 0; tip = "Copies you own"; }
+            return new GalleryItem(card, sid, url, name, price, pill)
+            {
+                OwnedText = owned > 0 ? $"×{owned}" : "",
+                OwnedTip = tip,
+            };
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

@@ -6,6 +6,7 @@
         Title="Breakers of E  —  v2.0"
         Width="1400" Height="900"
         MinWidth="1000" MinHeight="600"
+        WindowState="Maximized"
         WindowStartupLocation="CenterScreen"
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica">
@@ -195,7 +196,7 @@
                      "Collection" stays the main collection's tag (saved layouts/filters). -->
                 <ui:NavigationViewItem x:Name="NavCollection" Content="Collection"
                                        Icon="{ui:SymbolIcon Folder24}"
-                                       IsExpanded="True">
+                                       IsExpanded="False">
 
                     <ui:NavigationViewItem.MenuItems>
 
