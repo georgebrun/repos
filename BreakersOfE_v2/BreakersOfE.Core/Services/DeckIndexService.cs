@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -28,12 +28,24 @@ namespace BreakersOfE.Services
         {
             public DateTime Stamp;
             public string Name = "";
+            /// <summary>The deck as read from its file (shared with the deck browser).</summary>
+            public Deck Deck = new();
             /// <summary>Card key → copies in this deck (all categories).</summary>
             public Dictionary<string, int> Copies = new(StringComparer.OrdinalIgnoreCase);
         }
 
         private static readonly Dictionary<string, Entry> _cache = new(StringComparer.OrdinalIgnoreCase);
         private static readonly object _lock = new();
+
+        /// <summary>
+        /// Every readable deck file under the Decks folder, as (file path, deck).
+        /// One cached read shared by the deck browser and Other Decks.
+        /// </summary>
+        public static List<(string Path, Deck Deck)> AllDecks()
+        {
+            lock (_lock)
+                return Refresh().Select(kv => (kv.Key, kv.Value.Deck)).ToList();
+        }
 
         /// <summary>How many deck files were read (after a refresh).</summary>
         public static int DeckCount
@@ -126,6 +138,7 @@ namespace BreakersOfE.Services
                         var entry = new Entry
                         {
                             Stamp = stamp,
+                            Deck = deck,
                             Name = string.IsNullOrWhiteSpace(deck.Name)
                                 ? Path.GetFileNameWithoutExtension(path) : deck.Name,
                         };

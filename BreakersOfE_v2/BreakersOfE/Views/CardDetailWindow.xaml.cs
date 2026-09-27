@@ -92,10 +92,8 @@ namespace BreakersOfE.Views
             CardArtist.Text = Get("Artist");
             bool isFoil = bool.TryParse(Get("IsFoil"), out var f) && f;
             bool isNonFoil = bool.TryParse(Get("IsNonFoil"), out var nf) && nf;
-            var finishes = new List<string>();
-            if (isNonFoil) finishes.Add("Non-Foil");
-            if (isFoil) finishes.Add("Foil");
-            CardFinishes.Text = finishes.Count > 0 ? string.Join(" · ", finishes) : "—";
+            bool isEtched = bool.TryParse(Get("IsEtched"), out var et) && et;
+            CardFinishes.Text = Models.CardFinish.AvailableText(isNonFoil, isFoil, isEtched);
             CardNumber.Text = Get("CollectorNumber");
 
             // Mana cost symbols
@@ -114,11 +112,14 @@ namespace BreakersOfE.Views
             // Prices
             string usd = Get("PriceUsd");
             string foilPrice = Get("PriceUsdFoil");
+            string etchedPrice = Get("PriceUsdEtched");
             CardPriceMain.Text = !string.IsNullOrEmpty(usd) ? $"${usd}" :
-                                 !string.IsNullOrEmpty(foilPrice) ? $"${foilPrice}" : "—";
+                                 !string.IsNullOrEmpty(foilPrice) ? $"${foilPrice}" :
+                                 !string.IsNullOrEmpty(etchedPrice) ? $"${etchedPrice}" : "—";
             var details = new List<string>();
             if (!string.IsNullOrEmpty(usd)) details.Add($"Non-Foil: ${usd}");
             if (!string.IsNullOrEmpty(foilPrice)) details.Add($"Foil: ${foilPrice}");
+            if (!string.IsNullOrEmpty(etchedPrice)) details.Add($"Etched: ${etchedPrice}");
             CardPriceDetails.Text = string.Join("  ·  ", details);
 
             // Oracle + Flavor
@@ -235,8 +236,7 @@ namespace BreakersOfE.Views
 
             Add("Non-Foil", NonFoilBrush, points.Select(p => p.Usd).ToList());
             Add("Foil", FoilBrush, points.Select(p => p.UsdFoil).ToList());
-            if (!points.Any(p => p.UsdFoil.HasValue))
-                Add("Etched", EtchedBrush, points.Select(p => p.UsdEtched).ToList());
+            Add("Etched", EtchedBrush, points.Select(p => p.UsdEtched).ToList());
 
             PriceChart.SetData(labels, series);
             PriceChart.Visibility = series.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -250,8 +250,11 @@ namespace BreakersOfE.Views
             {
                 Date = p.Date.ToString("yyyy-MM-dd"),
                 NonFoil = p.Usd.HasValue ? $"${p.Usd.Value:F2}" : "—",
-                Foil = p.UsdFoil.HasValue ? $"F ${p.UsdFoil.Value:F2}"
-                     : p.UsdEtched.HasValue ? $"E ${p.UsdEtched.Value:F2}" : "",
+                Foil = string.Join("  ", new[]
+                {
+                    p.UsdFoil.HasValue ? $"F ${p.UsdFoil.Value:F2}" : "",
+                    p.UsdEtched.HasValue ? $"E ${p.UsdEtched.Value:F2}" : "",
+                }.Where(x => x.Length > 0)),
             }).ToList();
 
             PriceHistoryEmpty.Text = points.Count == 1

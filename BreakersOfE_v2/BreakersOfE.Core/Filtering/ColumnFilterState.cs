@@ -88,24 +88,26 @@ namespace BreakersOfE.Filtering
 
             return op switch
             {
-                TextFilterOperator.Contains => v.Contains(t),
-                TextFilterOperator.DoesNotContain => !v.Contains(t),
-                TextFilterOperator.Equals => v == t,
-                TextFilterOperator.DoesNotEqual => v != t,
-                TextFilterOperator.BeginsWith => v.StartsWith(t),
-                TextFilterOperator.EndsWith => v.EndsWith(t),
-                TextFilterOperator.IsBlank => string.IsNullOrWhiteSpace(value),
-                TextFilterOperator.IsNotBlank => !string.IsNullOrWhiteSpace(value),
-                TextFilterOperator.GreaterThan => CompareNumeric(value, text) > 0,
-                TextFilterOperator.GreaterThanOrEqual => CompareNumeric(value, text) >= 0,
-                TextFilterOperator.LessThan => CompareNumeric(value, text) < 0,
-                TextFilterOperator.LessThanOrEqual => CompareNumeric(value, text) <= 0,
+                TextFilterOperator.Contains        => v.Contains(t),
+                TextFilterOperator.DoesNotContain  => !v.Contains(t),
+                TextFilterOperator.Equals          => v == t,
+                TextFilterOperator.DoesNotEqual    => v != t,
+                TextFilterOperator.BeginsWith      => v.StartsWith(t),
+                TextFilterOperator.EndsWith        => v.EndsWith(t),
+                TextFilterOperator.IsBlank         => string.IsNullOrWhiteSpace(value),
+                TextFilterOperator.IsNotBlank      => !string.IsNullOrWhiteSpace(value),
+                TextFilterOperator.GreaterThan          => CompareNumeric(value, text) > 0,
+                TextFilterOperator.GreaterThanOrEqual   => CompareNumeric(value, text) >= 0,
+                TextFilterOperator.LessThan             => CompareNumeric(value, text) < 0,
+                TextFilterOperator.LessThanOrEqual      => CompareNumeric(value, text) <= 0,
                 _ => true
             };
         }
 
-        private static int CompareNumeric(string a, string b)
+        private static int CompareNumeric(string? a, string? b)
         {
+            a ??= string.Empty;
+            b ??= string.Empty;
             if (decimal.TryParse(a.TrimStart('$', ' '), NumberStyles.Any,
                     CultureInfo.InvariantCulture, out var da) &&
                 decimal.TryParse(b.TrimStart('$', ' '), NumberStyles.Any,
@@ -116,18 +118,18 @@ namespace BreakersOfE.Filtering
 
         public static string OperatorLabel(TextFilterOperator op) => op switch
         {
-            TextFilterOperator.Contains => "Contains",
-            TextFilterOperator.DoesNotContain => "Does Not Contain",
-            TextFilterOperator.Equals => "Equals",
-            TextFilterOperator.DoesNotEqual => "Does Not Equal",
-            TextFilterOperator.BeginsWith => "Begins With",
-            TextFilterOperator.EndsWith => "Ends With",
-            TextFilterOperator.IsBlank => "Is Blank",
-            TextFilterOperator.IsNotBlank => "Is Not Blank",
-            TextFilterOperator.GreaterThan => "Greater Than",
-            TextFilterOperator.GreaterThanOrEqual => "Greater Than Or Equal",
-            TextFilterOperator.LessThan => "Less Than",
-            TextFilterOperator.LessThanOrEqual => "Less Than Or Equal",
+            TextFilterOperator.Contains          => "Contains",
+            TextFilterOperator.DoesNotContain    => "Does Not Contain",
+            TextFilterOperator.Equals            => "Equals",
+            TextFilterOperator.DoesNotEqual      => "Does Not Equal",
+            TextFilterOperator.BeginsWith        => "Begins With",
+            TextFilterOperator.EndsWith          => "Ends With",
+            TextFilterOperator.IsBlank           => "Is Blank",
+            TextFilterOperator.IsNotBlank        => "Is Not Blank",
+            TextFilterOperator.GreaterThan       => "Greater Than",
+            TextFilterOperator.GreaterThanOrEqual=> "Greater Than Or Equal",
+            TextFilterOperator.LessThan          => "Less Than",
+            TextFilterOperator.LessThanOrEqual   => "Less Than Or Equal",
             _ => "Contains"
         };
 

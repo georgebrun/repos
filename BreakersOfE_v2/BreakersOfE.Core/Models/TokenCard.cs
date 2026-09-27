@@ -6,7 +6,7 @@ using System.Windows.Media;
 
 namespace BreakersOfE.Models
 {
-    public class TokenCard : IOwnedCard
+    public class TokenCard : IOwnedCard, System.ComponentModel.INotifyPropertyChanged
     {
         [Key]
         public int TokenId { get; set; }
@@ -32,18 +32,31 @@ namespace BreakersOfE.Models
         public string Layout { get; set; } = string.Empty;
         public bool IsFoil { get; set; }
         public bool IsNonFoil { get; set; }
-        /// <summary>Gold "F" for foil-only printings (no non-foil version exists).</summary>
-        [NotMapped] public string FinishPill => IsFoil && !IsNonFoil ? "F" : string.Empty;
+        /// <summary>Exists as an etched foil (Scryfall "finishes" contains "etched").</summary>
+        public bool IsEtched { get; set; }
+        /// <summary>Gold pill when there is no non-foil version: "F" foil, "E" etched-only.</summary>
+        [NotMapped] public string FinishPill => CardFinish.PoolPill(IsNonFoil, IsFoil, IsEtched);
 
         // ── Owned (from the matching collection table; filled when the pool loads) ──
-        [NotMapped] public int OwnedNonFoil { get; set; }
-        [NotMapped] public int OwnedFoil { get; set; }
+        [NotMapped] public int OwnedNonFoil { get => _ownedNonFoil; set { _ownedNonFoil = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedFoil { get => _ownedFoil; set { _ownedFoil = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedEtched { get => _ownedEtched; set { _ownedEtched = value; OwnedChanged(); } }
+        private int _ownedNonFoil, _ownedFoil, _ownedEtched;
+
+        /// <summary>Owned counts change live while editing (Edit → Pool → Collection).</summary>
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+        private void OwnedChanged()
+        {
+            var h = PropertyChanged;
+            if (h == null) return;
+            h(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(OwnedTotal)));
+            h(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(OwnedDisplay)));
+        }
         /// <summary>Copies of this printing you own, any finish (sort / filter value).</summary>
-        [NotMapped] public int OwnedTotal => OwnedNonFoil + OwnedFoil;
+        [NotMapped] public int OwnedTotal => OwnedNonFoil + OwnedFoil + OwnedEtched;
         /// <summary>"3", "3 (1F)" or blank when not owned.</summary>
-        [NotMapped]
-        public string OwnedDisplay =>
-            OwnedTotal == 0 ? string.Empty : OwnedFoil > 0 ? $"{OwnedTotal} ({OwnedFoil}F)" : OwnedTotal.ToString();
+        [NotMapped] public string OwnedDisplay =>
+            CardFinish.OwnedText(OwnedTotal, OwnedFoil, OwnedEtched);
         public string ReleasedAt { get; set; } = string.Empty;
         public string LocalImagePath { get; set; } = string.Empty;
         public bool IsFavorite { get; set; }
@@ -76,17 +89,7 @@ namespace BreakersOfE.Models
         public string FavoriteGlyph => IsFavorite ? "★" : string.Empty;
 
         [NotMapped]
-        public string SetSymbolPath
-        {
-            get
-            {
-                string folder = Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory, "SetSymbols");
-                string path = Path.Combine(
-                    folder, $"{SetCode.ToLower()}.png");
-                return File.Exists(path) ? path : string.Empty;
-            }
-        }
+        public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
 
         [NotMapped]
         public Brush RowForegroundBrush =>

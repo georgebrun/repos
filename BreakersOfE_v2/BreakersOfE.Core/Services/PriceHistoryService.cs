@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -98,16 +98,18 @@ namespace BreakersOfE.Services
         {
             try
             {
-                // Current pool prices.
+                // Current pool prices (+ which printings are etched-only).
                 var pool = new Dictionary<string, (long? u, long? f, long? e)>(StringComparer.OrdinalIgnoreCase);
+                var etchedOnly = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 using (var db = new AppDbContext())
                 {
                     foreach (var c in db.PoolCards
-                                 .Select(c => new { c.ScryfallId, c.PriceUsd, c.PriceUsdFoil, c.PriceUsdEtched })
+                                 .Select(c => new { c.ScryfallId, c.PriceUsd, c.PriceUsdFoil, c.PriceUsdEtched, c.IsFoil, c.IsEtched })
                                  .ToList())
                     {
                         if (string.IsNullOrEmpty(c.ScryfallId)) continue;
                         pool[c.ScryfallId] = (Cents(c.PriceUsd), Cents(c.PriceUsdFoil), Cents(c.PriceUsdEtched));
+                        if (c.IsEtched && !c.IsFoil) etchedOnly.Add(c.ScryfallId);
                     }
                 }
                 if (pool.Count == 0) return 0;
@@ -125,7 +127,9 @@ namespace BreakersOfE.Services
                     {
                         cards += e.Quantity;
                         if (!pool.TryGetValue(e.ScryfallId ?? "", out var p)) continue;
-                        long? price = CardFinish.Normalize(e.Finish) switch
+                        // The one price rule, on the row's real finish.
+                        string finish = CardFinish.Shown(e.Finish, etchedOnly.Contains(e.ScryfallId ?? ""));
+                        long? price = CardFinish.Normalize(finish) switch
                         {
                             CardFinish.Foil => p.f,
                             CardFinish.Etched => p.e,

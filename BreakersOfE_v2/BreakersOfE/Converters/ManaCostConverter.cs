@@ -14,9 +14,7 @@ namespace BreakersOfE.Services
 {
     public class ManaCostConverter : IValueConverter
     {
-        private static readonly string ManaFolder =
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
-                "ManaSymbols");
+        private static string ManaFolder => AppFolderService.ManaSymbolsFolder;
 
         public object? Convert(object value, Type targetType,
             object parameter, CultureInfo culture)

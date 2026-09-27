@@ -49,6 +49,11 @@ namespace BreakersOfE.Data
             // data lost). Checked first, so there are no "duplicate column"
             // exceptions. The next Full Database Update fills it in.
             AddColumnIfMissing("PoolCards", "IsGameChanger", "INTEGER NOT NULL DEFAULT 0");
+
+            // Etched finish (Scryfall "finishes"), on every pool table.
+            foreach (var table in new[] { "PoolCards", "TokenCards", "PlanarCards", "SchemeCards",
+                                          "VanguardCards", "ArtSeriesCards", "ConspiracyCards" })
+                AddColumnIfMissing(table, "IsEtched", "INTEGER NOT NULL DEFAULT 0");
         }
 
         private void AddColumnIfMissing(string table, string column, string definition)

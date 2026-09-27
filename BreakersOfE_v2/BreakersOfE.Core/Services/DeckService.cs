@@ -87,7 +87,8 @@ namespace BreakersOfE.Services
                 using var pdb = new Data.AppDbContext();
                 var map = pdb.PoolCards.AsNoTracking()
                     .Where(p => scryfallIds.Contains(p.ScryfallId))
-                    .Select(p => new { p.ScryfallId, p.PoolId, p.LegalitiesJson, p.IsGameChanger })
+                    .Select(p => new { p.ScryfallId, p.PoolId, p.LegalitiesJson, p.IsGameChanger,
+                                       p.IsFoil, p.IsEtched, p.PriceUsdEtched })
                     .ToList()
                     .GroupBy(p => p.ScryfallId)
                     .ToDictionary(g => g.Key, g => g.First());
@@ -103,6 +104,11 @@ namespace BreakersOfE.Services
                     if (string.IsNullOrWhiteSpace(card.LegalitiesJson))
                         card.LegalitiesJson = pc.LegalitiesJson ?? string.Empty;
                     card.IsGameChanger = pc.IsGameChanger;   // for Commander brackets
+                    // Etched: deck files count only non-foil/foil copies; the
+                    // pool says whether "foil" copies are really etched.
+                    card.IsEtched = pc.IsEtched;
+                    card.PriceUsdEtched = pc.PriceUsdEtched;
+                    if (pc.IsEtched && !pc.IsFoil) card.IsFoil = false;   // etched-only printing
                 }
             }
             catch (Exception ex)
@@ -623,42 +629,6 @@ namespace BreakersOfE.Services
                 LocalImageBackPath = pool.LocalImageBackPath,
                 PriceUsd = pool.PriceUsd,
                 PriceUsdFoil = pool.PriceUsdFoil
-            };
-        }
-
-        /// <summary>
-        /// Creates DeckCard from a CollectionDisplayRow
-        /// </summary>
-        public static DeckCard FromCollectionRow(
-            BreakersOfE.Models.CollectionDisplayRow row)
-        {
-            return new DeckCard
-            {
-                PoolId = row.PoolId,
-                ScryfallId = row.ScryfallId,
-                Name = row.Name,
-                SetCode = row.SetCode,
-                SetName = row.SetName,
-                CollectorNumber = row.CollectorNumber,
-                ColorIdentity = row.ColorIdentity,
-                TypeLine = row.TypeLine,
-                ManaCost = row.ManaCost,
-                ManaValue = row.ManaValue,
-                Power = row.Power,
-                Toughness = row.Toughness,
-                OracleText = row.OracleText,
-                FlavorText = row.FlavorText,
-                LegalitiesJson = row.LegalitiesJson,
-                Rarity = row.Rarity,
-                Artist = row.Artist,
-                IsFoil = row.IsFoil,
-                IsNonFoil = row.IsNonFoil,
-                ImageNormalUrl = row.ImageNormalUrl,
-                LocalImagePath = row.LocalImagePath,
-                ImageBackUrl = row.ImageBackUrl,
-                LocalImageBackPath = row.LocalImageBackPath,
-                PriceUsd = row.PriceUsd,
-                PriceUsdFoil = row.PriceUsdFoil
             };
         }
     }

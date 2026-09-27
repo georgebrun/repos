@@ -356,14 +356,22 @@ namespace BreakersOfE.ViewModels
                 using var poolDb = new AppDbContext();
                 using var colDb = new CollectionDbContext();
 
-                // Build price lookup from pool
+                // Price lookup from the pool: prices + which finishes exist.
                 var priceLookup = poolDb.PoolCards
                     .Where(p => p.ScryfallId != null)
-                    .ToDictionary(
-                        p => p.ScryfallId!,
-                        p => new { p.PriceUsd, p.PriceUsdFoil, p.PriceUsdEtched });
+                    .Select(p => new PoolPrice(p.ScryfallId!, p.PriceUsd, p.PriceUsdFoil, p.PriceUsdEtched, p.IsFoil, p.IsEtched))
+                    .ToList()
+                    .GroupBy(p => p.ScryfallId)
+                    .ToDictionary(g => g.Key, g => g.First());
 
-                // Update collection entries
+                // Each row gets the price of ITS finish (CardFinish.PriceFor, the
+                // one price rule). A v1 foil row of an etched-only printing is
+                // etched (CardFinish.Shown), so it gets the etched price.
+                static decimal? RowPrice(string? finish, PoolPrice p) =>
+                    Models.CardFinish.PriceFor(
+                        Models.CardFinish.Shown(finish, p.IsEtched && !p.IsFoil),
+                        p.PriceUsd, p.PriceUsdFoil, p.PriceUsdEtched);
+
                 foreach (var entry in colDb.CollectionEntries)
                 {
                     if (entry.ScryfallId != null &&
@@ -372,14 +380,10 @@ namespace BreakersOfE.ViewModels
                         entry.PriceUsd = prices.PriceUsd;
                         entry.PriceUsdFoil = prices.PriceUsdFoil;
                         entry.PriceUsdEtched = prices.PriceUsdEtched;
-                        // Per-finish Price is what the grid shows (v1 lesson:
-                        // skipping this left prices stale after an update).
-                        entry.Price = PriceForFinish(entry.Finish,
-                            prices.PriceUsd, prices.PriceUsdFoil, prices.PriceUsdEtched);
+                        entry.Price = RowPrice(entry.Finish, prices);
                     }
                 }
 
-                // Update trade binder entries
                 foreach (var entry in colDb.TradeBinderEntries)
                 {
                     if (entry.ScryfallId != null &&
@@ -387,12 +391,10 @@ namespace BreakersOfE.ViewModels
                     {
                         entry.PriceUsd = prices.PriceUsd;
                         entry.PriceUsdFoil = prices.PriceUsdFoil;
-                        entry.Price = PriceForFinish(entry.Finish,
-                            prices.PriceUsd, prices.PriceUsdFoil, prices.PriceUsdEtched);
+                        entry.Price = RowPrice(entry.Finish, prices);
                     }
                 }
 
-                // Update want list entries
                 foreach (var entry in colDb.WantListEntries)
                 {
                     if (entry.ScryfallId != null &&
@@ -400,8 +402,7 @@ namespace BreakersOfE.ViewModels
                     {
                         entry.PriceUsd = prices.PriceUsd;
                         entry.PriceUsdFoil = prices.PriceUsdFoil;
-                        entry.Price = PriceForFinish(entry.Finish,
-                            prices.PriceUsd, prices.PriceUsdFoil, prices.PriceUsdEtched);
+                        entry.Price = RowPrice(entry.Finish, prices);
                     }
                 }
 
@@ -413,19 +414,9 @@ namespace BreakersOfE.ViewModels
             }
         }
 
-        /// <summary>
-        /// The USD price for one finish: non-foil → usd, foil → usd_foil,
-        /// etched → usd_etched. Falls back to the other finishes when a price
-        /// is missing, so a row never shows blank when Scryfall has any price.
-        /// </summary>
-        private static decimal? PriceForFinish(string? finish,
-            decimal? usd, decimal? foil, decimal? etched) =>
-            Models.CardFinish.Normalize(finish) switch
-            {
-                Models.CardFinish.Foil => foil ?? usd,
-                Models.CardFinish.Etched => etched ?? foil ?? usd,
-                _ => usd ?? foil,
-            };
+        /// <summary>A pool printing's prices and which finishes it exists in.</summary>
+        private sealed record PoolPrice(string ScryfallId, decimal? PriceUsd, decimal? PriceUsdFoil,
+                                        decimal? PriceUsdEtched, bool IsFoil, bool IsEtched);
 
         /// <summary>
         /// Rebuilds the keyword dictionary in the background.

@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace BreakersOfE.Models
 {
     // ── Pool Collection ─────────────────────────────────────────────────────
-    public class CollectionEntry : ILegalityRow
+    public class CollectionEntry : ILegalityRow, IFinishRow
     {
         [Key]
         public int CollectionEntryId { get; set; }
@@ -95,13 +95,11 @@ namespace BreakersOfE.Models
         [NotMapped] public bool IsFoil => IsFoilAvailable;       // finishes the printing exists in
         [NotMapped] public bool IsNonFoil => IsNonFoilAvailable;
 
-        [NotMapped]
-        public string PowerToughness =>
+        [NotMapped] public string PowerToughness =>
             !string.IsNullOrWhiteSpace(Power) && !string.IsNullOrWhiteSpace(Toughness)
                 ? $"{Power}/{Toughness}" : string.Empty;
 
-        [NotMapped]
-        public double CollectorNumberSort
+        [NotMapped] public double CollectorNumberSort
         {
             get
             {
@@ -112,67 +110,58 @@ namespace BreakersOfE.Models
             }
         }
 
-        [NotMapped]
-        public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C",
-            "uncommon" => "U",
-            "rare" => "R",
-            "mythic" => "M",
-            "special" => "S",
-            "bonus" => "B",
-            _ => "?"
+            "common" => "C", "uncommon" => "U", "rare" => "R",
+            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
         };
 
-        [NotMapped]
-        public string PriceUsdDisplay =>
+        [NotMapped] public string PriceUsdDisplay =>
             PriceUsd.HasValue ? $"${PriceUsd.Value:F2}" : "—";
-        [NotMapped]
-        public string PriceUsdFoilDisplay =>
+        [NotMapped] public string PriceUsdFoilDisplay =>
             PriceUsdFoil.HasValue ? $"${PriceUsdFoil.Value:F2}" : "—";
 
         // ── Per-finish collection columns (each row is ONE finish) ─────────
         /// <summary>Finish pill: "F" foil, "E" etched, blank for non-foil.</summary>
-        [NotMapped] public string FinishPill => CardFinish.Pill(Finish);
+        /// <summary>Filled from the pool on load: the printing exists as etched /
+        /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
+        [NotMapped] public bool IsEtched { get; set; }
+        [NotMapped] public bool PrintingEtchedOnly { get; set; }
+        /// <summary>The finish this row really is (a v1 foil row of an etched-only printing is etched).</summary>
+        [NotMapped] public string ShownFinish => CardFinish.Shown(Finish, PrintingEtchedOnly);
+        [NotMapped] public string FinishPill => CardFinish.Pill(ShownFinish);
 
         /// <summary>Owned minus used, for THIS finish. UsedCount is kept
         /// derived and per-finish (capped at Quantity) by the deck-usage code.</summary>
         [NotMapped] public int AvailableCount => Math.Max(0, Quantity - UsedCount);
 
         /// <summary>This finish's price (not the non-foil USD column).</summary>
-        [NotMapped]
-        public string PriceDisplay =>
+        [NotMapped] public string PriceDisplay =>
             Price.HasValue ? $"${Price.Value:F2}" : "—";
 
         /// <summary>This finish's price × this row's quantity.</summary>
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
-        [NotMapped]
-        public string RowValueDisplay =>
+        [NotMapped] public string RowValueDisplay =>
             Price.HasValue ? $"${RowValue:F2}" : "—";
 
         // ── Legality columns: {Binding Legality[commander].Text} etc. ────────
         private LegalityAccessor? _legality;
-        [NotMapped]
-        public LegalityAccessor Legality =>
+        [NotMapped] public LegalityAccessor Legality =>
             _legality ??= new LegalityAccessor(() => LegalitiesJson);
 
         // ── Remaining v1 collection columns ─────────────────────────────────
-        [NotMapped]
-        public string BuyAtDisplay =>
+        [NotMapped] public string BuyAtDisplay =>
             BuyAt.HasValue ? $"${BuyAt.Value:F2}" : string.Empty;
-        [NotMapped]
-        public string SellAtDisplay =>
+        [NotMapped] public string SellAtDisplay =>
             SellAt.HasValue ? $"${SellAt.Value:F2}" : string.Empty;
-        [NotMapped]
-        public string SellAtValueDisplay =>
+        [NotMapped] public string SellAtValueDisplay =>
             SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
 
         /// <summary>Date added as yyyy-MM-dd so it sorts and filters in date order.</summary>
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
 
         /// <summary>W/U/B/R/G for one color, M for multicolor, N for colorless (as v1).</summary>
-        [NotMapped]
-        public string ColorDisplay
+        [NotMapped] public string ColorDisplay
         {
             get
             {
@@ -184,31 +173,19 @@ namespace BreakersOfE.Models
             }
         }
 
-        [NotMapped]
-        public string SetSymbolPath
-        {
-            get
-            {
-                string path = System.IO.Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory, "SetSymbols",
-                    $"{SetCode.ToLower()}.png");
-                return System.IO.File.Exists(path) ? path : string.Empty;
-            }
-        }
+        [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
 
         // Collection tint (blue family), foil rows marked like the pool.
-        [NotMapped]
-        public System.Windows.Media.Brush RowForegroundBrush =>
+        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground(
-                ColorIdentity, TypeLine, Finish == CardFinish.Foil);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
+                ColorIdentity, TypeLine, Finish != CardFinish.NonFoil);
+        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
-                Finish == CardFinish.Foil, RowIndex, BreakersOfE.Services.TableType.Collection);
+                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
 
     // ── Token Collection ────────────────────────────────────────────────────
-    public class TokenCollectionEntry
+    public class TokenCollectionEntry : IFinishRow
     {
         [Key]
         public int TokenCollectionEntryId { get; set; }
@@ -267,28 +244,27 @@ namespace BreakersOfE.Models
         public string PrintType { get; set; } = "Unknown";
         public string BuyStatus { get; set; } = "Unassigned";
         public string SellStatus { get; set; } = "Unassigned";
-
+    
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
         [NotMapped] public int RowIndex { get; set; }
-        [NotMapped] public string FinishPill => CardFinish.Pill(Finish);
+        /// <summary>Filled from the pool on load: the printing exists as etched /
+        /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
+        [NotMapped] public bool IsEtched { get; set; }
+        [NotMapped] public bool PrintingEtchedOnly { get; set; }
+        /// <summary>The finish this row really is (a v1 foil row of an etched-only printing is etched).</summary>
+        [NotMapped] public string ShownFinish => CardFinish.Shown(Finish, PrintingEtchedOnly);
+        [NotMapped] public string FinishPill => CardFinish.Pill(ShownFinish);
         [NotMapped] public string PriceDisplay => Price.HasValue ? $"${Price.Value:F2}" : "—";
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
-        [NotMapped]
-        public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C",
-            "uncommon" => "U",
-            "rare" => "R",
-            "mythic" => "M",
-            "special" => "S",
-            "bonus" => "B",
-            _ => "?"
+            "common" => "C", "uncommon" => "U", "rare" => "R",
+            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
         };
-        [NotMapped]
-        public double CollectorNumberSort
+        [NotMapped] public double CollectorNumberSort
         {
             get
             {
@@ -298,27 +274,15 @@ namespace BreakersOfE.Models
                 return end > 0 && double.TryParse(CollectorNumber[..end], out var v2) ? v2 : 9999;
             }
         }
-        [NotMapped]
-        public string SetSymbolPath
-        {
-            get
-            {
-                string path = System.IO.Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory, "SetSymbols",
-                    $"{SetCode.ToLower()}.png");
-                return System.IO.File.Exists(path) ? path : string.Empty;
-            }
-        }
+        [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
         [NotMapped] public int AvailableCount => Math.Max(0, Quantity - UsedCount);
-        [NotMapped]
-        public string PowerToughness =>
+        [NotMapped] public string PowerToughness =>
             !string.IsNullOrWhiteSpace(Power) && !string.IsNullOrWhiteSpace(Toughness)
                 ? $"{Power}/{Toughness}" : string.Empty;
         [NotMapped] public string BuyAtDisplay => BuyAt.HasValue ? $"${BuyAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtDisplay => SellAt.HasValue ? $"${SellAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtValueDisplay => SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
-        [NotMapped]
-        public string ColorDisplay
+        [NotMapped] public string ColorDisplay
         {
             get
             {
@@ -328,17 +292,15 @@ namespace BreakersOfE.Models
                 return distinct[0].ToString();
             }
         }
-        [NotMapped]
-        public System.Windows.Media.Brush RowForegroundBrush =>
-            BreakersOfE.Services.CardColorService.GetForeground(ColorIdentity, TypeLine, Finish == CardFinish.Foil);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+            BreakersOfE.Services.CardColorService.GetForeground(ColorIdentity, TypeLine, Finish != CardFinish.NonFoil);
+        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
-                Finish == CardFinish.Foil, RowIndex, BreakersOfE.Services.TableType.Collection);
+                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
 
     // ── Planar Collection ───────────────────────────────────────────────────
-    public class PlanarCollectionEntry
+    public class PlanarCollectionEntry : IFinishRow
     {
         [Key]
         public int PlanarCollectionEntryId { get; set; }
@@ -393,28 +355,27 @@ namespace BreakersOfE.Models
         public string PrintType { get; set; } = "Unknown";
         public string BuyStatus { get; set; } = "Unassigned";
         public string SellStatus { get; set; } = "Unassigned";
-
+    
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
         [NotMapped] public int RowIndex { get; set; }
-        [NotMapped] public string FinishPill => CardFinish.Pill(Finish);
+        /// <summary>Filled from the pool on load: the printing exists as etched /
+        /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
+        [NotMapped] public bool IsEtched { get; set; }
+        [NotMapped] public bool PrintingEtchedOnly { get; set; }
+        /// <summary>The finish this row really is (a v1 foil row of an etched-only printing is etched).</summary>
+        [NotMapped] public string ShownFinish => CardFinish.Shown(Finish, PrintingEtchedOnly);
+        [NotMapped] public string FinishPill => CardFinish.Pill(ShownFinish);
         [NotMapped] public string PriceDisplay => Price.HasValue ? $"${Price.Value:F2}" : "—";
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
-        [NotMapped]
-        public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C",
-            "uncommon" => "U",
-            "rare" => "R",
-            "mythic" => "M",
-            "special" => "S",
-            "bonus" => "B",
-            _ => "?"
+            "common" => "C", "uncommon" => "U", "rare" => "R",
+            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
         };
-        [NotMapped]
-        public double CollectorNumberSort
+        [NotMapped] public double CollectorNumberSort
         {
             get
             {
@@ -424,32 +385,20 @@ namespace BreakersOfE.Models
                 return end > 0 && double.TryParse(CollectorNumber[..end], out var v2) ? v2 : 9999;
             }
         }
-        [NotMapped]
-        public string SetSymbolPath
-        {
-            get
-            {
-                string path = System.IO.Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory, "SetSymbols",
-                    $"{SetCode.ToLower()}.png");
-                return System.IO.File.Exists(path) ? path : string.Empty;
-            }
-        }
+        [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
         [NotMapped] public int AvailableCount => Math.Max(0, Quantity - UsedCount);
         [NotMapped] public string BuyAtDisplay => BuyAt.HasValue ? $"${BuyAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtDisplay => SellAt.HasValue ? $"${SellAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtValueDisplay => SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
-        [NotMapped]
-        public System.Windows.Media.Brush RowForegroundBrush =>
-            BreakersOfE.Services.CardColorService.GetForeground("", TypeLine, Finish == CardFinish.Foil);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+            BreakersOfE.Services.CardColorService.GetForeground("", TypeLine, Finish != CardFinish.NonFoil);
+        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
-                Finish == CardFinish.Foil, RowIndex, BreakersOfE.Services.TableType.Collection);
+                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
 
     // ── Scheme Collection ───────────────────────────────────────────────────
-    public class SchemeCollectionEntry
+    public class SchemeCollectionEntry : IFinishRow
     {
         [Key]
         public int SchemeCollectionEntryId { get; set; }
@@ -504,28 +453,27 @@ namespace BreakersOfE.Models
         public string PrintType { get; set; } = "Unknown";
         public string BuyStatus { get; set; } = "Unassigned";
         public string SellStatus { get; set; } = "Unassigned";
-
+    
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
         [NotMapped] public int RowIndex { get; set; }
-        [NotMapped] public string FinishPill => CardFinish.Pill(Finish);
+        /// <summary>Filled from the pool on load: the printing exists as etched /
+        /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
+        [NotMapped] public bool IsEtched { get; set; }
+        [NotMapped] public bool PrintingEtchedOnly { get; set; }
+        /// <summary>The finish this row really is (a v1 foil row of an etched-only printing is etched).</summary>
+        [NotMapped] public string ShownFinish => CardFinish.Shown(Finish, PrintingEtchedOnly);
+        [NotMapped] public string FinishPill => CardFinish.Pill(ShownFinish);
         [NotMapped] public string PriceDisplay => Price.HasValue ? $"${Price.Value:F2}" : "—";
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
-        [NotMapped]
-        public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C",
-            "uncommon" => "U",
-            "rare" => "R",
-            "mythic" => "M",
-            "special" => "S",
-            "bonus" => "B",
-            _ => "?"
+            "common" => "C", "uncommon" => "U", "rare" => "R",
+            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
         };
-        [NotMapped]
-        public double CollectorNumberSort
+        [NotMapped] public double CollectorNumberSort
         {
             get
             {
@@ -535,32 +483,20 @@ namespace BreakersOfE.Models
                 return end > 0 && double.TryParse(CollectorNumber[..end], out var v2) ? v2 : 9999;
             }
         }
-        [NotMapped]
-        public string SetSymbolPath
-        {
-            get
-            {
-                string path = System.IO.Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory, "SetSymbols",
-                    $"{SetCode.ToLower()}.png");
-                return System.IO.File.Exists(path) ? path : string.Empty;
-            }
-        }
+        [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
         [NotMapped] public int AvailableCount => Math.Max(0, Quantity - UsedCount);
         [NotMapped] public string BuyAtDisplay => BuyAt.HasValue ? $"${BuyAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtDisplay => SellAt.HasValue ? $"${SellAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtValueDisplay => SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
-        [NotMapped]
-        public System.Windows.Media.Brush RowForegroundBrush =>
-            BreakersOfE.Services.CardColorService.GetForeground("", TypeLine, Finish == CardFinish.Foil);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+            BreakersOfE.Services.CardColorService.GetForeground("", TypeLine, Finish != CardFinish.NonFoil);
+        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
-                Finish == CardFinish.Foil, RowIndex, BreakersOfE.Services.TableType.Collection);
+                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
 
     // ── Vanguard Collection ─────────────────────────────────────────────────
-    public class VanguardCollectionEntry
+    public class VanguardCollectionEntry : IFinishRow
     {
         [Key]
         public int VanguardCollectionEntryId { get; set; }
@@ -617,28 +553,27 @@ namespace BreakersOfE.Models
         public string PrintType { get; set; } = "Unknown";
         public string BuyStatus { get; set; } = "Unassigned";
         public string SellStatus { get; set; } = "Unassigned";
-
+    
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
         [NotMapped] public int RowIndex { get; set; }
-        [NotMapped] public string FinishPill => CardFinish.Pill(Finish);
+        /// <summary>Filled from the pool on load: the printing exists as etched /
+        /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
+        [NotMapped] public bool IsEtched { get; set; }
+        [NotMapped] public bool PrintingEtchedOnly { get; set; }
+        /// <summary>The finish this row really is (a v1 foil row of an etched-only printing is etched).</summary>
+        [NotMapped] public string ShownFinish => CardFinish.Shown(Finish, PrintingEtchedOnly);
+        [NotMapped] public string FinishPill => CardFinish.Pill(ShownFinish);
         [NotMapped] public string PriceDisplay => Price.HasValue ? $"${Price.Value:F2}" : "—";
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
-        [NotMapped]
-        public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C",
-            "uncommon" => "U",
-            "rare" => "R",
-            "mythic" => "M",
-            "special" => "S",
-            "bonus" => "B",
-            _ => "?"
+            "common" => "C", "uncommon" => "U", "rare" => "R",
+            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
         };
-        [NotMapped]
-        public double CollectorNumberSort
+        [NotMapped] public double CollectorNumberSort
         {
             get
             {
@@ -648,32 +583,20 @@ namespace BreakersOfE.Models
                 return end > 0 && double.TryParse(CollectorNumber[..end], out var v2) ? v2 : 9999;
             }
         }
-        [NotMapped]
-        public string SetSymbolPath
-        {
-            get
-            {
-                string path = System.IO.Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory, "SetSymbols",
-                    $"{SetCode.ToLower()}.png");
-                return System.IO.File.Exists(path) ? path : string.Empty;
-            }
-        }
+        [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
         [NotMapped] public int AvailableCount => Math.Max(0, Quantity - UsedCount);
         [NotMapped] public string BuyAtDisplay => BuyAt.HasValue ? $"${BuyAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtDisplay => SellAt.HasValue ? $"${SellAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtValueDisplay => SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
-        [NotMapped]
-        public System.Windows.Media.Brush RowForegroundBrush =>
-            BreakersOfE.Services.CardColorService.GetForeground("", TypeLine, Finish == CardFinish.Foil);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+            BreakersOfE.Services.CardColorService.GetForeground("", TypeLine, Finish != CardFinish.NonFoil);
+        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
-                Finish == CardFinish.Foil, RowIndex, BreakersOfE.Services.TableType.Collection);
+                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
 
     // ── Conspiracy Collection ───────────────────────────────────────────────
-    public class ConspiracyCollectionEntry
+    public class ConspiracyCollectionEntry : IFinishRow
     {
         [Key]
         public int ConspiracyCollectionEntryId { get; set; }
@@ -717,28 +640,27 @@ namespace BreakersOfE.Models
         public string StorageLocation { get; set; } = string.Empty;
         public DateTime DateAdded { get; set; } = DateTime.Now;
         public DateTime DateModified { get; set; } = DateTime.Now;
-
+    
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
         [NotMapped] public int RowIndex { get; set; }
-        [NotMapped] public string FinishPill => CardFinish.Pill(Finish);
+        /// <summary>Filled from the pool on load: the printing exists as etched /
+        /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
+        [NotMapped] public bool IsEtched { get; set; }
+        [NotMapped] public bool PrintingEtchedOnly { get; set; }
+        /// <summary>The finish this row really is (a v1 foil row of an etched-only printing is etched).</summary>
+        [NotMapped] public string ShownFinish => CardFinish.Shown(Finish, PrintingEtchedOnly);
+        [NotMapped] public string FinishPill => CardFinish.Pill(ShownFinish);
         [NotMapped] public string PriceDisplay => Price.HasValue ? $"${Price.Value:F2}" : "—";
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
-        [NotMapped]
-        public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C",
-            "uncommon" => "U",
-            "rare" => "R",
-            "mythic" => "M",
-            "special" => "S",
-            "bonus" => "B",
-            _ => "?"
+            "common" => "C", "uncommon" => "U", "rare" => "R",
+            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
         };
-        [NotMapped]
-        public double CollectorNumberSort
+        [NotMapped] public double CollectorNumberSort
         {
             get
             {
@@ -748,19 +670,8 @@ namespace BreakersOfE.Models
                 return end > 0 && double.TryParse(CollectorNumber[..end], out var v2) ? v2 : 9999;
             }
         }
-        [NotMapped]
-        public string SetSymbolPath
-        {
-            get
-            {
-                string path = System.IO.Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory, "SetSymbols",
-                    $"{SetCode.ToLower()}.png");
-                return System.IO.File.Exists(path) ? path : string.Empty;
-            }
-        }
-        [NotMapped]
-        public string ColorDisplay
+        [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
+        [NotMapped] public string ColorDisplay
         {
             get
             {
@@ -770,17 +681,15 @@ namespace BreakersOfE.Models
                 return distinct[0].ToString();
             }
         }
-        [NotMapped]
-        public System.Windows.Media.Brush RowForegroundBrush =>
-            BreakersOfE.Services.CardColorService.GetForeground(ColorIdentity, TypeLine, Finish == CardFinish.Foil);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+            BreakersOfE.Services.CardColorService.GetForeground(ColorIdentity, TypeLine, Finish != CardFinish.NonFoil);
+        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
-                Finish == CardFinish.Foil, RowIndex, BreakersOfE.Services.TableType.Collection);
+                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
 
     // ── Art Series Collection ───────────────────────────────────────────────
-    public class ArtSeriesCollectionEntry
+    public class ArtSeriesCollectionEntry : IFinishRow
     {
         [Key]
         public int ArtSeriesCollectionEntryId { get; set; }
@@ -834,28 +743,27 @@ namespace BreakersOfE.Models
         public string PrintType { get; set; } = "Unknown";
         public string BuyStatus { get; set; } = "Unassigned";
         public string SellStatus { get; set; } = "Unassigned";
-
+    
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
         [NotMapped] public int RowIndex { get; set; }
-        [NotMapped] public string FinishPill => CardFinish.Pill(Finish);
+        /// <summary>Filled from the pool on load: the printing exists as etched /
+        /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
+        [NotMapped] public bool IsEtched { get; set; }
+        [NotMapped] public bool PrintingEtchedOnly { get; set; }
+        /// <summary>The finish this row really is (a v1 foil row of an etched-only printing is etched).</summary>
+        [NotMapped] public string ShownFinish => CardFinish.Shown(Finish, PrintingEtchedOnly);
+        [NotMapped] public string FinishPill => CardFinish.Pill(ShownFinish);
         [NotMapped] public string PriceDisplay => Price.HasValue ? $"${Price.Value:F2}" : "—";
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
-        [NotMapped]
-        public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C",
-            "uncommon" => "U",
-            "rare" => "R",
-            "mythic" => "M",
-            "special" => "S",
-            "bonus" => "B",
-            _ => "?"
+            "common" => "C", "uncommon" => "U", "rare" => "R",
+            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
         };
-        [NotMapped]
-        public double CollectorNumberSort
+        [NotMapped] public double CollectorNumberSort
         {
             get
             {
@@ -865,32 +773,20 @@ namespace BreakersOfE.Models
                 return end > 0 && double.TryParse(CollectorNumber[..end], out var v2) ? v2 : 9999;
             }
         }
-        [NotMapped]
-        public string SetSymbolPath
-        {
-            get
-            {
-                string path = System.IO.Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory, "SetSymbols",
-                    $"{SetCode.ToLower()}.png");
-                return System.IO.File.Exists(path) ? path : string.Empty;
-            }
-        }
+        [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
         [NotMapped] public int AvailableCount => Math.Max(0, Quantity - UsedCount);
         [NotMapped] public string BuyAtDisplay => BuyAt.HasValue ? $"${BuyAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtDisplay => SellAt.HasValue ? $"${SellAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtValueDisplay => SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
-        [NotMapped]
-        public System.Windows.Media.Brush RowForegroundBrush =>
-            BreakersOfE.Services.CardColorService.GetForeground("", TypeLine, Finish == CardFinish.Foil);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+            BreakersOfE.Services.CardColorService.GetForeground("", TypeLine, Finish != CardFinish.NonFoil);
+        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
-                Finish == CardFinish.Foil, RowIndex, BreakersOfE.Services.TableType.Collection);
+                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
 
     // ── Trade Binder — Have list (cards you own and want to trade away) ────
-    public class TradeBinderEntry
+    public class TradeBinderEntry : IFinishRow
     {
         [Key]
         public int TradeBinderEntryId { get; set; }
@@ -933,28 +829,27 @@ namespace BreakersOfE.Models
         public decimal? AskingPrice { get; set; }
         public string Notes { get; set; } = string.Empty;
         public DateTime DateAdded { get; set; } = DateTime.Now;
-
+    
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
         [NotMapped] public int RowIndex { get; set; }
-        [NotMapped] public string FinishPill => CardFinish.Pill(Finish);
+        /// <summary>Filled from the pool on load: the printing exists as etched /
+        /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
+        [NotMapped] public bool IsEtched { get; set; }
+        [NotMapped] public bool PrintingEtchedOnly { get; set; }
+        /// <summary>The finish this row really is (a v1 foil row of an etched-only printing is etched).</summary>
+        [NotMapped] public string ShownFinish => CardFinish.Shown(Finish, PrintingEtchedOnly);
+        [NotMapped] public string FinishPill => CardFinish.Pill(ShownFinish);
         [NotMapped] public string PriceDisplay => Price.HasValue ? $"${Price.Value:F2}" : "—";
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
-        [NotMapped]
-        public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C",
-            "uncommon" => "U",
-            "rare" => "R",
-            "mythic" => "M",
-            "special" => "S",
-            "bonus" => "B",
-            _ => "?"
+            "common" => "C", "uncommon" => "U", "rare" => "R",
+            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
         };
-        [NotMapped]
-        public double CollectorNumberSort
+        [NotMapped] public double CollectorNumberSort
         {
             get
             {
@@ -964,24 +859,12 @@ namespace BreakersOfE.Models
                 return end > 0 && double.TryParse(CollectorNumber[..end], out var v2) ? v2 : 9999;
             }
         }
-        [NotMapped]
-        public string SetSymbolPath
-        {
-            get
-            {
-                string path = System.IO.Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory, "SetSymbols",
-                    $"{SetCode.ToLower()}.png");
-                return System.IO.File.Exists(path) ? path : string.Empty;
-            }
-        }
-        [NotMapped]
-        public string PowerToughness =>
+        [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
+        [NotMapped] public string PowerToughness =>
             !string.IsNullOrWhiteSpace(Power) && !string.IsNullOrWhiteSpace(Toughness)
                 ? $"{Power}/{Toughness}" : string.Empty;
         [NotMapped] public string AskingPriceDisplay => AskingPrice.HasValue ? $"${AskingPrice.Value:F2}" : string.Empty;
-        [NotMapped]
-        public string ColorDisplay
+        [NotMapped] public string ColorDisplay
         {
             get
             {
@@ -991,17 +874,15 @@ namespace BreakersOfE.Models
                 return distinct[0].ToString();
             }
         }
-        [NotMapped]
-        public System.Windows.Media.Brush RowForegroundBrush =>
-            BreakersOfE.Services.CardColorService.GetForeground(ColorIdentity, TypeLine, Finish == CardFinish.Foil);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+            BreakersOfE.Services.CardColorService.GetForeground(ColorIdentity, TypeLine, Finish != CardFinish.NonFoil);
+        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
-                Finish == CardFinish.Foil, RowIndex, BreakersOfE.Services.TableType.TradeBinder);
+                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.TradeBinder);
     }
 
     // ── Want List — Want list (cards you are looking to acquire) ──────────────
-    public class WantListEntry
+    public class WantListEntry : IFinishRow
     {
         [Key]
         public int WantListEntryId { get; set; }
@@ -1042,28 +923,27 @@ namespace BreakersOfE.Models
         public decimal? OfferPrice { get; set; }
         public string Notes { get; set; } = string.Empty;
         public DateTime DateAdded { get; set; } = DateTime.Now;
-
+    
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
         [NotMapped] public int RowIndex { get; set; }
-        [NotMapped] public string FinishPill => CardFinish.Pill(Finish);
+        /// <summary>Filled from the pool on load: the printing exists as etched /
+        /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
+        [NotMapped] public bool IsEtched { get; set; }
+        [NotMapped] public bool PrintingEtchedOnly { get; set; }
+        /// <summary>The finish this row really is (a v1 foil row of an etched-only printing is etched).</summary>
+        [NotMapped] public string ShownFinish => CardFinish.Shown(Finish, PrintingEtchedOnly);
+        [NotMapped] public string FinishPill => CardFinish.Pill(ShownFinish);
         [NotMapped] public string PriceDisplay => Price.HasValue ? $"${Price.Value:F2}" : "—";
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
-        [NotMapped]
-        public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C",
-            "uncommon" => "U",
-            "rare" => "R",
-            "mythic" => "M",
-            "special" => "S",
-            "bonus" => "B",
-            _ => "?"
+            "common" => "C", "uncommon" => "U", "rare" => "R",
+            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
         };
-        [NotMapped]
-        public double CollectorNumberSort
+        [NotMapped] public double CollectorNumberSort
         {
             get
             {
@@ -1073,24 +953,12 @@ namespace BreakersOfE.Models
                 return end > 0 && double.TryParse(CollectorNumber[..end], out var v2) ? v2 : 9999;
             }
         }
-        [NotMapped]
-        public string SetSymbolPath
-        {
-            get
-            {
-                string path = System.IO.Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory, "SetSymbols",
-                    $"{SetCode.ToLower()}.png");
-                return System.IO.File.Exists(path) ? path : string.Empty;
-            }
-        }
-        [NotMapped]
-        public string PowerToughness =>
+        [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
+        [NotMapped] public string PowerToughness =>
             !string.IsNullOrWhiteSpace(Power) && !string.IsNullOrWhiteSpace(Toughness)
                 ? $"{Power}/{Toughness}" : string.Empty;
         [NotMapped] public string OfferPriceDisplay => OfferPrice.HasValue ? $"${OfferPrice.Value:F2}" : string.Empty;
-        [NotMapped]
-        public string ColorDisplay
+        [NotMapped] public string ColorDisplay
         {
             get
             {
@@ -1100,13 +968,19 @@ namespace BreakersOfE.Models
                 return distinct[0].ToString();
             }
         }
-        [NotMapped]
-        public System.Windows.Media.Brush RowForegroundBrush =>
-            BreakersOfE.Services.CardColorService.GetForeground(ColorIdentity, TypeLine, Finish == CardFinish.Foil);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+            BreakersOfE.Services.CardColorService.GetForeground(ColorIdentity, TypeLine, Finish != CardFinish.NonFoil);
+        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
-                Finish == CardFinish.Foil, RowIndex, BreakersOfE.Services.TableType.WantList);
+                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.WantList);
+    }
+
+    /// <summary>A collection-type row whose finish display depends on the pool printing.</summary>
+    public interface IFinishRow
+    {
+        string ScryfallId { get; }
+        bool IsEtched { set; }
+        bool PrintingEtchedOnly { set; }
     }
 
     // ── Finish constants ───────────────────────────────────────────────────
@@ -1137,6 +1011,59 @@ namespace BreakersOfE.Models
             Etched => "Etched",
             _ => "Non-Foil"
         };
+
+        /// <summary>
+        /// THE price rule (one place for the whole app): the USD price of
+        /// exactly this finish — non-foil → usd, foil → usd_foil, etched →
+        /// usd_etched. No borrowing another finish's price: a foil and an
+        /// etched copy of the same printing are different products.
+        /// </summary>
+        public static decimal? PriceFor(string? finish, decimal? usd, decimal? foil, decimal? etched) =>
+            Normalize(finish) switch
+            {
+                Foil => foil,
+                Etched => etched,
+                _ => usd,
+            };
+
+        /// <summary>
+        /// The finish a stored row really is. v1 stored copies of etched-only
+        /// printings (no foil version exists, e.g. MUL #66–130) as FOIL rows;
+        /// such a row is shown and priced as etched. Nothing in the file changes;
+        /// the v1→v2 conversion rewrites these rows later.
+        /// </summary>
+        public static string Shown(string? storedFinish, bool printingEtchedOnly)
+        {
+            string f = Normalize(storedFinish);
+            return f == Foil && printingEtchedOnly ? Etched : f;
+        }
+
+        /// <summary>Owned column text: "3", "3 (1F)", "3 (1F, 1E)", blank when none.</summary>
+        public static string OwnedText(int total, int foil, int etched)
+        {
+            if (total == 0) return string.Empty;
+            var parts = new List<string>(2);
+            if (foil > 0) parts.Add($"{foil}F");
+            if (etched > 0) parts.Add($"{etched}E");
+            return parts.Count == 0 ? total.ToString() : $"{total} ({string.Join(", ", parts)})";
+        }
+
+        /// <summary>"Non-Foil · Foil · Etched" — the finishes a printing exists in.</summary>
+        public static string AvailableText(bool nonFoil, bool foil, bool etched)
+        {
+            var parts = new List<string>(3);
+            if (nonFoil) parts.Add("Non-Foil");
+            if (foil) parts.Add("Foil");
+            if (etched) parts.Add("Etched");
+            return parts.Count > 0 ? string.Join(" · ", parts) : "Unknown";
+        }
+
+        /// <summary>
+        /// Pool pill: shown only when there is NO non-foil version —
+        /// "F" foil-only (or foil + etched), "E" etched-only.
+        /// </summary>
+        public static string PoolPill(bool nonFoil, bool foil, bool etched) =>
+            nonFoil ? string.Empty : foil ? "F" : etched ? "E" : string.Empty;
 
         /// <summary>Normalizes any legacy/loose value to a canonical finish.</summary>
         public static string Normalize(string? finish)

@@ -52,6 +52,11 @@
                                         <Style TargetType="Border">
                                             <Setter Property="BorderBrush" Value="Transparent"/>
                                             <Style.Triggers>
+                                                <!-- Deck gallery: the commander's tile is outlined
+                                                 in gold (selection blue still wins, below). -->
+                                                <DataTrigger Binding="{Binding IsCommander}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#C8A200"/>
+                                                </DataTrigger>
                                                 <DataTrigger Binding="{Binding IsSelected}" Value="True">
                                                     <Setter Property="BorderBrush"
                                                         Value="#4CA0FF"/>

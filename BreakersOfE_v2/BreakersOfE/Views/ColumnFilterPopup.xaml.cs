@@ -231,8 +231,10 @@ namespace BreakersOfE.Views
             };
         }
 
-        private static int Num(string a, string b)
+        private static int Num(string? a, string? b)
         {
+            a ??= string.Empty;
+            b ??= string.Empty;
             if (decimal.TryParse(a.TrimStart('$', ' '),
                     System.Globalization.NumberStyles.Any,
                     System.Globalization.CultureInfo.InvariantCulture, out var da) &&
@@ -244,20 +246,31 @@ namespace BreakersOfE.Views
         }
 
         // ── OK — commit checkbox state (the ONLY thing that defines the filter) ──
+        /// <summary>
+        /// While a search is typed, only the values the search shows count
+        /// (Excel behavior): search "mul", tick MUL, OK → just MUL. Values the
+        /// search hides are left out even if their boxes were still ticked.
+        /// </summary>
         private void BtnOk_Click(object sender, RoutedEventArgs e)
         {
-            bool allChecked = _allItems.All(x => x.IsChecked);
+            bool searching = !string.IsNullOrWhiteSpace(ValueSearchBox.Text);
+            var counted = searching
+                ? ((ValuesListBox.ItemsSource as IEnumerable<ValueItem>)?.ToList() ?? _allItems)
+                : _allItems;
+            var chosen = counted.Where(x => x.IsChecked).Select(x => x.ActualValue)
+                                .ToHashSet(StringComparer.Ordinal);
+
             _state.SelectedValues.Clear();
 
-            if (allChecked)
+            if (chosen.Count == _allItems.Count)
             {
                 _state.AllSelected = true;   // no narrowing
             }
             else
             {
                 _state.AllSelected = false;
-                foreach (var item in _allItems.Where(x => x.IsChecked))
-                    _state.SelectedValues.Add(item.ActualValue);
+                foreach (var v in chosen)
+                    _state.SelectedValues.Add(v);
             }
 
             FilterChanged?.Invoke(this, EventArgs.Empty);

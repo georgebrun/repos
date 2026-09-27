@@ -42,6 +42,9 @@ namespace BreakersOfE.ViewModels
         public bool HasOwned => !string.IsNullOrEmpty(OwnedText);
         public string OwnedTip { get; private set; } = "";
 
+        /// <summary>Deck gallery: this card is the deck's commander.</summary>
+        public bool IsCommander { get; private set; }
+
         /// <summary>Set checklist: a printing you don't own shows dimmed.</summary>
         private bool _isDimmed;
         public bool IsDimmed
@@ -121,7 +124,7 @@ namespace BreakersOfE.ViewModels
 
         private sealed class Accessors
         {
-            public PropertyInfo? Sid, Url, SmallUrl, Name, Usd, UsdFoil;
+            public PropertyInfo? Sid, Url, SmallUrl, Name, Usd, UsdFoil, UsdEtched;
             public PropertyInfo? Finish, Price, FinishPill;   // collection rows / pill
             public PropertyInfo? OwnedTotal;                  // pool / deck cards
             public PropertyInfo? Quantity;                    // collection rows (this finish)
@@ -138,6 +141,7 @@ namespace BreakersOfE.ViewModels
                 Name = t.GetProperty("Name"),
                 Usd = t.GetProperty("PriceUsd"),
                 UsdFoil = t.GetProperty("PriceUsdFoil"),
+                UsdEtched = t.GetProperty("PriceUsdEtched"),
                 Finish = t.GetProperty("Finish"),
                 Price = t.GetProperty("Price"),
                 FinishPill = t.GetProperty("FinishPill"),
@@ -153,8 +157,8 @@ namespace BreakersOfE.ViewModels
             string name = a.Name?.GetValue(card) as string ?? "";
 
             // Price badge. Collection rows (they have Finish + Price): that
-            // row's own finish price. Pool cards: non-foil price, or the foil
-            // price for foil-only printings.
+            // row's own finish price. Pool / deck cards: non-foil price, else
+            // foil (foil-only printings), else etched (etched-only printings).
             decimal? p;
             if (a.Finish != null && a.Price != null)
             {
@@ -164,7 +168,8 @@ namespace BreakersOfE.ViewModels
             {
                 decimal? usd = a.Usd?.GetValue(card) as decimal?;
                 decimal? foil = a.UsdFoil?.GetValue(card) as decimal?;
-                p = usd ?? foil;
+                decimal? etched = a.UsdEtched?.GetValue(card) as decimal?;
+                p = usd ?? foil ?? etched;
             }
             string price = p.HasValue ? $"${p.Value:F2}" : "";
 
@@ -188,6 +193,10 @@ namespace BreakersOfE.ViewModels
             {
                 OwnedText = owned > 0 ? $"×{owned}" : "",
                 OwnedTip = tip,
+                // Deck gallery: the commander gets a "Commander" badge, like its
+                // row in the grid (flag or Commander category).
+                IsCommander = card is Models.DeckCard dc &&
+                              (dc.IsCommander || dc.Category == Models.DeckCardCategory.Commander),
             };
         }
 

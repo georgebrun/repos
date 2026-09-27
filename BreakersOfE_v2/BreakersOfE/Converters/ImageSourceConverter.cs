@@ -103,6 +103,9 @@ namespace BreakersOfE.Services
 
             return rarity.ToLower() switch
             {
+                // Neutral symbol on the app's dark surfaces (set browser tiles,
+                // Set Completion) — independent of the grid-row theme colors.
+                "ondark" => new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
                 "common" => dark
                     ? new SolidColorBrush(Color.FromRgb(0xAA, 0xAA, 0xAA)) // light gray on dark
                     : new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1A)), // black on light

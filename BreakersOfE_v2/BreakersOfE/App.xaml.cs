@@ -23,6 +23,9 @@ namespace BreakersOfE
             // Make sure My Documents\BoE_V2\ and its subfolders exist
             AppFolderService.EnsureAllFolders();
 
+            // Downloads used to live next to the program; copy them over once.
+            AppFolderService.CopyLegacyDownloads();
+
             // An update interrupted by closing/crashing leaves a temporary
             // copy behind; drop it — the real databases were never touched.
             DatabaseStaging.CleanupLeftover(AppFolderService.DatabasePath);

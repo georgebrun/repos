@@ -49,7 +49,7 @@
 
                     <Border Grid.Row="0" BorderThickness="0,0,0,1"
                             BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" Padding="4">
-                        <ui:TextBox Name="ValueSearchBox" Height="28"
+                        <ui:TextBox Name="ValueSearchBox"
                                  FontSize="12"
                                  PlaceholderText="Search values..."
                                  TextChanged="ValueSearchBox_TextChanged"/>
@@ -98,11 +98,11 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <ComboBox Name="OperatorCombo" Grid.Row="0" Height="28" Margin="0,0,0,6"
+                    <ComboBox Name="OperatorCombo" Grid.Row="0" Margin="0,0,0,6"
                               FontSize="12"
                               SelectionChanged="OperatorCombo_SelectionChanged"/>
 
-                    <ui:TextBox Name="TextFilterBox" Grid.Row="1" Height="28"
+                    <ui:TextBox Name="TextFilterBox" Grid.Row="1"
                              FontSize="12"
                              PlaceholderText="Filter text..."
                              KeyDown="TextFilterBox_KeyDown"/>
@@ -110,7 +110,7 @@
                     <StackPanel Grid.Row="2" Orientation="Vertical" Margin="0,8,0,0">
                         <ui:Button Name="BtnApplyText" Content="Apply"
                                 HorizontalAlignment="Left"
-                                Width="70" Height="28" Click="BtnApplyText_Click"/>
+                                MinWidth="70" Click="BtnApplyText_Click"/>
                         <TextBlock Name="TextHint" Margin="0,6,0,0"
                                    FontSize="11" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"

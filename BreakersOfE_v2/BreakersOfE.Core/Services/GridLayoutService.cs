@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -82,6 +82,50 @@ namespace BreakersOfE.Services
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"GridLayouts save failed: {ex.Message}");
+            }
+        }
+
+        // ── Zoom per table (grid only), in its own file ──────────────────
+        // Kept apart from GridLayouts.json so that file's format never changes.
+        private static string ZoomPath =>
+            Path.Combine(AppFolderService.RootFolder, "GridZoom.json");
+
+        private static Dictionary<string, double>? _zoom;
+
+        private static Dictionary<string, double> Zooms => _zoom ??= LoadZoom();
+
+        private static Dictionary<string, double> LoadZoom()
+        {
+            try
+            {
+                if (File.Exists(ZoomPath))
+                {
+                    var loaded = JsonSerializer.Deserialize<Dictionary<string, double>>(
+                        File.ReadAllText(ZoomPath), _json);
+                    if (loaded != null)
+                        return new Dictionary<string, double>(loaded, StringComparer.OrdinalIgnoreCase);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"GridZoom load failed: {ex.Message}");
+            }
+            return new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>A table's grid zoom (1.0 = 100%).</summary>
+        public static double GetZoom(string table) =>
+            Zooms.TryGetValue(table, out var z) && z > 0 ? z : 1.0;
+
+        /// <summary>Save a table's grid zoom (1.0 removes the entry).</summary>
+        public static void SetZoom(string table, double zoom)
+        {
+            if (Math.Abs(zoom - 1.0) < 0.001) Zooms.Remove(table);
+            else Zooms[table] = zoom;
+            try { File.WriteAllText(ZoomPath, JsonSerializer.Serialize(Zooms, _json)); }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"GridZoom save failed: {ex.Message}");
             }
         }
     }

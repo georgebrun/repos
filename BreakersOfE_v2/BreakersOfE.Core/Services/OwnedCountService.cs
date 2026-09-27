@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using BreakersOfE.Data;
@@ -10,8 +10,11 @@ namespace BreakersOfE.Models
     public interface IOwnedCard
     {
         string ScryfallId { get; }
+        bool IsFoil { get; }
+        bool IsEtched { get; }
         int OwnedNonFoil { get; set; }
         int OwnedFoil { get; set; }
+        int OwnedEtched { get; set; }
     }
 }
 
@@ -31,20 +34,24 @@ namespace BreakersOfE.Services
             {
                 if (owned.TryGetValue(card.ScryfallId ?? "", out var t))
                 {
+                    // v1 stored etched-only printings as foil rows: count them as etched.
+                    bool etchedOnly = card.IsEtched && !card.IsFoil;
                     card.OwnedNonFoil = t.nonFoil;
-                    card.OwnedFoil = t.foil;
+                    card.OwnedFoil = etchedOnly ? 0 : t.foil;
+                    card.OwnedEtched = t.etched + (etchedOnly ? t.foil : 0);
                 }
                 else
                 {
                     card.OwnedNonFoil = 0;
                     card.OwnedFoil = 0;
+                    card.OwnedEtched = 0;
                 }
             }
         }
 
-        private static Dictionary<string, (int nonFoil, int foil)> Load(string poolTag)
+        private static Dictionary<string, (int nonFoil, int foil, int etched)> Load(string poolTag)
         {
-            var map = new Dictionary<string, (int nonFoil, int foil)>(StringComparer.OrdinalIgnoreCase);
+            var map = new Dictionary<string, (int nonFoil, int foil, int etched)>(StringComparer.OrdinalIgnoreCase);
             try
             {
                 using var db = new CollectionDbContext();
@@ -70,8 +77,12 @@ namespace BreakersOfE.Services
                 {
                     if (string.IsNullOrEmpty(sid) || qty <= 0) continue;
                     map.TryGetValue(sid, out var t);
-                    if (CardFinish.Normalize(finish) == CardFinish.NonFoil) t.nonFoil += qty;
-                    else t.foil += qty;
+                    switch (CardFinish.Normalize(finish))
+                    {
+                        case CardFinish.Foil: t.foil += qty; break;
+                        case CardFinish.Etched: t.etched += qty; break;
+                        default: t.nonFoil += qty; break;
+                    }
                     map[sid] = t;
                 }
             }

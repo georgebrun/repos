@@ -129,10 +129,9 @@ namespace BreakersOfE.Services
                 "application/json;q=0.9,*/*;q=0.8");
             _http.Timeout = TimeSpan.FromMinutes(30);
 
-            _setSymbolsFolder = EnsureFolder(Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory, "SetSymbols"));
-            _manaSymbolsFolder = EnsureFolder(Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory, "ManaSymbols"));
+            // Downloads go under Documents\BoE_V2 (the program folder may be read-only).
+            _setSymbolsFolder = AppFolderService.SetSymbolsFolder;
+            _manaSymbolsFolder = AppFolderService.ManaSymbolsFolder;
         }
 
         // ════════════════════════════════════════════════════════════════════
@@ -187,6 +186,7 @@ namespace BreakersOfE.Services
                 ct.ThrowIfCancellationRequested();
                 result.SetSymbolsDownloaded =
                     await DownloadSetSymbolsAsync(progress, 81, 88, ct);
+                AppFolderService.ClearSetSymbolCache();   // new symbols show without a restart
 
                 // Step 6 — Basic verification
                 Report(progress, "Verifying import...", 89);
@@ -939,8 +939,9 @@ namespace BreakersOfE.Services
                 ImageNormalUrl = GetImageUri(c, "normal"),
                 ImageBackUrl = GetBackFaceImageUri(c, "normal"),
                 Layout = GetString(c, "layout"),
-                IsFoil = GetBool(c, "foil"),
-                IsNonFoil = GetBool(c, "nonfoil"),
+                IsFoil = HasFinish(c, "foil"),
+                IsNonFoil = HasFinish(c, "nonfoil"),
+                IsEtched = HasFinish(c, "etched"),
                 IsToken = false,
                 ReleasedAt = GetString(c, "released_at"),
                 PricesJson = GetRawJson(c, "prices"),
@@ -978,8 +979,9 @@ namespace BreakersOfE.Services
             ImageSmallUrl = GetImageUri(c, "small"),
             ImageNormalUrl = GetImageUri(c, "normal"),
             Layout = GetString(c, "layout"),
-            IsFoil = GetBool(c, "foil"),
-            IsNonFoil = GetBool(c, "nonfoil"),
+            IsFoil = HasFinish(c, "foil"),
+            IsNonFoil = HasFinish(c, "nonfoil"),
+                IsEtched = HasFinish(c, "etched"),
             ReleasedAt = GetString(c, "released_at"),
             LocalImagePath = string.Empty
         };
@@ -1001,8 +1003,9 @@ namespace BreakersOfE.Services
             ImageSmallUrl = GetImageUri(c, "small"),
             ImageNormalUrl = GetImageUri(c, "normal"),
             Layout = GetString(c, "layout"),
-            IsFoil = GetBool(c, "foil"),
-            IsNonFoil = GetBool(c, "nonfoil"),
+            IsFoil = HasFinish(c, "foil"),
+            IsNonFoil = HasFinish(c, "nonfoil"),
+                IsEtched = HasFinish(c, "etched"),
             ReleasedAt = GetString(c, "released_at"),
             LocalImagePath = string.Empty
         };
@@ -1024,8 +1027,9 @@ namespace BreakersOfE.Services
             ImageSmallUrl = GetImageUri(c, "small"),
             ImageNormalUrl = GetImageUri(c, "normal"),
             Layout = GetString(c, "layout"),
-            IsFoil = GetBool(c, "foil"),
-            IsNonFoil = GetBool(c, "nonfoil"),
+            IsFoil = HasFinish(c, "foil"),
+            IsNonFoil = HasFinish(c, "nonfoil"),
+                IsEtched = HasFinish(c, "etched"),
             ReleasedAt = GetString(c, "released_at"),
             LocalImagePath = string.Empty
         };
@@ -1047,8 +1051,9 @@ namespace BreakersOfE.Services
             ImageSmallUrl = GetImageUri(c, "small"),
             ImageNormalUrl = GetImageUri(c, "normal"),
             Layout = GetString(c, "layout"),
-            IsFoil = GetBool(c, "foil"),
-            IsNonFoil = GetBool(c, "nonfoil"),
+            IsFoil = HasFinish(c, "foil"),
+            IsNonFoil = HasFinish(c, "nonfoil"),
+                IsEtched = HasFinish(c, "etched"),
             ReleasedAt = GetString(c, "released_at"),
             HandModifier = GetString(c, "hand_modifier"),
             LifeModifier = GetString(c, "life_modifier"),
@@ -1071,8 +1076,9 @@ namespace BreakersOfE.Services
             ImageSmallUrl = GetImageUri(c, "small"),
             ImageNormalUrl = GetImageUri(c, "normal"),
             Layout = GetString(c, "layout"),
-            IsFoil = GetBool(c, "foil"),
-            IsNonFoil = GetBool(c, "nonfoil"),
+            IsFoil = HasFinish(c, "foil"),
+            IsNonFoil = HasFinish(c, "nonfoil"),
+                IsEtched = HasFinish(c, "etched"),
             ReleasedAt = GetString(c, "released_at"),
             LocalImagePath = string.Empty
         };
@@ -1098,8 +1104,9 @@ namespace BreakersOfE.Services
             ImageSmallUrl = GetImageUri(c, "small"),
             ImageNormalUrl = GetImageUri(c, "normal"),
             Layout = GetString(c, "layout"),
-            IsFoil = GetBool(c, "foil"),
-            IsNonFoil = GetBool(c, "nonfoil"),
+            IsFoil = HasFinish(c, "foil"),
+            IsNonFoil = HasFinish(c, "nonfoil"),
+                IsEtched = HasFinish(c, "etched"),
             ReleasedAt = GetString(c, "released_at"),
             LocalImagePath = string.Empty
         };
@@ -1212,6 +1219,26 @@ namespace BreakersOfE.Services
                 v.ValueKind == JsonValueKind.Number)
                 return v.GetDouble();
             return 0;
+        }
+
+        /// <summary>
+        /// Does this printing exist in this finish? Reads Scryfall's "finishes"
+        /// array ("nonfoil", "foil", "etched", "glossy"). The old top-level
+        /// foil/nonfoil booleans are deprecated and say nothing about etched
+        /// (an etched-only card reports foil=false AND nonfoil=false), so they
+        /// are only a fallback for data without a finishes array.
+        /// </summary>
+        private static bool HasFinish(JsonElement c, string finish)
+        {
+            if (c.TryGetProperty("finishes", out var f) && f.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var x in f.EnumerateArray())
+                    if (x.ValueKind == JsonValueKind.String &&
+                        string.Equals(x.GetString(), finish, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                return false;
+            }
+            return finish is "foil" or "nonfoil" && GetBool(c, finish);
         }
 
         private static bool GetBool(JsonElement el, string prop)
@@ -1482,56 +1509,56 @@ namespace BreakersOfE.Services
             {
                 using (var db = new Data.RulingsDbContext(stage.WorkingPath))
                 {
-                    db.EnsureCreated();
+                db.EnsureCreated();
 
-                    // Clear existing rulings (full refresh)
-                    db.Database.ExecuteSqlRaw("DELETE FROM CardRulings");
+                // Clear existing rulings (full refresh)
+                db.Database.ExecuteSqlRaw("DELETE FROM CardRulings");
 
-                    var batch = new List<Data.CardRuling>(1000);
-                    await foreach (var item in EnumerateCardsAsync(tempFile, isGzip, ct))
+                var batch = new List<Data.CardRuling>(1000);
+                await foreach (var item in EnumerateCardsAsync(tempFile, isGzip, ct))
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    // Scryfall rulings bulk has: object, oracle_id, source, published_at, comment
+                    string oracleId = item.TryGetProperty("oracle_id", out var oid)
+                        ? oid.GetString() ?? "" : "";
+                    string publishedAt = item.TryGetProperty("published_at", out var pa)
+                        ? pa.GetString() ?? "" : "";
+                    string comment = item.TryGetProperty("comment", out var cm)
+                        ? cm.GetString() ?? "" : "";
+
+                    if (string.IsNullOrEmpty(oracleId) || string.IsNullOrEmpty(comment))
+                        continue;
+
+                    batch.Add(new Data.CardRuling
                     {
-                        ct.ThrowIfCancellationRequested();
+                        ScryfallId = oracleId, // store oracle_id — we'll look up by it
+                        PublishedAt = publishedAt,
+                        Comment = comment
+                    });
 
-                        // Scryfall rulings bulk has: object, oracle_id, source, published_at, comment
-                        string oracleId = item.TryGetProperty("oracle_id", out var oid)
-                            ? oid.GetString() ?? "" : "";
-                        string publishedAt = item.TryGetProperty("published_at", out var pa)
-                            ? pa.GetString() ?? "" : "";
-                        string comment = item.TryGetProperty("comment", out var cm)
-                            ? cm.GetString() ?? "" : "";
-
-                        if (string.IsNullOrEmpty(oracleId) || string.IsNullOrEmpty(comment))
-                            continue;
-
-                        batch.Add(new Data.CardRuling
-                        {
-                            ScryfallId = oracleId, // store oracle_id — we'll look up by it
-                            PublishedAt = publishedAt,
-                            Comment = comment
-                        });
-
-                        if (batch.Count >= 1000)
-                        {
-                            db.CardRulings.AddRange(batch);
-                            await db.SaveChangesAsync(ct);
-                            db.ChangeTracker.Clear();          // don't keep 78K rulings tracked
-                            count += batch.Count;
-                            batch.Clear();
-                            progress.Report(new ImportProgress
-                            {
-                                Percentage = 50 + Math.Min(45, count / 500),
-                                Step = "Importing rulings...",
-                                Detail = $"{count:N0} rulings imported"
-                            });
-                        }
-                    }
-
-                    if (batch.Count > 0)
+                    if (batch.Count >= 1000)
                     {
                         db.CardRulings.AddRange(batch);
                         await db.SaveChangesAsync(ct);
+                        db.ChangeTracker.Clear();          // don't keep 78K rulings tracked
                         count += batch.Count;
+                        batch.Clear();
+                        progress.Report(new ImportProgress
+                        {
+                            Percentage = 50 + Math.Min(45, count / 500),
+                            Step = "Importing rulings...",
+                            Detail = $"{count:N0} rulings imported"
+                        });
                     }
+                }
+
+                if (batch.Count > 0)
+                {
+                    db.CardRulings.AddRange(batch);
+                    await db.SaveChangesAsync(ct);
+                    count += batch.Count;
+                }
                 }
 
                 if (count == 0)

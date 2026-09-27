@@ -63,8 +63,13 @@ namespace BreakersOfE.ViewModels
 
         private string _label = "cards";
 
+        // Newest load wins: loads run in the background and can finish out of
+        // order (two quick edits → two reloads); an older result is dropped.
+        private int _loadGeneration;
+
         public void LoadPool(string tag)
         {
+            int generation = ++_loadGeneration;
             IsLoading = true;
             IsEmpty = false;
             EmptyMessage = "";
@@ -174,11 +179,14 @@ namespace BreakersOfE.ViewModels
                 // Pool pages: how many of each printing you own (read-only).
                 if (IsPoolTag(tag))
                     Services.OwnedCountService.Fill(tag, rows);
+                else
+                    Services.FinishInfoService.Fill(tag, rows);   // etched facts from the pool
 
                 AssignRowIndices(rows);
 
                 System.Windows.Application.Current?.Dispatcher?.BeginInvoke(() =>
                 {
+                    if (generation != _loadGeneration) return;   // a newer load is on its way
                     _allRows = rows;
                     _label = label;
                     IsLoading = false;

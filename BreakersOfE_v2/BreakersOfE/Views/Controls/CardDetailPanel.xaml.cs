@@ -72,20 +72,18 @@ namespace BreakersOfE.Views.Controls
                 DetailPT.Visibility = Visibility.Collapsed;
             }
 
-            // Finishes
+            // Finishes the printing exists in (Scryfall "finishes")
             bool isFoil = bool.TryParse(Get("IsFoil"), out var f) && f;
             bool isNonFoil = bool.TryParse(Get("IsNonFoil"), out var nf) && nf;
-            var finishes = new List<string>();
-            if (isFoil) finishes.Add("Foil");
-            if (isNonFoil) finishes.Add("Non-Foil");
-            DetailFinishes.Text = finishes.Count > 0
-                ? string.Join(" · ", finishes) : "Unknown";
+            bool isEtched = bool.TryParse(Get("IsEtched"), out var et) && et;
+            DetailFinishes.Text = Models.CardFinish.AvailableText(isNonFoil, isFoil, isEtched);
 
-            // Prices
+            // Prices, one per finish
             string usd = Get("PriceUsd") is string pu && !string.IsNullOrEmpty(pu) ? $"USD:  ${pu}" : "";
             string foilP = Get("PriceUsdFoil") is string pf && !string.IsNullOrEmpty(pf) ? $"USD Foil: ${pf}" : "";
+            string etchedP = Get("PriceUsdEtched") is string pe && !string.IsNullOrEmpty(pe) ? $"USD Etched: ${pe}" : "";
             DetailPrices.Text = string.Join("\n",
-                new[] { usd, foilP }.Where(s => !string.IsNullOrEmpty(s)));
+                new[] { usd, foilP, etchedP }.Where(s => !string.IsNullOrEmpty(s)));
 
             // Mana cost symbols
             DetailManaCost.Items.Clear();

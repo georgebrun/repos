@@ -35,15 +35,71 @@ namespace BreakersOfE.Services
         public static string ImportsFolder =>
             EnsureFolder(Path.Combine(RootFolder, "Imports"));
 
-        // ── Program data folders (next to executable) ─────────────────────────
+        // ── Program folder (next to the executable) — READ-ONLY at run time:
+        //    under Program Files a normal user can't write here. Everything the
+        //    app downloads goes under Documents\BoE_V2 instead. ──────────────
         public static string ProgramFolder =>
             AppDomain.CurrentDomain.BaseDirectory;
 
+        // ── Downloaded data (written by Update Database) ──────────────────────
         public static string SetSymbolsFolder =>
-            EnsureFolder(Path.Combine(ProgramFolder, "SetSymbols"));
+            EnsureFolder(Path.Combine(RootFolder, "SetSymbols"));
 
         public static string ManaSymbolsFolder =>
-            EnsureFolder(Path.Combine(ProgramFolder, "ManaSymbols"));
+            EnsureFolder(Path.Combine(RootFolder, "ManaSymbols"));
+
+        public static string RulingsDatabasePath =>
+            Path.Combine(RootFolder, "rulings.db");
+
+        // ── Set symbol lookup (cached: the grid asks for every row) ───────────
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _setSymbolCache =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Path of a set's symbol image, or "" when it isn't downloaded. One
+        /// helper for every card type; File.Exists runs once per set, not per
+        /// row per redraw.
+        /// </summary>
+        public static string SetSymbolPath(string? setCode)
+        {
+            if (string.IsNullOrWhiteSpace(setCode)) return string.Empty;
+            return _setSymbolCache.GetOrAdd(setCode, code =>
+            {
+                string path = Path.Combine(SetSymbolsFolder, $"{code.ToLowerInvariant()}.png");
+                return File.Exists(path) ? path : string.Empty;
+            });
+        }
+
+        /// <summary>Forget cached symbol lookups (after new symbols are downloaded).</summary>
+        public static void ClearSetSymbolCache() => _setSymbolCache.Clear();
+
+        /// <summary>
+        /// One-time move: earlier v2 builds saved symbols and rulings next to
+        /// the program. Copy them to Documents\BoE_V2 if they aren't there yet
+        /// (the originals are left alone). Never throws.
+        /// </summary>
+        public static void CopyLegacyDownloads()
+        {
+            try
+            {
+                CopyFolderIfEmpty(Path.Combine(ProgramFolder, "SetSymbols"), SetSymbolsFolder);
+                CopyFolderIfEmpty(Path.Combine(ProgramFolder, "ManaSymbols"), ManaSymbolsFolder);
+                string oldRulings = Path.Combine(ProgramFolder, "rulings.db");
+                if (File.Exists(oldRulings) && !File.Exists(RulingsDatabasePath))
+                    File.Copy(oldRulings, RulingsDatabasePath);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CopyLegacyDownloads: {ex.Message}");
+            }
+        }
+
+        private static void CopyFolderIfEmpty(string from, string to)
+        {
+            if (!Directory.Exists(from) || Directory.EnumerateFileSystemEntries(to).Any()) return;
+            foreach (var file in Directory.EnumerateFiles(from))
+                File.Copy(file, Path.Combine(to, Path.GetFileName(file)), overwrite: false);
+        }
 
         public static string CardImagesFolder =>
             EnsureFolder(Path.Combine(RootFolder, "CardImages"));
@@ -80,6 +136,8 @@ namespace BreakersOfE.Services
             _ = PlaymatImagesFolder;
             _ = SleeveImagesFolder;
             _ = CollectionFolder;
+            _ = SetSymbolsFolder;
+            _ = ManaSymbolsFolder;
         }
 
         // ── Helper ────────────────────────────────────────────────────────────

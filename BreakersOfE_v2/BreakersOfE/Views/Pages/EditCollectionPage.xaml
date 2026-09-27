@@ -1,0 +1,89 @@
+<Page x:Class="BreakersOfE.Views.Pages.EditCollectionPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ctl="clr-namespace:BreakersOfE.Views.Controls"
+      ScrollViewer.VerticalScrollBarVisibility="Disabled"
+      Loaded="Page_Loaded"
+      PreviewKeyDown="Page_PreviewKeyDown">
+
+    <!-- Edit → Pool → Collection: the pool table on top, the matching
+         collection table below (same tables as View, embedded), the card
+         detail panel on the left for whichever card was selected last. -->
+    <Grid Margin="16">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="240" MinWidth="180" MaxWidth="320"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ═══ LEFT DETAIL PANEL (last card selected in either table) ═══ -->
+        <ctl:CardDetailPanel x:Name="Detail" Grid.Column="0" Margin="0,0,12,0"/>
+
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" MinHeight="160"/>
+                <!-- pool -->
+                <RowDefinition Height="Auto"/>
+                <!-- splitter -->
+                <RowDefinition Height="Auto"/>
+                <!-- mode buttons -->
+                <RowDefinition Height="*" MinHeight="160"/>
+                <!-- collection -->
+            </Grid.RowDefinitions>
+
+            <!-- ═══ TOP: pool table ═══ -->
+            <Frame Grid.Row="0" x:Name="TopFrame" NavigationUIVisibility="Hidden"
+                   JournalOwnership="OwnsJournal" Focusable="False"/>
+
+            <!-- Drag to share the height between the two tables -->
+            <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch"
+                          ResizeDirection="Rows" ResizeBehavior="PreviousAndNext"
+                          Background="#30808080" Margin="0,4,0,4"
+                          ToolTip="Drag to resize the tables"/>
+
+            <!-- ═══ MODE BUTTONS (Pool → Collection) ═══
+                 Act on the card selected last, in either table. Qty applies to
+                 every Add and Remove button (and the keys / right-click). -->
+            <Border Grid.Row="2" Background="#15808080" CornerRadius="8"
+                    Padding="12,6" Margin="0,0,0,8">
+                <StackPanel>
+                    <WrapPanel VerticalAlignment="Center">
+                        <TextBlock Text="Add/Remove Qty" VerticalAlignment="Center" Margin="0,0,6,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <TextBox x:Name="QtyBox" Text="1" Width="56" Margin="0,0,14,0"
+                                 VerticalAlignment="Center" TextAlignment="Center"
+                                 PreviewTextInput="QtyBox_PreviewTextInput"
+                                 PreviewKeyDown="QtyBox_PreviewKeyDown"
+                                 GotKeyboardFocus="QtyBox_GotKeyboardFocus"
+                                 ToolTip="How many to add or remove (Ctrl+Q). Enter adds the default finish. To set an exact quantity, double-click a Qty cell in the collection table."/>
+
+                        <Button x:Name="BtnAddNonFoil" Content="Add Non-Foil" Padding="10,4" Margin="0,0,6,0"
+                                Click="BtnAddNonFoil_Click" ToolTip="Add Qty non-foil copies (Enter)"/>
+                        <Button x:Name="BtnAddFoil" Content="Add Foil" Padding="10,4" Margin="0,0,6,0"
+                                Click="BtnAddFoil_Click" ToolTip="Add Qty foil copies (Shift+Enter)"/>
+                        <Button x:Name="BtnAddEtched" Content="Add Etched" Padding="10,4" Margin="0,0,18,0"
+                                Click="BtnAddEtched_Click" ToolTip="Add Qty etched copies (Ctrl+Enter)"/>
+
+                        <Button x:Name="BtnRemoveNonFoil" Content="Remove Non-Foil" Padding="10,4" Margin="0,0,6,0"
+                                Click="BtnRemoveNonFoil_Click" ToolTip="Remove Qty non-foil copies (copies used in decks stay)"/>
+                        <Button x:Name="BtnRemoveFoil" Content="Remove Foil" Padding="10,4" Margin="0,0,6,0"
+                                Click="BtnRemoveFoil_Click" ToolTip="Remove Qty foil copies (copies used in decks stay)"/>
+                        <Button x:Name="BtnRemoveEtched" Content="Remove Etched" Padding="10,4" Margin="0,0,6,0"
+                                Click="BtnRemoveEtched_Click" ToolTip="Remove Qty etched copies (copies used in decks stay)"/>
+                        <Button x:Name="BtnRemoveAll" Content="Remove All" Padding="10,4"
+                                Click="BtnRemoveAll_Click" ToolTip="Remove every unused copy of this printing, all finishes"/>
+                    </WrapPanel>
+                    <!-- The card the buttons act on, and what you own of it -->
+                    <TextBlock x:Name="ModeText" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    <!-- What the last action did (amber when something was refused) -->
+                    <TextBlock x:Name="ActionText" Margin="0,2,0,0" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ BOTTOM: collection table ═══ -->
+            <Frame Grid.Row="3" x:Name="BottomFrame" NavigationUIVisibility="Hidden"
+                   JournalOwnership="OwnsJournal" Focusable="False"/>
+        </Grid>
+    </Grid>
+</Page>

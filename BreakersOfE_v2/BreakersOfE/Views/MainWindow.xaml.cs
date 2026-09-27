@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using BreakersOfE.Views.Pages;
 using Wpf.Ui.Controls;
 
@@ -64,7 +64,7 @@ namespace BreakersOfE.Views
             NavDecks.Visibility = viewVis;
 
             // Edit items (placeholder until editing exists)
-            NavEditComingSoon.Visibility = open == NavSection.Edit ? Visibility.Visible : Visibility.Collapsed;
+            NavEditPoolToCollection.Visibility = open == NavSection.Edit ? Visibility.Visible : Visibility.Collapsed;
 
             // Edit button: at the bottom only while View is open; otherwise
             // stacked at the top under View.
@@ -123,6 +123,17 @@ namespace BreakersOfE.Views
         private void RootNavigation_Navigated(
             NavigationView sender, NavigatedEventArgs args)
         {
+            // Edit → Pool → Collection: tag "Edit:<pool>" picks the table pair.
+            if (args.Page is EditCollectionPage editPage)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    string tag = (sender.SelectedItem as NavigationViewItem)?.Tag as string ?? "";
+                    editPage.LoadPair(tag.StartsWith("Edit:") ? tag.Substring(5) : "Cards");
+                }), System.Windows.Threading.DispatcherPriority.Loaded);
+                return;
+            }
+
             if (args.Page is not PoolPage page)
                 return;
 

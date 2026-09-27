@@ -136,6 +136,18 @@ namespace BreakersOfE.Models
         public decimal? PriceUsd { get; set; }
         public decimal? PriceUsdFoil { get; set; }
 
+        // ── Etched (filled from the pool when the deck opens; not saved) ──────
+        // Deck files count non-foil and foil copies only. The "foil" copies of
+        // an ETCHED-ONLY printing (no foil version exists) are etched copies.
+        /// <summary>The printing exists as etched.</summary>
+        [JsonIgnore] public bool IsEtched { get; set; }
+        /// <summary>Etched price (usd_etched).</summary>
+        [JsonIgnore] public decimal? PriceUsdEtched { get; set; }
+        /// <summary>Etched-only printing: the foil count means etched copies.</summary>
+        [JsonIgnore] public bool IsEtchedOnly => IsEtched && !IsFoil;
+        /// <summary>Price of the deck's "foil" copies: etched price for etched-only printings.</summary>
+        [JsonIgnore] public decimal? FoilCopyPrice => IsEtchedOnly ? PriceUsdEtched : PriceUsdFoil;
+
         // ── Deck-specific ─────────────────────────────────────────────────────
         public int Quantity { get; set; } = 0;
         public int FoilQuantity { get; set; } = 0;
@@ -196,21 +208,29 @@ namespace BreakersOfE.Models
             PriceUsdFoil.HasValue ? $"${PriceUsdFoil.Value:F2}" : "—";
 
         [JsonIgnore]
+        public string PriceUsdEtchedDisplay =>
+            PriceUsdEtched.HasValue ? $"${PriceUsdEtched.Value:F2}" : "—";
+
+        [JsonIgnore]
         public int TotalQuantity => Quantity + FoilQuantity;
 
-        /// <summary>Gold "F" when any copies in the deck are foil.</summary>
+        /// <summary>Gold pill when any copies are foil: "F", or "E" for an etched-only printing.</summary>
         [JsonIgnore]
-        public string FinishPill => FoilQuantity > 0 ? "F" : string.Empty;
+        public string FinishPill => FoilQuantity > 0 ? (IsEtchedOnly ? "E" : "F") : string.Empty;
 
-        /// <summary>Deck value of this line: non-foil copies × USD + foil copies × foil USD.</summary>
+        /// <summary>
+        /// Deck value of this line: non-foil copies × USD + foil copies × their
+        /// finish's price (etched price for etched-only printings). A missing
+        /// price borrows the other finish's (deck files carry old snapshots).
+        /// </summary>
         [JsonIgnore]
         public decimal RowValue =>
-            (PriceUsd ?? PriceUsdFoil ?? 0m) * Quantity +
-            (PriceUsdFoil ?? PriceUsd ?? 0m) * FoilQuantity;
+            (PriceUsd ?? FoilCopyPrice ?? 0m) * Quantity +
+            (FoilCopyPrice ?? PriceUsd ?? 0m) * FoilQuantity;
 
         [JsonIgnore]
         public string RowValueDisplay =>
-            PriceUsd.HasValue || PriceUsdFoil.HasValue ? $"${RowValue:F2}" : "—";
+            PriceUsd.HasValue || FoilCopyPrice.HasValue ? $"${RowValue:F2}" : "—";
 
         [JsonIgnore]
         public string ValueDisplay =>
@@ -220,8 +240,8 @@ namespace BreakersOfE.Models
 
         [JsonIgnore]
         public string FoilValueDisplay =>
-            PriceUsdFoil.HasValue
-                ? $"${PriceUsdFoil.Value * FoilQuantity:F2}"
+            FoilCopyPrice.HasValue
+                ? $"${FoilCopyPrice.Value * FoilQuantity:F2}"
                 : "—";
 
         [JsonIgnore]
@@ -231,16 +251,7 @@ namespace BreakersOfE.Models
         public decimal FoilValueSort => PriceUsdFoil.HasValue ? PriceUsdFoil.Value * FoilQuantity : 0m;
 
         [JsonIgnore]
-        public string SetSymbolPath
-        {
-            get
-            {
-                string folder = Services.AppFolderService.SetSymbolsFolder;
-                string path = System.IO.Path.Combine(
-                    folder, $"{SetCode.ToLower()}.png");
-                return System.IO.File.Exists(path) ? path : string.Empty;
-            }
-        }
+        public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
 
         // ── Color display ─────────────────────────────────────────────────────
         [JsonIgnore]

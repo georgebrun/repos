@@ -7,8 +7,7 @@ namespace BreakersOfE.Data
     public class RulingsDbContext : DbContext
     {
         /// <summary>The real rulings database file.</summary>
-        public static readonly string DefaultPath = System.IO.Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory, "rulings.db");
+        public static string DefaultPath => Services.AppFolderService.RulingsDatabasePath;
 
         private readonly string _dbPath;
 
