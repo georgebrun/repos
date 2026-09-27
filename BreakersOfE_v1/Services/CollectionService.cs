@@ -82,7 +82,9 @@ namespace BreakersOfE.Services
         {
             return CardFinish.Normalize(finish) switch
             {
-                CardFinish.Foil => foil,
+                // Etched-only printings are owned as foil rows and have no
+                // plain foil price, so fall back to the etched price.
+                CardFinish.Foil => foil ?? etched,
                 CardFinish.Etched => etched,
                 _ => nonFoil
             };

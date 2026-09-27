@@ -6088,6 +6088,12 @@ namespace BreakersOfE
                     { AddToPoolCollection(pc.PoolId, pc.Name, 1, false); handled = true; }
                     else if (pc.IsFoil)
                     { AddToPoolCollection(pc.PoolId, pc.Name, 1, true); handled = true; }
+                    else
+                    {
+                        // No addable finish: still swallow Enter so the grid's
+                        // default Enter/Shift+Enter doesn't move the selection.
+                        handled = true;
+                    }
                     break;
 
                 case PlanarCard pl:
@@ -10131,7 +10137,7 @@ namespace BreakersOfE
                     ce.PricesJson = p.PricesJson;
                     // Per-finish Price — the field the grid actually displays
                     ce.Price = ce.Finish == Models.CardFinish.Foil
-                        ? (p.PriceUsdFoil ?? p.PriceUsd)
+                        ? (p.PriceUsdFoil ?? p.PriceUsdEtched ?? p.PriceUsd)
                         : (p.PriceUsd ?? p.PriceUsdFoil);
                 }
             }
@@ -10145,7 +10151,7 @@ namespace BreakersOfE
                     tb.PriceUsd = p.PriceUsd;
                     tb.PriceUsdFoil = p.PriceUsdFoil;
                     tb.Price = tb.Finish == Models.CardFinish.Foil
-                        ? (p.PriceUsdFoil ?? p.PriceUsd)
+                        ? (p.PriceUsdFoil ?? p.PriceUsdEtched ?? p.PriceUsd)
                         : (p.PriceUsd ?? p.PriceUsdFoil);
                 }
             }
@@ -10159,7 +10165,7 @@ namespace BreakersOfE
                     wl.PriceUsd = p.PriceUsd;
                     wl.PriceUsdFoil = p.PriceUsdFoil;
                     wl.Price = wl.Finish == Models.CardFinish.Foil
-                        ? (p.PriceUsdFoil ?? p.PriceUsd)
+                        ? (p.PriceUsdFoil ?? p.PriceUsdEtched ?? p.PriceUsd)
                         : (p.PriceUsd ?? p.PriceUsdFoil);
                 }
             }

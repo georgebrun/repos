@@ -840,7 +840,7 @@ namespace BreakersOfE.Services
                 ImageNormalUrl = GetImageUri(c, "normal"),
                 ImageBackUrl = GetBackFaceImageUri(c, "normal"),
                 Layout = GetString(c, "layout"),
-                IsFoil = GetBool(c, "foil"),
+                IsFoil = HasFoilFinish(c),
                 IsNonFoil = GetBool(c, "nonfoil"),
                 IsToken = false,
                 ReleasedAt = GetString(c, "released_at"),
@@ -878,7 +878,7 @@ namespace BreakersOfE.Services
             ImageSmallUrl = GetImageUri(c, "small"),
             ImageNormalUrl = GetImageUri(c, "normal"),
             Layout = GetString(c, "layout"),
-            IsFoil = GetBool(c, "foil"),
+            IsFoil = HasFoilFinish(c),
             IsNonFoil = GetBool(c, "nonfoil"),
             ReleasedAt = GetString(c, "released_at"),
             LocalImagePath = string.Empty
@@ -901,7 +901,7 @@ namespace BreakersOfE.Services
             ImageSmallUrl = GetImageUri(c, "small"),
             ImageNormalUrl = GetImageUri(c, "normal"),
             Layout = GetString(c, "layout"),
-            IsFoil = GetBool(c, "foil"),
+            IsFoil = HasFoilFinish(c),
             IsNonFoil = GetBool(c, "nonfoil"),
             ReleasedAt = GetString(c, "released_at"),
             LocalImagePath = string.Empty
@@ -924,7 +924,7 @@ namespace BreakersOfE.Services
             ImageSmallUrl = GetImageUri(c, "small"),
             ImageNormalUrl = GetImageUri(c, "normal"),
             Layout = GetString(c, "layout"),
-            IsFoil = GetBool(c, "foil"),
+            IsFoil = HasFoilFinish(c),
             IsNonFoil = GetBool(c, "nonfoil"),
             ReleasedAt = GetString(c, "released_at"),
             LocalImagePath = string.Empty
@@ -947,7 +947,7 @@ namespace BreakersOfE.Services
             ImageSmallUrl = GetImageUri(c, "small"),
             ImageNormalUrl = GetImageUri(c, "normal"),
             Layout = GetString(c, "layout"),
-            IsFoil = GetBool(c, "foil"),
+            IsFoil = HasFoilFinish(c),
             IsNonFoil = GetBool(c, "nonfoil"),
             ReleasedAt = GetString(c, "released_at"),
             HandModifier = GetString(c, "hand_modifier"),
@@ -971,7 +971,7 @@ namespace BreakersOfE.Services
             ImageSmallUrl = GetImageUri(c, "small"),
             ImageNormalUrl = GetImageUri(c, "normal"),
             Layout = GetString(c, "layout"),
-            IsFoil = GetBool(c, "foil"),
+            IsFoil = HasFoilFinish(c),
             IsNonFoil = GetBool(c, "nonfoil"),
             ReleasedAt = GetString(c, "released_at"),
             LocalImagePath = string.Empty
@@ -998,7 +998,7 @@ namespace BreakersOfE.Services
             ImageSmallUrl = GetImageUri(c, "small"),
             ImageNormalUrl = GetImageUri(c, "normal"),
             Layout = GetString(c, "layout"),
-            IsFoil = GetBool(c, "foil"),
+            IsFoil = HasFoilFinish(c),
             IsNonFoil = GetBool(c, "nonfoil"),
             ReleasedAt = GetString(c, "released_at"),
             LocalImagePath = string.Empty
@@ -1112,6 +1112,25 @@ namespace BreakersOfE.Services
                 v.ValueKind == JsonValueKind.Number)
                 return v.GetDouble();
             return 0;
+        }
+
+        // Foil-capable = Scryfall "foil" flag OR an "etched" finish.
+        // Etched-only printings (e.g. MUL 66-130) report foil=false AND
+        // nonfoil=false; they are owned as foil rows of their own ScryfallId,
+        // so the pool must treat them as foil or nothing can add them.
+        private static bool HasFoilFinish(JsonElement c)
+        {
+            if (GetBool(c, "foil")) return true;
+            if (c.TryGetProperty("finishes", out var f) &&
+                f.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var x in f.EnumerateArray())
+                    if (x.ValueKind == JsonValueKind.String &&
+                        string.Equals(x.GetString(), "etched",
+                            StringComparison.OrdinalIgnoreCase))
+                        return true;
+            }
+            return false;
         }
 
         private static bool GetBool(JsonElement el, string prop)
