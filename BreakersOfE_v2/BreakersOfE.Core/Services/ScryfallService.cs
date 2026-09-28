@@ -37,6 +37,8 @@ namespace BreakersOfE.Services
         public int VanguardCardsImported { get; set; }
         public int ArtSeriesCardsImported { get; set; }
         public int ConspiracyCardsImported { get; set; }
+        /// <summary>Printings stored in the online pool (on MTGO and/or Arena).</summary>
+        public int OnlineCardsImported { get; set; }
         public int SkippedCount { get; set; }
 
         // Symbol counts
@@ -97,6 +99,10 @@ namespace BreakersOfE.Services
         private static AppDbContext PoolDb() =>
             _workingDb != null ? new AppDbContext(_workingDb) : new AppDbContext();
 
+        /// <summary>The online pool (MTGO / Arena) — same file, own table.</summary>
+        private static OnlineDbContext OnlineDb() =>
+            _workingDb != null ? new OnlineDbContext(_workingDb) : new OnlineDbContext();
+
         /// <summary>Copy the real card database to a temp file and point this service at it.</summary>
         private static DatabaseStaging BeginStaging(IProgress<ImportProgress> progress, int pct)
         {
@@ -104,6 +110,8 @@ namespace BreakersOfE.Services
             var stage = DatabaseStaging.Begin(AppFolderService.DatabasePath);
             using (var db = new AppDbContext(stage.WorkingPath))
                 db.EnsureSchema();                         // empty/first run: create tables
+            using (var odb = new OnlineDbContext(stage.WorkingPath))
+                odb.EnsureSchema();                        // online pool table (MTGO / Arena)
             _workingDb = stage.WorkingPath;
             return stage;
         }
@@ -372,6 +380,24 @@ namespace BreakersOfE.Services
             }
 
             await db.SaveChangesAsync(ct);
+
+            // Online pool: the same prices (MTGO tickets included).
+            using (var odb = OnlineDb())
+            {
+                foreach (var card in odb.OnlineCards.ToList())
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (!priceLookup.TryGetValue(card.ScryfallId, out var p)) continue;
+                    card.PriceUsd = p.usd;
+                    card.PriceUsdFoil = p.usdFoil;
+                    card.PriceUsdEtched = p.usdEtched;
+                    card.PriceEur = p.eur;
+                    card.PriceEurFoil = p.eurFoil;
+                    card.PriceTix = p.tix;
+                }
+                await odb.SaveChangesAsync(ct);
+            }
+
             Report(progress, "Prices updated.", endPct,
                 $"{updated:N0} cards updated");
         }
@@ -591,6 +617,13 @@ namespace BreakersOfE.Services
                 await db.Database.ExecuteSqlRawAsync("DELETE FROM ArtSeriesCards", ct);
                 await db.Database.ExecuteSqlRawAsync("DELETE FROM ConspiracyCards", ct);
             }
+            // Online pool: rebuilt from scratch (drop + create), so a column
+            // added in a later version is always there.
+            using (var odb = OnlineDb())
+            {
+                await odb.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS OnlineCards", ct);
+                odb.EnsureSchema();
+            }
 
             const int batchSize = 500;
             var pool = new List<PoolCard>(batchSize);
@@ -600,6 +633,7 @@ namespace BreakersOfE.Services
             var vanguard = new List<VanguardCard>(batchSize);
             var artSeries = new List<ArtSeriesCard>(batchSize);
             var conspiracy = new List<ConspiracyCard>(batchSize);
+            var online = new List<PoolCard>(batchSize);      // MTGO / Arena pool
 
             // Track seen ScryfallIds to skip duplicates in the bulk file
             var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -630,13 +664,24 @@ namespace BreakersOfE.Services
                     schemaValidated = true;
                 }
 
-                // Skip digital-only cards (MTGO/Arena exclusives)
-                if (cardEl.TryGetProperty("games", out var gamesEl))
+                // Where this printing exists: paper, MTGO, Arena (Scryfall
+                // "games"). No list = paper, as before.
+                bool hasPaper = true, onMtgo = false, onArena = false;
+                if (cardEl.TryGetProperty("games", out var gamesEl) &&
+                    gamesEl.ValueKind == JsonValueKind.Array)
                 {
-                    bool hasPaper = gamesEl.EnumerateArray()
-                        .Any(g => g.GetString() == "paper");
-                    if (!hasPaper) continue;
+                    hasPaper = false;
+                    foreach (var g in gamesEl.EnumerateArray())
+                    {
+                        switch (g.ValueKind == JsonValueKind.String ? g.GetString() : null)
+                        {
+                            case "paper": hasPaper = true; break;
+                            case "mtgo": onMtgo = true; break;
+                            case "arena": onArena = true; break;
+                        }
+                    }
                 }
+                if (!hasPaper && !onMtgo && !onArena) continue;
 
                 // Skip duplicate ScryfallIds (bulk files can contain dupes)
                 string scryfallId = GetString(cardEl, "id");
@@ -646,9 +691,21 @@ namespace BreakersOfE.Services
                     continue;
                 }
 
-                RouteCard(cardEl, GetString(cardEl, "layout"),
-                    pool, tokens, planar, schemes,
-                    vanguard, artSeries, conspiracy, result);
+                // Paper pool: paper printings only (digital-only cards never go here).
+                if (hasPaper)
+                    RouteCard(cardEl, GetString(cardEl, "layout"),
+                        pool, tokens, planar, schemes,
+                        vanguard, artSeries, conspiracy, result);
+
+                // Online pool: every regular card on MTGO or Arena, including
+                // digital-only ones. Its own table — paper never sees it.
+                if ((onMtgo || onArena) && IsRegularCard(cardEl))
+                {
+                    online.Add(ParseOnlineCard(cardEl, onMtgo, onArena));
+                    result.OnlineCardsImported++;
+                    if (online.Count >= batchSize)
+                    { await FlushOnlineAsync(online, ct); online.Clear(); }
+                }
 
                 if (pool.Count >= batchSize)
                 { await FlushBatchAsync(pool, ct); pool.Clear(); }
@@ -675,7 +732,8 @@ namespace BreakersOfE.Services
                         $"Tokens: {result.TokenCardsImported:N0}  " +
                         $"Planar: {result.PlanarCardsImported:N0}  " +
                         $"Schemes: {result.SchemeCardsImported:N0}  " +
-                        $"Conspiracy: {result.ConspiracyCardsImported:N0}";
+                        $"Conspiracy: {result.ConspiracyCardsImported:N0}  " +
+                        $"Online: {result.OnlineCardsImported:N0}";
                     Report(progress, "Importing to card pool database (breakersofe.db)...", pct, detail);
                 }
             }
@@ -690,6 +748,45 @@ namespace BreakersOfE.Services
             if (vanguard.Count > 0) await FlushBatchAsync(vanguard, ct);
             if (artSeries.Count > 0) await FlushBatchAsync(artSeries, ct);
             if (conspiracy.Count > 0) await FlushBatchAsync(conspiracy, ct);
+            if (online.Count > 0) await FlushOnlineAsync(online, ct);
+        }
+
+        /// <summary>
+        /// A card that goes to the main Cards pool (not a token, plane,
+        /// scheme, vanguard, art series or conspiracy) — same rule as RouteCard.
+        /// </summary>
+        private static bool IsRegularCard(JsonElement card)
+        {
+            if (GetString(card, "type_line").Contains("Conspiracy", StringComparison.OrdinalIgnoreCase))
+                return false;
+            return GetString(card, "layout") is not ("token" or "double_faced_token" or "planar"
+                or "scheme" or "vanguard" or "art_series");
+        }
+
+        /// <summary>A pool card plus where it can be played online and its MTGO / Arena ids.</summary>
+        private static PoolCard ParseOnlineCard(JsonElement c, bool onMtgo, bool onArena)
+        {
+            var pc = ParsePoolCard(c);
+            pc.IsMeld = GetString(c, "layout") == "meld";
+            pc.IsOnMtgo = onMtgo;
+            pc.IsOnArena = onArena;
+            pc.IsDigital = GetBool(c, "digital");
+            pc.MtgoId = GetIntOrNull(c, "mtgo_id");
+            pc.MtgoFoilId = GetIntOrNull(c, "mtgo_foil_id");
+            pc.ArenaId = GetIntOrNull(c, "arena_id");
+            return pc;
+        }
+
+        private static int? GetIntOrNull(JsonElement el, string prop) =>
+            el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number &&
+            v.TryGetInt32(out int i) ? i : null;
+
+        /// <summary>Write a batch of online cards to OnlineCards.</summary>
+        private static async Task FlushOnlineAsync(List<PoolCard> batch, CancellationToken ct)
+        {
+            using var db = OnlineDb();
+            await db.OnlineCards.AddRangeAsync(batch, ct);
+            await db.SaveChangesAsync(ct);
         }
 
         // ── Route card to correct table ───────────────────────────────────────
@@ -804,6 +901,10 @@ namespace BreakersOfE.Services
                 setCodes.Add(c);
             foreach (var c in db.ArtSeriesCards.Select(x => x.SetCode).Distinct())
                 setCodes.Add(c);
+            // Online-only sets (Alchemy, MTGO-only) need their symbols too.
+            using (var odb = OnlineDb())
+                foreach (var c in odb.OnlineCards.Select(x => x.SetCode).Distinct())
+                    setCodes.Add(c);
 
             var list = setCodes.ToList();
             int total = list.Count;

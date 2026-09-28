@@ -130,6 +130,8 @@ namespace BreakersOfE.Models
         /// <summary>The finish this row really is (a v1 foil row of an etched-only printing is etched).</summary>
         [NotMapped] public string ShownFinish => CardFinish.Shown(Finish, PrintingEtchedOnly);
         [NotMapped] public string FinishPill => CardFinish.Pill(ShownFinish);
+        /// <summary>Favorite column: a star when this row is a favorite.</summary>
+        [NotMapped] public string FavoriteDisplay => IsFavorite ? "★" : string.Empty;
 
         /// <summary>Owned minus used, for THIS finish. UsedCount is kept
         /// derived and per-finish (capped at Quantity) by the deck-usage code.</summary>
@@ -255,6 +257,8 @@ namespace BreakersOfE.Models
         /// <summary>The finish this row really is (a v1 foil row of an etched-only printing is etched).</summary>
         [NotMapped] public string ShownFinish => CardFinish.Shown(Finish, PrintingEtchedOnly);
         [NotMapped] public string FinishPill => CardFinish.Pill(ShownFinish);
+        /// <summary>Favorite column: a star when this row is a favorite.</summary>
+        [NotMapped] public string FavoriteDisplay => IsFavorite ? "★" : string.Empty;
         [NotMapped] public string PriceDisplay => Price.HasValue ? $"${Price.Value:F2}" : "—";
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
@@ -366,6 +370,8 @@ namespace BreakersOfE.Models
         /// <summary>The finish this row really is (a v1 foil row of an etched-only printing is etched).</summary>
         [NotMapped] public string ShownFinish => CardFinish.Shown(Finish, PrintingEtchedOnly);
         [NotMapped] public string FinishPill => CardFinish.Pill(ShownFinish);
+        /// <summary>Favorite column: a star when this row is a favorite.</summary>
+        [NotMapped] public string FavoriteDisplay => IsFavorite ? "★" : string.Empty;
         [NotMapped] public string PriceDisplay => Price.HasValue ? $"${Price.Value:F2}" : "—";
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
@@ -464,6 +470,8 @@ namespace BreakersOfE.Models
         /// <summary>The finish this row really is (a v1 foil row of an etched-only printing is etched).</summary>
         [NotMapped] public string ShownFinish => CardFinish.Shown(Finish, PrintingEtchedOnly);
         [NotMapped] public string FinishPill => CardFinish.Pill(ShownFinish);
+        /// <summary>Favorite column: a star when this row is a favorite.</summary>
+        [NotMapped] public string FavoriteDisplay => IsFavorite ? "★" : string.Empty;
         [NotMapped] public string PriceDisplay => Price.HasValue ? $"${Price.Value:F2}" : "—";
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
@@ -564,6 +572,8 @@ namespace BreakersOfE.Models
         /// <summary>The finish this row really is (a v1 foil row of an etched-only printing is etched).</summary>
         [NotMapped] public string ShownFinish => CardFinish.Shown(Finish, PrintingEtchedOnly);
         [NotMapped] public string FinishPill => CardFinish.Pill(ShownFinish);
+        /// <summary>Favorite column: a star when this row is a favorite.</summary>
+        [NotMapped] public string FavoriteDisplay => IsFavorite ? "★" : string.Empty;
         [NotMapped] public string PriceDisplay => Price.HasValue ? $"${Price.Value:F2}" : "—";
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
@@ -651,6 +661,8 @@ namespace BreakersOfE.Models
         /// <summary>The finish this row really is (a v1 foil row of an etched-only printing is etched).</summary>
         [NotMapped] public string ShownFinish => CardFinish.Shown(Finish, PrintingEtchedOnly);
         [NotMapped] public string FinishPill => CardFinish.Pill(ShownFinish);
+        /// <summary>Favorite column: a star when this row is a favorite.</summary>
+        [NotMapped] public string FavoriteDisplay => IsFavorite ? "★" : string.Empty;
         [NotMapped] public string PriceDisplay => Price.HasValue ? $"${Price.Value:F2}" : "—";
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
@@ -754,6 +766,8 @@ namespace BreakersOfE.Models
         /// <summary>The finish this row really is (a v1 foil row of an etched-only printing is etched).</summary>
         [NotMapped] public string ShownFinish => CardFinish.Shown(Finish, PrintingEtchedOnly);
         [NotMapped] public string FinishPill => CardFinish.Pill(ShownFinish);
+        /// <summary>Favorite column: a star when this row is a favorite.</summary>
+        [NotMapped] public string FavoriteDisplay => IsFavorite ? "★" : string.Empty;
         [NotMapped] public string PriceDisplay => Price.HasValue ? $"${Price.Value:F2}" : "—";
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";

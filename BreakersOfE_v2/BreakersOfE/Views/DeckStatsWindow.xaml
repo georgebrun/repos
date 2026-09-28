@@ -350,6 +350,14 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,8,0">
                     <StackPanel>
                         <ItemsControl x:Name="CheckList" ItemTemplate="{StaticResource CheckRow}"/>
+
+                        <!-- Card legality in every format this kind of deck can be played in -->
+                        <TextBlock x:Name="LegalityHeader" Text="Legality by format" FontSize="16" FontWeight="SemiBold"
+                                   Margin="0,8,0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <TextBlock x:Name="LegalityIntro" FontSize="12" Margin="0,0,0,10" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <ItemsControl x:Name="LegalityList" ItemTemplate="{StaticResource CheckRow}"/>
+
                         <TextBlock Style="{StaticResource Note}"
                                    Text="Copies are counted by card name across all printings. Basic lands and cards that allow any number of copies are exempt. Legality comes from the pool's Scryfall data."/>
                     </StackPanel>

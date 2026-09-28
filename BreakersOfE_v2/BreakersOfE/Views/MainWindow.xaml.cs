@@ -54,6 +54,7 @@ namespace BreakersOfE.Views
                 _viewOpenedOnce = true;
                 NavCardPool.IsExpanded = true;
                 NavCollection.IsExpanded = false;
+                NavOnline.IsExpanded = false;
             }
 
             // View items
@@ -62,9 +63,12 @@ namespace BreakersOfE.Views
             NavSets.Visibility = viewVis;
             NavCollection.Visibility = viewVis;
             NavDecks.Visibility = viewVis;
+            NavOnline.Visibility = viewVis;
 
             // Edit items (placeholder until editing exists)
-            NavEditPoolToCollection.Visibility = open == NavSection.Edit ? Visibility.Visible : Visibility.Collapsed;
+            var editVis = open == NavSection.Edit ? Visibility.Visible : Visibility.Collapsed;
+            NavEditPoolToCollection.Visibility = editVis;
+            NavEditOnline.Visibility = editVis;
 
             // Edit button: at the bottom only while View is open; otherwise
             // stacked at the top under View.

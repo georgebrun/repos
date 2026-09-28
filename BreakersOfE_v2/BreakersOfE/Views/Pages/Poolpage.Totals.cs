@@ -139,8 +139,11 @@ namespace BreakersOfE.Views.Pages
                 int missing = cards.Sum(c => c.CollectionMissing);
                 // Cost to finish: missing copies at the card's price (non-foil, else foil).
                 decimal missingCost = cards.Sum(c => c.CollectionMissing * (c.PriceUsd ?? c.FoilCopyPrice ?? 0m));
+                // Pauper Commander: "restricted" = an uncommon, fine only as the commander.
                 int illegal = cards.Count(c =>
-                    c.Legality[Models.LegalityAccessor.DeckFormatKey].Status is "banned" or "not_legal");
+                    c.Legality[Models.LegalityAccessor.DeckFormatKey].Status is "banned" or "not_legal" ||
+                    (c.DeckFormat == "paupercommander" && !Services.DeckRulesService.IsLeaderCard(c) &&
+                     c.Legality[Models.LegalityAccessor.DeckFormatKey].Status == "restricted"));
                 TotalsGrid.ItemsSource = new[]
                 {
                     new CollectionTotalsRow
@@ -176,15 +179,25 @@ namespace BreakersOfE.Views.Pages
             int foil = rows.Where(r => (Str(r, "Finish") ?? "nonfoil") != Models.CardFinish.NonFoil)
                            .Sum(r => Int(r, "Quantity"));
 
+            // Online: MTGO values are in event tickets; Arena has no prices or foils.
+            var kind = KindOf(_currentTag);
+            decimal value = rows.Sum(r => Dec(r, "RowValue"));
             TotalsGrid.ItemsSource = new[]
             {
                 new CollectionTotalsRow
                 {
-                    Label = $"Totals ({rows.Count:N0} rows, {foil:N0} foil)",
+                    Label = kind == TableKind.ArenaCollection
+                        ? $"Totals ({rows.Count:N0} rows)"
+                        : $"Totals ({rows.Count:N0} rows, {foil:N0} foil)",
                     Qty = rows.Sum(r => Int(r, "Quantity")).ToString("N0"),
                     Used = Count(rows.Sum(r => Int(r, "UsedCount"))),
                     Available = Count(rows.Sum(r => Int(r, "AvailableCount"))),
-                    Value = $"${rows.Sum(r => Dec(r, "RowValue")):N2}",
+                    Value = kind switch
+                    {
+                        TableKind.MtgoCollection => $"{value:N2} tix",
+                        TableKind.ArenaCollection => "",
+                        _ => $"${value:N2}",
+                    },
                     // Asking / offer prices are per copy.
                     Asking = Money(rows.Sum(r => Dec(r, "AskingPrice") * Int(r, "Quantity"))),
                     Offer = Money(rows.Sum(r => Dec(r, "OfferPrice") * Int(r, "Quantity"))),
@@ -218,7 +231,7 @@ namespace BreakersOfE.Views.Pages
             if (_currentTag == DeckTableTag)
             {
                 if (_openDeck != null)
-                    new DeckStatsWindow(_openDeck, Window.GetWindow(this)).Show();
+                    new DeckStatsWindow(_openDeck, Window.GetWindow(this), _checkAsFormat).Show();
                 return;
             }
             if (_currentTag != "Collection") return;

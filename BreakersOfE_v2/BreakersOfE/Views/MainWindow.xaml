@@ -254,6 +254,31 @@
                                        TargetPageType="{x:Type pages:PoolPage}"
                                        Icon="{ui:SymbolIcon Stack24}" />
 
+                <!-- ═══ ONLINE (expandable): Magic Online and MTG Arena, each with its
+                     own card pool and its own collection — never mixed with paper. ═══ -->
+                <ui:NavigationViewItem x:Name="NavOnline" Content="Online"
+                                       Icon="{ui:SymbolIcon Cloud24}"
+                                       IsExpanded="False">
+                    <ui:NavigationViewItem.MenuItems>
+                        <ui:NavigationViewItem Content="MTGO Cards"
+                                               Tag="MtgoCards"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Desktop24}" />
+                        <ui:NavigationViewItem Content="MTGO Collection"
+                                               Tag="MtgoCollection"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Folder24}" />
+                        <ui:NavigationViewItem Content="Arena Cards"
+                                               Tag="ArenaCards"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Games24}" />
+                        <ui:NavigationViewItem Content="Arena Collection"
+                                               Tag="ArenaCollection"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Folder24}" />
+                    </ui:NavigationViewItem.MenuItems>
+                </ui:NavigationViewItem>
+
                 <!-- ═══ EDIT section items (shown while Edit is open) ═══ -->
 
                 <!-- Pool → Collection: pool table on top, its collection table below -->
@@ -297,6 +322,23 @@
                                                TargetPageType="{x:Type pages:EditCollectionPage}"
                                                Icon="{ui:SymbolIcon EyeTracking24}" />
 
+                    </ui:NavigationViewItem.MenuItems>
+                </ui:NavigationViewItem>
+
+                <!-- Online → Collection: the MTGO or Arena pool on top, that game's collection below -->
+                <ui:NavigationViewItem x:Name="NavEditOnline" Content="Online → Collection"
+                                       Icon="{ui:SymbolIcon Cloud24}"
+                                       Visibility="Collapsed"
+                                       IsExpanded="True">
+                    <ui:NavigationViewItem.MenuItems>
+                        <ui:NavigationViewItem Content="MTGO"
+                                               Tag="Edit:MtgoCards"
+                                               TargetPageType="{x:Type pages:EditCollectionPage}"
+                                               Icon="{ui:SymbolIcon Desktop24}" />
+                        <ui:NavigationViewItem Content="Arena"
+                                               Tag="Edit:ArenaCards"
+                                               TargetPageType="{x:Type pages:EditCollectionPage}"
+                                               Icon="{ui:SymbolIcon Games24}" />
                     </ui:NavigationViewItem.MenuItems>
                 </ui:NavigationViewItem>
 

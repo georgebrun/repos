@@ -1,10 +1,14 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using BreakersOfE.Models;
 using BreakersOfE.Services;
+using BreakersOfE.Views.Dialogs;
 
 namespace BreakersOfE.Views.Pages
 {
@@ -13,13 +17,19 @@ namespace BreakersOfE.Views.Pages
     /// the matching collection table below. Both are the same PoolPage the
     /// View section uses (embedded, with their own filters, layouts and zoom).
     ///
-    /// Every add and remove — buttons, keys, right-click — goes through
-    /// <see cref="DoAdd"/> / <see cref="DoRemove"/> → CollectionEditService,
-    /// then <see cref="AfterEdit"/> refreshes both tables in one place.
+    /// A collection row is one printing + finish + language + condition.
+    /// Cards added from the pool table go in with the Language and Condition
+    /// picked in the bar (English · Near Mint to start); adding to a selected
+    /// collection row keeps that row's language and condition.
+    ///
+    /// Every change — buttons, keys, right-click, cell double-clicks — goes
+    /// through <see cref="Run"/>: snapshot for Undo → CollectionEditService →
+    /// <see cref="AfterEdit"/>, which refreshes both tables in one place.
+    /// Several selected rows (Ctrl/Shift+click) are all acted on, after asking.
     ///
     /// Keys: top table Enter = add default finish, Shift+Enter = foil,
-    /// Ctrl+Enter = etched; bottom table Delete = remove Qty of that row's
-    /// finish, Shift+Delete = remove all of that row's finish; Ctrl+Q = Qty box.
+    /// Ctrl+Enter = etched; bottom table Delete = remove Qty from the selected
+    /// rows, Shift+Delete = remove all of them; Ctrl+Q = Qty box; Ctrl+Z = Undo.
     /// </summary>
     public partial class EditCollectionPage : Page
     {
@@ -27,8 +37,12 @@ namespace BreakersOfE.Views.Pages
         private readonly PoolPage _bottom = new();
         private string _poolTag = "Cards";
         private string CollTag => CollectionEditService.CollectionTagFor(_poolTag);
+        /// <summary>Online → Collection (MTGO or Arena): no language, condition or etched.</summary>
+        private bool IsOnline => CollectionEditService.IsOnline(CollTag);
+        private bool IsArena => _poolTag == "ArenaCards";
 
-        // The card the buttons act on: the one selected last, in either table.
+        // The table the user worked in last, and the card shown / counted.
+        private PoolPage? _active;
         private object? _current;
         private object? _currentPool;      // its pool card (for adding), if found
         private bool _currentEtchedOnly;
@@ -36,6 +50,10 @@ namespace BreakersOfE.Views.Pages
 
         private readonly ContextMenu _topMenu = new();
         private readonly ContextMenu _bottomMenu = new();
+
+        // Undo: the rows as they were before each change (newest last).
+        private const int UndoSteps = 20;
+        private readonly List<(EditSnapshot Snap, string Text)> _undo = new();
 
         public EditCollectionPage()
         {
@@ -46,22 +64,45 @@ namespace BreakersOfE.Views.Pages
             TopFrame.Content = _top;
             BottomFrame.Content = _bottom;
 
-            _top.SelectedCardChanged += card => { if (card != null) SetCurrent(card); };
-            _bottom.SelectedCardChanged += card => { if (card != null) SetCurrent(card); };
+            _top.SelectedCardChanged += card => OnSelected(_top, card);
+            _bottom.SelectedCardChanged += card => OnSelected(_bottom, card);
 
             _top.GridPreviewKeyDown += Top_GridPreviewKeyDown;
             _bottom.GridPreviewKeyDown += Bottom_GridPreviewKeyDown;
 
+            LanguageBox.ItemsSource = CardLanguage.All;
+            LanguageBox.SelectedItem = CardLanguage.Default;
+            ConditionBox.ItemsSource = CardCondition.All;
+            ConditionBox.SelectedItem = CardCondition.Default;
+
             BuildMenus();
 
-            // Double-click the Qty cell of a collection row to type a new quantity.
+            // Double-click a cell of a collection row to change it in place.
             _bottom.CellDoubleClickHandler = (row, header, cell) =>
             {
-                if (header != "Qty") return false;
-                EditQuantityInPlace(row, cell);
-                return true;
+                switch (header)
+                {
+                    case "Qty": EditQuantityInPlace(row, cell); return true;
+                    case "Notes": EditTextInPlace(row, cell, TextField.Notes); return true;
+                    case "Storage": EditTextInPlace(row, cell, TextField.Storage); return true;
+                    case "Fav": ToggleFavorite(); return true;
+                    case "Language":
+                        ShowChoices(cell, CardLanguage.All, CardLanguage.Normalize(Str(row, "Language")),
+                                    v => ChangeRows(null, v, null, $"Language → {v}"));
+                        return true;
+                    case "Condition":
+                        ShowChoices(cell, CardCondition.All, CardCondition.Normalize(Str(row, "Condition")),
+                                    v => ChangeRows(null, null, v, $"Condition → {v}"));
+                        return true;
+                    case "Finish":
+                        ShowChoices(cell, FinishChoices(), CardFinish.Display(FinishOf(row)),
+                                    v => ChangeRows(FinishFromDisplay(v), null, null, $"Finish → {v}"));
+                        return true;
+                    default: return false;
+                }
             };
             UpdateButtons();
+            UpdateUndo();
         }
 
         /// <summary>Pool table tag → its collection table tag.</summary>
@@ -70,6 +111,8 @@ namespace BreakersOfE.Views.Pages
         private static string DisplayName(string poolTag) => poolTag switch
         {
             "ArtSeries" => "Art Series",
+            "MtgoCards" => "MTGO",
+            "ArenaCards" => "Arena",
             "" => "Cards",
             _ => poolTag,
         };
@@ -79,18 +122,58 @@ namespace BreakersOfE.Views.Pages
         {
             if (string.IsNullOrEmpty(poolTag)) poolTag = "Cards";
             _poolTag = poolTag;
+            _active = null;
             _current = null;
             _currentPool = null;
             Detail.ShowCard(null);
+            ShowModeControls();
             _top.LoadPool(poolTag);
             _bottom.LoadPool(CollTag);
-            UpdateButtons();
+            RefreshCounts();
             ShowStatus("", false);
+        }
+
+        /// <summary>
+        /// Online pages have no language, condition, storage or etched; Arena
+        /// has no foils either. Those controls and menu items are hidden there.
+        /// </summary>
+        private void ShowModeControls()
+        {
+            var paper = IsOnline ? Visibility.Collapsed : Visibility.Visible;
+            var foil = IsArena ? Visibility.Collapsed : Visibility.Visible;
+            LanguageLabel.Visibility = LanguageBox.Visibility = paper;
+            ConditionLabel.Visibility = ConditionBox.Visibility = paper;
+            BtnAddEtched.Visibility = BtnRemoveEtched.Visibility = paper;
+            BtnAddFoil.Visibility = BtnRemoveFoil.Visibility = foil;
+
+            foreach (var entry in _menuEntries)
+            {
+                string h = entry.Header;
+                entry.Item.Visibility =
+                    (h.Contains("Etched") || h == "Edit Storage…") ? paper :
+                    h.Contains("Foil") && !h.Contains("Non-Foil") && !h.Contains("Favorite") ? foil :
+                    Visibility.Visible;
+            }
+            if (_languageMenu != null) _languageMenu.Visibility = paper;
+            if (_conditionMenu != null) _conditionMenu.Visibility = paper;
+            if (_finishMenu != null)
+            {
+                _finishMenu.Visibility = foil;         // Arena: one finish, nothing to change to
+                foreach (MenuItem mi in _finishMenu.Items)
+                    mi.Visibility = (string)mi.Tag == CardFinish.Etched ? paper : Visibility.Visible;
+            }
         }
 
         // ══════════════════════════════════════════════════════════════════
         // CURRENT CARD
         // ══════════════════════════════════════════════════════════════════
+        private void OnSelected(PoolPage table, object? card)
+        {
+            if (card == null) return;
+            _active = table;
+            SetCurrent(card);
+        }
+
         private void SetCurrent(object card)
         {
             _current = card;
@@ -100,15 +183,7 @@ namespace BreakersOfE.Views.Pages
             // Adding needs the pool printing: the card itself (top table) or
             // looked up by its ScryfallId (a collection row, bottom table).
             _currentPool = card is IOwnedCard ? card : CollectionEditService.FindPoolCard(CollTag, sid);
-            if (_currentPool != null)
-            {
-                var (_, foil, etched) = CollectionEditService.FinishesOf(_currentPool);
-                _currentEtchedOnly = etched && !foil;
-            }
-            else
-            {
-                _currentEtchedOnly = card is IFinishRow && Bool(card, "PrintingEtchedOnly");
-            }
+            _currentEtchedOnly = EtchedOnly(card, _currentPool);
             RefreshCounts();
         }
 
@@ -120,33 +195,61 @@ namespace BreakersOfE.Views.Pages
             UpdateButtons();
         }
 
+        private bool IsCollectionRow(object card) => card is not IOwnedCard;
+
         private void UpdateButtons()
         {
+            int selected = _active?.SelectedCount ?? 0;
+            bool many = selected > 1;
             var (nf, f, e) = _currentPool != null
-                ? CollectionEditService.FinishesOf(_currentPool) : (false, false, false);
-            BtnAddNonFoil.IsEnabled = nf;
-            BtnAddFoil.IsEnabled = f;
-            BtnAddEtched.IsEnabled = e;
-            BtnRemoveNonFoil.IsEnabled = _counts.NonFoil > 0;
-            BtnRemoveFoil.IsEnabled = _counts.Foil > 0;
-            BtnRemoveEtched.IsEnabled = _counts.Etched > 0;
-            BtnRemoveAll.IsEnabled = _counts.Total > 0;
+                ? CollectionEditService.FinishesOf(CollTag, _currentPool) : (false, false, false);
 
-            ModeText.Text = _current == null
-                ? $"Pool → Collection · {DisplayName(_poolTag)}. Select a card in either table."
-                : $"{CardText(_current)}  ·  you own {OwnedText()}";
+            // Several rows: every button is on (rows that can't take the
+            // action are skipped and reported).
+            BtnAddNonFoil.IsEnabled = many || nf;
+            BtnAddFoil.IsEnabled = many || f;
+            BtnAddEtched.IsEnabled = many || e;
+            BtnRemoveNonFoil.IsEnabled = many || _counts.NonFoil > 0;
+            BtnRemoveFoil.IsEnabled = many || _counts.Foil > 0;
+            BtnRemoveEtched.IsEnabled = many || _counts.Etched > 0;
+            BtnRemoveAll.IsEnabled = many || _counts.Total > 0;
+
+            if (_current == null)
+                ModeText.Text = $"{(IsOnline ? "Online" : "Pool")} → Collection · {DisplayName(_poolTag)}. Select a card in either table " +
+                                "(Ctrl+click or Shift+click for several).";
+            else if (many)
+                ModeText.Text = $"{selected} rows selected in the {(_active == _bottom ? "collection" : "pool")} table" +
+                                (IsOnline ? "" : $"  ·  adds go in as {AddsAs()}");
+            else
+                ModeText.Text = $"{CardText(_current)}  ·  you own {OwnedText()}" +
+                                (IsOnline ? "" : $"  ·  adds go in as {AddsAs()}");
+        }
+
+        /// <summary>"English · Near Mint" — or the selected collection row's own.</summary>
+        private string AddsAs()
+        {
+            if (_active == _bottom && _current != null && IsCollectionRow(_current))
+                return $"{CardLanguage.Normalize(Str(_current, "Language"))} · " +
+                       $"{CardCondition.Normalize(Str(_current, "Condition"))} (this row's)";
+            return $"{AddLanguage} · {AddCondition}";
         }
 
         private string OwnedText()
         {
             if (_counts.Total == 0) return "none";
-            var parts = new System.Collections.Generic.List<string>();
+            var parts = new List<string>();
             if (_counts.NonFoil > 0) parts.Add($"{_counts.NonFoil} Non-Foil");
             if (_counts.Foil > 0) parts.Add($"{_counts.Foil} Foil");
             if (_counts.Etched > 0) parts.Add($"{_counts.Etched} Etched");
-            int used = _counts.UsedNonFoil + _counts.UsedFoil + _counts.UsedEtched;
-            return string.Join(", ", parts) + (used > 0 ? $"  ({used} in use by decks)" : "");
+            string rows = _counts.Rows > 1 ? $" in {_counts.Rows} rows" : "";
+            return string.Join(", ", parts) + rows + (_counts.Used > 0 ? $"  ({_counts.Used} in use by decks)" : "");
         }
+
+        // Online rows have no language or condition ("" → the defaults, as the service keys them).
+        private string AddLanguage => IsOnline ? "" : LanguageBox.SelectedItem as string ?? CardLanguage.Default;
+        private string AddCondition => IsOnline ? "" : ConditionBox.SelectedItem as string ?? CardCondition.Default;
+
+        private void Defaults_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateButtons();
 
         // ══════════════════════════════════════════════════════════════════
         // ACTIONS — every gesture ends up here
@@ -162,81 +265,332 @@ namespace BreakersOfE.Views.Pages
             }
         }
 
-        /// <summary>Default finish for Enter: non-foil, else foil, else etched.</summary>
-        private string DefaultFinish()
+        /// <summary>At most this many rows per action (Ctrl+A on the pool would be 100,000).</summary>
+        private const int MaxRows = 1000;
+
+        /// <summary>The rows an action works on: the selected rows of that table.</summary>
+        private List<object> Targets(PoolPage? table)
         {
-            if (_currentPool == null) return CardFinish.NonFoil;
-            var (nf, f, _) = CollectionEditService.FinishesOf(_currentPool);
-            return nf ? CardFinish.NonFoil : f ? CardFinish.Foil : CardFinish.Etched;
+            table ??= _active;
+            if (table != null)
+            {
+                var rows = table.SelectedCards;
+                if (rows.Count > 0) return rows;
+            }
+            // Nothing selected there: the current card, but only if it is from that table.
+            if (_current == null) return new List<object>();
+            bool fits = table == null || (table == _bottom) == IsCollectionRow(_current);
+            return fits ? new List<object> { _current } : new List<object>();
         }
 
-        private void DoAdd(string finish)
+        private bool TooMany(List<object> rows)
         {
-            if (_currentPool == null)
-            {
-                ShowStatus("Select a card first (this printing isn't in the card pool).", true);
-                return;
-            }
-            var result = CollectionEditService.Add(CollTag, _currentPool, finish, Qty);
-            AfterEdit(result, Str(_currentPool, "ScryfallId"), finish);
-        }
-
-        private void DoRemove(string finish, bool all)
-        {
-            if (_current == null) { ShowStatus("Select a card first.", true); return; }
-            string sid = Str(_current, "ScryfallId");
-            var result = CollectionEditService.Remove(CollTag, sid, Str(_current, "Name"), finish,
-                all ? int.MaxValue : Qty, _currentEtchedOnly);
-            AfterEdit(result, sid, finish);
-        }
-
-        private void DoRemoveAllFinishes()
-        {
-            if (_current == null) { ShowStatus("Select a card first.", true); return; }
-            int free = _counts.Total - (_counts.UsedNonFoil + _counts.UsedFoil + _counts.UsedEtched);
-            if (free <= 0)
-            {
-                ShowStatus($"{CardText(_current)}: every copy is in use by decks — nothing removed.", true);
-                return;
-            }
-            var answer = System.Windows.MessageBox.Show(Window.GetWindow(this),
-                $"Remove all {free} unused {(free == 1 ? "copy" : "copies")} of {CardText(_current)}?\n\n" +
-                "Copies used by decks or the Trade Binder are kept.",
-                "Remove All", MessageBoxButton.OKCancel, MessageBoxImage.Question);
-            if (answer != MessageBoxResult.OK) return;
-
-            string sid = Str(_current, "ScryfallId");
-            string name = Str(_current, "Name");
-            int removed = 0;
-            foreach (var finish in new[] { CardFinish.NonFoil, CardFinish.Foil, CardFinish.Etched })
-            {
-                if (_counts.Owned(finish) == 0) continue;
-                removed += CollectionEditService.Remove(CollTag, sid, name, finish, int.MaxValue, _currentEtchedOnly).Changed;
-            }
-            AfterEdit(new EditResult { Changed = removed, Message = $"Removed {removed} × {name} (all unused copies)." },
-                      sid, null);
+            if (rows.Count <= MaxRows) return false;
+            ShowStatus($"{rows.Count:N0} rows are selected — select {MaxRows:N0} or fewer for one change.", true);
+            return true;
         }
 
         /// <summary>
-        /// One place for everything an edit changes on screen: the status line,
-        /// the pool row's Owned count (live), the collection table (reloaded,
-        /// same filters/sort, the edited row re-selected), buttons and counts.
+        /// Snapshot (for Undo) → do the work → one status line → refresh.
+        /// <paramref name="what"/> starts the summary when several rows were done.
         /// </summary>
-        private void AfterEdit(EditResult result, string sid, string? finish)
+        private void Run(string what, IEnumerable<string> sids, Func<List<EditResult>> work)
+        {
+            var printings = sids.Where(s => s.Length > 0).Distinct().ToList();
+            var snap = CollectionEditService.Snapshot(CollTag, printings);
+            var results = work();
+            var result = Combine(what, results);
+            if (result.Changed > 0)
+            {
+                if (snap != null)
+                {
+                    CollectionEditService.MarkAfter(snap);
+                    PushUndo(snap, result.Message);
+                }
+                else
+                {
+                    result = new EditResult
+                    {
+                        Changed = result.Changed, Warning = true, Touched = result.Touched,
+                        Message = result.Message + "  (This change can't be undone.)",
+                    };
+                }
+            }
+            AfterEdit(result, printings);
+        }
+
+        private static EditResult Combine(string what, List<EditResult> results)
+        {
+            if (results.Count == 1) return results[0];
+            int done = results.Count(r => r.Changed > 0);
+            var problems = results.Where(r => r.Warning).ToList();       // refused or partly done
+            int unchanged = results.Count(r => r.Changed <= 0 && !r.Warning);  // nothing to do
+            string msg = $"{what}: {done} of {results.Count} rows changed";
+            if (unchanged > 0) msg += $", {unchanged} already that way";
+            msg += problems.Count > 0
+                ? $"; {problems.Count} skipped or partly done — e.g. {problems[0].Message}"
+                : ".";
+            return new EditResult
+            {
+                Changed = results.Sum(r => r.Changed),
+                Message = msg,
+                Warning = problems.Count > 0,
+                Touched = results.SelectMany(r => r.Touched).ToList(),
+            };
+        }
+
+        private bool Confirm(string text, string title) =>
+            System.Windows.MessageBox.Show(Window.GetWindow(this), text, title,
+                MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK;
+
+        // ── Add ─────────────────────────────────────────────────────────
+        /// <summary>
+        /// Add Qty copies to each target. <paramref name="finish"/> null = each
+        /// card's default finish (non-foil, else foil, else etched).
+        /// </summary>
+        private void DoAdd(string? finish, PoolPage? table = null)
+        {
+            table ??= _active;
+            var rows = Targets(table);
+            if (rows.Count == 0) { ShowStatus("Select a card first.", true); return; }
+            if (TooMany(rows)) return;
+            int qty = Qty;
+            string finishText = finish == null ? "" : CardFinish.Display(finish) + " ";
+
+            // What each selected row adds to. Two selected rows that land on
+            // the same collection row (same printing, finish, language,
+            // condition) add once, not twice.
+            var plan = new List<(RowKey Key, object? Pool, string Name)>();
+            foreach (var row in rows)
+            {
+                bool fromCollection = IsCollectionRow(row);
+                var pool = fromCollection ? CollectionEditService.FindPoolCard(CollTag, Str(row, "ScryfallId")) : row;
+                string fin = finish ?? (fromCollection ? FinishOf(row) : DefaultFinish(pool));
+                var key = RowKey.Of(Str(row, "ScryfallId"), fin,
+                                    fromCollection ? Str(row, "Language") : AddLanguage,
+                                    fromCollection ? Str(row, "Condition") : AddCondition);
+                if (!plan.Any(p => p.Key == key)) plan.Add((key, pool, Str(row, "Name")));
+            }
+
+            if (plan.Count > 1 &&
+                !Confirm($"Add {qty} {finishText}{(qty == 1 ? "copy" : "copies")} to each of {plan.Count} rows?",
+                         "Add to several rows"))
+                return;
+
+            Run($"Added {qty} {finishText}".TrimEnd(), plan.Select(p => p.Key.ScryfallId), () =>
+                plan.Select(p => p.Pool == null
+                    ? new EditResult { Message = $"{p.Name}: not in the card pool.", Warning = true }
+                    : CollectionEditService.Add(CollTag, p.Pool, p.Key.Finish, qty, p.Key.Language, p.Key.Condition))
+                .ToList());
+        }
+
+        /// <summary>Default finish for Enter: non-foil, else foil, else etched.</summary>
+        private string DefaultFinish(object? pool)
+        {
+            if (pool == null) return CardFinish.NonFoil;
+            var (nf, f, _) = CollectionEditService.FinishesOf(CollTag, pool);
+            return nf ? CardFinish.NonFoil : f ? CardFinish.Foil : CardFinish.Etched;
+        }
+
+        // ── Remove ──────────────────────────────────────────────────────
+        /// <summary>
+        /// Remove Qty copies of one finish from each target. Pool rows use the
+        /// Language and Condition in the bar; collection rows use their own
+        /// (if that exact row doesn't exist, the finish's only row is used).
+        /// </summary>
+        private void DoRemove(string finish, PoolPage? table = null)
+        {
+            table ??= _active;
+            var rows = Targets(table);
+            if (rows.Count == 0) { ShowStatus("Select a card first.", true); return; }
+            if (TooMany(rows)) return;
+            int qty = Qty;
+
+            // Each selected row → the row it removes from (once per row, even
+            // when two selected rows point at the same one).
+            var plan = new List<(RowKey Key, object Row, bool FromCollection)>();
+            foreach (var row in rows)
+            {
+                bool fromCollection = IsCollectionRow(row);
+                var key = RowKey.Of(Str(row, "ScryfallId"), finish,
+                                    fromCollection ? Str(row, "Language") : AddLanguage,
+                                    fromCollection ? Str(row, "Condition") : AddCondition);
+                if (!plan.Any(p => p.Key == key)) plan.Add((key, row, fromCollection));
+            }
+
+            if (plan.Count > 1 &&
+                !Confirm($"Remove {qty} {CardFinish.Display(finish)} {(qty == 1 ? "copy" : "copies")} from each of " +
+                         $"{plan.Count} rows?\n\nCopies used by decks or the Trade Binder are kept.",
+                         "Remove from several rows"))
+                return;
+
+            // From a collection row: exactly that language and condition. From
+            // the pool: the bar's, or the finish's only row if that one doesn't exist.
+            Run($"Removed {qty} {CardFinish.Display(finish)}", plan.Select(p => p.Key.ScryfallId), () =>
+                plan.Select(p => CollectionEditService.Remove(CollTag, p.Key.ScryfallId, Str(p.Row, "Name"),
+                    finish, qty, EtchedOnly(p.Row, p.FromCollection ? null : p.Row),
+                    p.Key.Language, p.Key.Condition, allowFallback: !p.FromCollection)).ToList());
+        }
+
+        /// <summary>Collection table: remove Qty (or all unused) from each selected row itself.</summary>
+        private void RemoveRows(bool all)
+        {
+            var rows = Targets(_bottom).Where(IsCollectionRow).ToList();
+            if (rows.Count == 0) { ShowStatus("Select a row in the collection table first.", true); return; }
+            if (TooMany(rows)) return;
+            int qty = Qty;
+            if (all || rows.Count > 1)
+            {
+                string what = all ? "all unused copies" : $"{qty} {(qty == 1 ? "copy" : "copies")}";
+                string of = rows.Count == 1 ? $"{CardText(rows[0])} ({RowText(rows[0])}, {Int(rows[0], "Quantity")} owned)"
+                                            : $"each of the {rows.Count} selected rows";
+                if (!Confirm($"Remove {what} of {of}?\n\nCopies used by decks or the Trade Binder are kept.",
+                             all ? "Remove all of the row" : "Remove from several rows"))
+                    return;
+            }
+            Run(all ? "Removed all unused copies" : $"Removed {qty}", rows.Select(r => Str(r, "ScryfallId")), () =>
+                rows.Select(row => CollectionEditService.RemoveFromRow(CollTag, CollectionEditService.RowId(row),
+                    all ? int.MaxValue : qty, EtchedOnly(row, null))).ToList());
+        }
+
+        /// <summary>Remove All: every unused copy of each selected printing (all finishes, languages, conditions).</summary>
+        private void DoRemoveAllOfPrintings(PoolPage? table = null)
+        {
+            var rows = Targets(table ?? _active);
+            if (rows.Count == 0) { ShowStatus("Select a card first.", true); return; }
+            if (TooMany(rows)) return;
+            var printings = rows.GroupBy(r => Str(r, "ScryfallId")).Select(g => g.First()).ToList();
+            string of = printings.Count == 1 ? CardText(printings[0]) : $"the {printings.Count} selected printings";
+            if (!Confirm($"Remove every unused copy of {of} — all finishes, languages and conditions?\n\n" +
+                         "Copies used by decks or the Trade Binder are kept.", "Remove All"))
+                return;
+
+            Run("Removed all unused copies", printings.Select(r => Str(r, "ScryfallId")), () =>
+                printings.Select(r => CollectionEditService.RemoveAllOfPrinting(CollTag, Str(r, "ScryfallId"),
+                    Str(r, "Name"), EtchedOnly(r, IsCollectionRow(r) ? null : r))).ToList());
+        }
+
+        // ── Change finish / language / condition (moves copies) ────────
+        /// <summary>
+        /// Move copies of the selected collection rows to another finish,
+        /// language or condition (null = keep). One row with several copies →
+        /// asks how many; several rows → all unused copies of each, after asking.
+        /// </summary>
+        private void ChangeRows(string? finish, string? language, string? condition, string what)
+        {
+            var rows = Targets(_bottom).Where(IsCollectionRow).ToList();
+            if (rows.Count == 0) { ShowStatus("Select a row in the collection table first.", true); return; }
+            if (TooMany(rows)) return;
+
+            int count = int.MaxValue;
+            if (rows.Count == 1)
+            {
+                var row = rows[0];
+                int owned = Int(row, "Quantity");
+                int used = Math.Min(Int(row, "UsedCount"), owned);
+                if (owned - used > 1)
+                {
+                    var n = MoveCopiesDialog.Ask(Window.GetWindow(this), what,
+                        $"{CardText(row)} · {RowText(row)}", owned, used);
+                    if (n == null) return;
+                    count = n.Value;
+                }
+            }
+            else if (!Confirm($"{what} for the {rows.Count} selected rows?\n\n" +
+                              "All unused copies of each row change; copies used by decks stay as they are.",
+                              "Change several rows"))
+                return;
+
+            Run(what, rows.Select(r => Str(r, "ScryfallId")), () =>
+                rows.Select(row => CollectionEditService.Move(CollTag, CollectionEditService.RowId(row), count,
+                    finish, language, condition)).ToList());
+        }
+
+        // ── Notes, storage and favorite ─────────────────────────────────
+        private enum TextField { Notes, Storage }
+
+        /// <summary>Right-click → Edit Notes… / Edit Storage…: the editor over that cell.</summary>
+        private void EditText(TextField field)
+        {
+            if (Targets(_bottom).FirstOrDefault(IsCollectionRow) is not { } row)
+            {
+                ShowStatus("Select a row in the collection table first.", true);
+                return;
+            }
+            string header = field == TextField.Storage ? "Storage" : "Notes";
+            // After the right-click menu has closed, or it would close the editor at once.
+            Dispatcher.BeginInvoke(new Action(() => EditTextInPlace(row, _bottom.CellFor(row, header), field)),
+                System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        /// <summary>Favorite on/off for the selected rows (all on unless every one already is).</summary>
+        private void ToggleFavorite()
+        {
+            var rows = Targets(_bottom).Where(IsCollectionRow).ToList();
+            if (rows.Count == 0) { ShowStatus("Select a row in the collection table first.", true); return; }
+            if (TooMany(rows)) return;
+            bool mark = !rows.All(r => Bool(r, "IsFavorite"));
+            Run(mark ? "Marked as favorite" : "Favorite removed", rows.Select(r => Str(r, "ScryfallId")), () =>
+                rows.Select(row => CollectionEditService.SetFavorite(CollTag, CollectionEditService.RowId(row),
+                    mark, EtchedOnly(row, null))).ToList());
+        }
+
+        // ── Undo ────────────────────────────────────────────────────────
+        private void PushUndo(EditSnapshot snap, string text)
+        {
+            _undo.Add((snap, text));
+            if (_undo.Count > UndoSteps) _undo.RemoveAt(0);
+            UpdateUndo();
+        }
+
+        private void DoUndo()
+        {
+            if (_undo.Count == 0) { ShowStatus("Nothing to undo.", false); return; }
+            var (snap, text) = _undo[^1];
+            _undo.RemoveAt(_undo.Count - 1);
+
+            // Refused when those cards changed since (it can never apply then).
+            var result = CollectionEditService.Restore(snap, text);
+            UpdateUndo();
+
+            if (snap.Table != CollTag)
+            {
+                // Undone in another collection table (not on screen now).
+                ShowStatus(result.Message, result.Warning);
+                return;
+            }
+            AfterEdit(result, snap.Printings.ToList());
+        }
+
+        private void UpdateUndo()
+        {
+            BtnUndo.IsEnabled = _undo.Count > 0;
+            BtnUndo.ToolTip = _undo.Count == 0
+                ? "Nothing to undo (Ctrl+Z)"
+                : $"Undo: {_undo[^1].Text}  (Ctrl+Z · {_undo.Count} of the last {UndoSteps} changes can be undone)";
+        }
+
+        // ── After every change ──────────────────────────────────────────
+        /// <summary>
+        /// One place for everything an edit changes on screen: the status line,
+        /// the pool rows' Owned counts (live), the collection table (reloaded,
+        /// same filters/sort, the edited rows re-selected), buttons and counts.
+        /// </summary>
+        private void AfterEdit(EditResult result, List<string> sids)
         {
             ShowStatus(result.Message, result.Warning);
             if (result.Changed <= 0) { RefreshCounts(); return; }
 
-            // Pool row(s) for this printing: Owned updates in place.
-            if (_top.FindLoaded(r => Str(r, "ScryfallId") == sid) is IOwnedCard poolRow)
-                OwnedCountService.Fill(_poolTag, new object[] { poolRow });
+            // Pool rows of these printings: Owned updates in place.
+            var wanted = new HashSet<string>(sids);
+            var poolRows = _top.FindAllLoaded(r => r is IOwnedCard && wanted.Contains(Str(r, "ScryfallId"))).ToArray();
+            if (poolRows.Length > 0) OwnedCountService.Fill(_poolTag, poolRows);
 
-            // Collection table: re-read and re-select the edited row (or any
-            // row of the same printing if that one is gone).
-            _bottom.ReloadRows(r =>
-                Str(r, "ScryfallId") == sid &&
-                (finish == null || r is not IFinishRow ||
-                 Str(r, "ShownFinish") == finish || Str(r, "Finish") == finish));
+            // Collection table: re-read, re-select the rows the edit ended in
+            // (or a row of the same printing if those are gone).
+            var keys = new HashSet<RowKey>(result.Touched);
+            var printings = new HashSet<string>(sids);
+            _bottom.ReloadRows(r => keys.Contains(KeyOf(r)), r => printings.Contains(Str(r, "ScryfallId")));
 
             RefreshCounts();
         }
@@ -254,162 +608,233 @@ namespace BreakersOfE.Views.Pages
         private void BtnAddNonFoil_Click(object sender, RoutedEventArgs e) => DoAdd(CardFinish.NonFoil);
         private void BtnAddFoil_Click(object sender, RoutedEventArgs e) => DoAdd(CardFinish.Foil);
         private void BtnAddEtched_Click(object sender, RoutedEventArgs e) => DoAdd(CardFinish.Etched);
-        private void BtnRemoveNonFoil_Click(object sender, RoutedEventArgs e) => DoRemove(CardFinish.NonFoil, all: false);
-        private void BtnRemoveFoil_Click(object sender, RoutedEventArgs e) => DoRemove(CardFinish.Foil, all: false);
-        private void BtnRemoveEtched_Click(object sender, RoutedEventArgs e) => DoRemove(CardFinish.Etched, all: false);
-        private void BtnRemoveAll_Click(object sender, RoutedEventArgs e) => DoRemoveAllFinishes();
+        private void BtnRemoveNonFoil_Click(object sender, RoutedEventArgs e) => DoRemove(CardFinish.NonFoil);
+        private void BtnRemoveFoil_Click(object sender, RoutedEventArgs e) => DoRemove(CardFinish.Foil);
+        private void BtnRemoveEtched_Click(object sender, RoutedEventArgs e) => DoRemove(CardFinish.Etched);
+        private void BtnRemoveAll_Click(object sender, RoutedEventArgs e) => DoRemoveAllOfPrintings();
+        private void BtnUndo_Click(object sender, RoutedEventArgs e) => DoUndo();
 
-        // ── Right-click menus (same actions as the buttons) ─────────────
+        // ══════════════════════════════════════════════════════════════════
+        // RIGHT-CLICK MENUS (same actions as the buttons, plus row changes)
+        // ══════════════════════════════════════════════════════════════════
+        /// <summary>A menu item and when it is on; Qty items show "×Qty".</summary>
+        private sealed record MenuEntry(MenuItem Item, string Header, Func<bool> Enabled, bool ShowsQty);
+        private readonly List<MenuEntry> _menuEntries = new();
+        private MenuItem? _favoriteItem;
+        private MenuItem? _undoTop, _undoBottom;
+        private MenuItem? _finishMenu, _languageMenu, _conditionMenu;
+
         private void BuildMenus()
         {
-            MenuItem Item(string header, string keys, Action act)
+            MenuItem Item(ContextMenu menu, string header, string keys, Action act, Func<bool>? enabled = null, bool qty = false)
             {
                 var mi = new MenuItem { Header = header, InputGestureText = keys };
                 mi.Click += (_, _) => act();
+                menu.Items.Add(mi);
+                _menuEntries.Add(new MenuEntry(mi, header, enabled ?? (() => true), qty));
                 return mi;
             }
 
-            _topMenu.Items.Add(Item("Add Non-Foil", "Enter", () => DoAdd(CardFinish.NonFoil)));
-            _topMenu.Items.Add(Item("Add Foil", "Shift+Enter", () => DoAdd(CardFinish.Foil)));
-            _topMenu.Items.Add(Item("Add Etched", "Ctrl+Enter", () => DoAdd(CardFinish.Etched)));
+            // Top: the pool table.
+            Item(_topMenu, "Add Non-Foil", "Enter", () => DoAdd(CardFinish.NonFoil, _top), () => BtnAddNonFoil.IsEnabled, true);
+            Item(_topMenu, "Add Foil", "Shift+Enter", () => DoAdd(CardFinish.Foil, _top), () => BtnAddFoil.IsEnabled, true);
+            Item(_topMenu, "Add Etched", "Ctrl+Enter", () => DoAdd(CardFinish.Etched, _top), () => BtnAddEtched.IsEnabled, true);
             _topMenu.Items.Add(new Separator());
-            _topMenu.Items.Add(Item("Remove Non-Foil", "", () => DoRemove(CardFinish.NonFoil, false)));
-            _topMenu.Items.Add(Item("Remove Foil", "", () => DoRemove(CardFinish.Foil, false)));
-            _topMenu.Items.Add(Item("Remove Etched", "", () => DoRemove(CardFinish.Etched, false)));
-            _topMenu.Opened += (_, _) => UpdateMenu(_topMenu);
+            Item(_topMenu, "Remove Non-Foil", "", () => DoRemove(CardFinish.NonFoil, _top), () => BtnRemoveNonFoil.IsEnabled, true);
+            Item(_topMenu, "Remove Foil", "", () => DoRemove(CardFinish.Foil, _top), () => BtnRemoveFoil.IsEnabled, true);
+            Item(_topMenu, "Remove Etched", "", () => DoRemove(CardFinish.Etched, _top), () => BtnRemoveEtched.IsEnabled, true);
+            Item(_topMenu, "Remove All (every finish, language, condition)", "", () => DoRemoveAllOfPrintings(_top), () => BtnRemoveAll.IsEnabled);
+            _topMenu.Items.Add(new Separator());
+            _undoTop = Item(_topMenu, "Undo", "Ctrl+Z", DoUndo, () => _undo.Count > 0);
 
-            _bottomMenu.Items.Add(Item("Add Non-Foil", "", () => DoAdd(CardFinish.NonFoil)));
-            _bottomMenu.Items.Add(Item("Add Foil", "", () => DoAdd(CardFinish.Foil)));
-            _bottomMenu.Items.Add(Item("Add Etched", "", () => DoAdd(CardFinish.Etched)));
+            // Bottom: the collection table.
+            Item(_bottomMenu, "Add Non-Foil", "", () => DoAdd(CardFinish.NonFoil, _bottom), () => BtnAddNonFoil.IsEnabled, true);
+            Item(_bottomMenu, "Add Foil", "", () => DoAdd(CardFinish.Foil, _bottom), () => BtnAddFoil.IsEnabled, true);
+            Item(_bottomMenu, "Add Etched", "", () => DoAdd(CardFinish.Etched, _bottom), () => BtnAddEtched.IsEnabled, true);
             _bottomMenu.Items.Add(new Separator());
-            _bottomMenu.Items.Add(Item("Remove Non-Foil", "", () => DoRemove(CardFinish.NonFoil, false)));
-            _bottomMenu.Items.Add(Item("Remove Foil", "", () => DoRemove(CardFinish.Foil, false)));
-            _bottomMenu.Items.Add(Item("Remove Etched", "", () => DoRemove(CardFinish.Etched, false)));
+            Item(_bottomMenu, "Remove Qty from the selected rows", "Delete", () => RemoveRows(all: false), qty: true);
+            Item(_bottomMenu, "Remove all of the selected rows", "Shift+Delete", () => RemoveRows(all: true));
+            Item(_bottomMenu, "Remove All (every finish, language, condition)", "", () => DoRemoveAllOfPrintings(_bottom), () => BtnRemoveAll.IsEnabled);
             _bottomMenu.Items.Add(new Separator());
-            _bottomMenu.Items.Add(Item("Remove Qty of this row", "Delete", () => RemoveRow(all: false)));
-            _bottomMenu.Items.Add(Item("Remove all of this row", "Shift+Delete", () => RemoveRow(all: true)));
-            _bottomMenu.Items.Add(Item("Remove All (every finish)", "", DoRemoveAllFinishes));
-            _bottomMenu.Opened += (_, _) => UpdateMenu(_bottomMenu);
 
+            _finishMenu = new MenuItem { Header = "Change Finish" };
+            foreach (var f in new[] { CardFinish.NonFoil, CardFinish.Foil, CardFinish.Etched })
+            {
+                string fin = f;
+                var mi = new MenuItem { Header = CardFinish.Display(fin), Tag = fin };
+                mi.Click += (_, _) => ChangeRows(fin, null, null, $"Finish → {CardFinish.Display(fin)}");
+                _finishMenu.Items.Add(mi);
+            }
+            _bottomMenu.Items.Add(_finishMenu);
+
+            _languageMenu = new MenuItem { Header = "Change Language" };
+            foreach (var l in CardLanguage.All)
+            {
+                string lang = l;
+                var mi = new MenuItem { Header = lang, Tag = lang };
+                mi.Click += (_, _) => ChangeRows(null, lang, null, $"Language → {lang}");
+                _languageMenu.Items.Add(mi);
+            }
+            _bottomMenu.Items.Add(_languageMenu);
+
+            _conditionMenu = new MenuItem { Header = "Change Condition" };
+            foreach (var c in CardCondition.All)
+            {
+                string cond = c;
+                var mi = new MenuItem { Header = cond, Tag = cond };
+                mi.Click += (_, _) => ChangeRows(null, null, cond, $"Condition → {cond}");
+                _conditionMenu.Items.Add(mi);
+            }
+            _bottomMenu.Items.Add(_conditionMenu);
+
+            Item(_bottomMenu, "Edit Notes…", "", () => EditText(TextField.Notes));
+            Item(_bottomMenu, "Edit Storage…", "", () => EditText(TextField.Storage));
+            _favoriteItem = Item(_bottomMenu, "Mark as Favorite", "", ToggleFavorite);
+            _bottomMenu.Items.Add(new Separator());
+            _undoBottom = Item(_bottomMenu, "Undo", "Ctrl+Z", DoUndo, () => _undo.Count > 0);
+
+            _topMenu.Opened += (_, _) => MenuOpened(_top);
+            _bottomMenu.Opened += (_, _) => MenuOpened(_bottom);
             _top.SetRowContextMenu(_topMenu);
             _bottom.SetRowContextMenu(_bottomMenu);
         }
 
-        /// <summary>Menu items follow the buttons (on/off) and show the Qty.</summary>
-        private void UpdateMenu(ContextMenu menu)
+        /// <summary>The menu acts on its own table: sync the current card, then items follow the buttons.</summary>
+        private void MenuOpened(PoolPage table)
         {
+            _active = table;
+            if (table.SelectedCard is { } card) SetCurrent(card);
+            else UpdateButtons();
+
             int q = Qty;
-            foreach (var o in menu.Items)
+            foreach (var entry in _menuEntries)
             {
-                if (o is not MenuItem mi) continue;
-                string h = (mi.Header as string ?? "").Split(" ×")[0];
-                bool qtyAction = h.StartsWith("Add ") || (h.StartsWith("Remove ") && h != "Remove all of this row" && !h.StartsWith("Remove All"));
-                mi.Header = qtyAction && q > 1 ? $"{h} ×{q}" : h;
-                mi.IsEnabled = h switch
-                {
-                    "Add Non-Foil" => BtnAddNonFoil.IsEnabled,
-                    "Add Foil" => BtnAddFoil.IsEnabled,
-                    "Add Etched" => BtnAddEtched.IsEnabled,
-                    "Remove Non-Foil" => BtnRemoveNonFoil.IsEnabled,
-                    "Remove Foil" => BtnRemoveFoil.IsEnabled,
-                    "Remove Etched" => BtnRemoveEtched.IsEnabled,
-                    _ => BtnRemoveAll.IsEnabled,
-                };
+                entry.Item.Header = entry.ShowsQty && q > 1 ? $"{entry.Header} ×{q}" : entry.Header;
+                entry.Item.IsEnabled = entry.Enabled();
             }
+
+            string undoText = _undo.Count > 0 ? $"Undo: {Shorten(_undo[^1].Text)}" : "Undo";
+            if (_undoTop != null) _undoTop.Header = undoText;
+            if (_undoBottom != null) _undoBottom.Header = undoText;
+
+            if (table != _bottom) return;
+            var rows = Targets(_bottom).Where(IsCollectionRow).ToList();
+            bool single = rows.Count == 1;
+            object? row = single ? rows[0] : null;
+
+            if (_favoriteItem != null)
+                _favoriteItem.Header = rows.Count > 0 && rows.All(r => Bool(r, "IsFavorite"))
+                    ? "Remove Favorite" : "Mark as Favorite";
+
+            // Tick the row's current values; finishes the printing lacks are off.
+            var (nf, f, e) = _currentPool != null && single
+                ? CollectionEditService.FinishesOf(CollTag, _currentPool) : (true, true, true);
+            foreach (MenuItem mi in _finishMenu!.Items)
+            {
+                string fin = (string)mi.Tag;
+                mi.IsChecked = row != null && FinishOf(row) == fin;
+                mi.IsEnabled = fin switch { CardFinish.Foil => f, CardFinish.Etched => e, _ => nf };
+            }
+            foreach (MenuItem mi in _languageMenu!.Items)
+                mi.IsChecked = row != null && CardLanguage.Normalize(Str(row, "Language")) == (string)mi.Tag;
+            foreach (MenuItem mi in _conditionMenu!.Items)
+                mi.IsChecked = row != null && CardCondition.Normalize(Str(row, "Condition")) == (string)mi.Tag;
         }
 
-        /// <summary>Bottom table: remove from the selected row's own finish.</summary>
-        private void RemoveRow(bool all)
+        private static string Shorten(string s) => s.Length <= 60 ? s : s[..57] + "…";
+
+        /// <summary>A list of values at a cell (double-click Language / Condition / Finish).</summary>
+        private static void ShowChoices(UIElement target, IEnumerable<string> options, string current, Action<string> pick)
         {
-            if (_bottom.SelectedCard is not { } row) return;
-            SetCurrent(row);
-            string finish = Str(row, "ShownFinish") is { Length: > 0 } shown ? shown : Str(row, "Finish");
-            if (all)
+            var menu = new ContextMenu { PlacementTarget = target, Placement = PlacementMode.Bottom };
+            foreach (var o in options)
             {
-                int n = _counts.Owned(finish);
-                var answer = System.Windows.MessageBox.Show(Window.GetWindow(this),
-                    $"Remove all unused {CardFinish.Display(finish)} copies of {CardText(row)} ({n} owned)?\n\n" +
-                    "Copies used by decks or the Trade Binder are kept.",
-                    "Remove all of this row", MessageBoxButton.OKCancel, MessageBoxImage.Question);
-                if (answer != MessageBoxResult.OK) return;
+                string value = o;
+                var mi = new MenuItem { Header = value, IsChecked = value == current };
+                mi.Click += (_, _) => { if (value != current) pick(value); };
+                menu.Items.Add(mi);
             }
-            DoRemove(finish, all);
+            // Open once the double-click has finished, or the grid's own mouse
+            // handling could close the list straight away.
+            target.Dispatcher.BeginInvoke(new Action(() => menu.IsOpen = true),
+                System.Windows.Threading.DispatcherPriority.Input);
         }
 
-        // ── Qty cell: double-click → type the new quantity ──────────────
+        private IEnumerable<string> FinishChoices()
+        {
+            var (nf, f, e) = _currentPool != null ? CollectionEditService.FinishesOf(CollTag, _currentPool) : (true, true, true);
+            if (nf) yield return CardFinish.Display(CardFinish.NonFoil);
+            if (f) yield return CardFinish.Display(CardFinish.Foil);
+            if (e) yield return CardFinish.Display(CardFinish.Etched);
+        }
+
+        private static string FinishFromDisplay(string display) => display switch
+        {
+            "Foil" => CardFinish.Foil,
+            "Etched" => CardFinish.Etched,
+            _ => CardFinish.NonFoil,
+        };
+
+        // ══════════════════════════════════════════════════════════════════
+        // IN-PLACE EDITORS (double-click Qty / Notes / Storage)
+        // ══════════════════════════════════════════════════════════════════
         /// <summary>
-        /// A small box over the Qty cell: Enter or clicking away sets the row's
-        /// quantity (never below the copies in use), Esc cancels.
+        /// A white box with dark text and a blue edge over a cell (same look on
+        /// every row color). Enter or clicking away saves, Esc cancels. With no
+        /// cell (the Notes or Storage column is hidden) it opens at the mouse.
         /// </summary>
-        private void EditQuantityInPlace(object row, DataGridCell cell)
+        private static void ShowCellEditor(DataGridCell? cell, string text, double minWidth,
+                                           TextAlignment align, bool digitsOnly, string tip, Action<string> save)
         {
-            SetCurrent(row);
-            string finish = Str(row, "ShownFinish") is { Length: > 0 } shown ? shown : Str(row, "Finish");
-            int current = row.GetType().GetProperty("Quantity")?.GetValue(row) is int q ? q : 0;
-
-            // Same look on every table (dark grid, white rows, pink/blue
-            // status rows): a white box, dark bold digits, a blue edge, and a
-            // light-blue selection the digits still read through. The plain
-            // WPF text box style is used on purpose — the app's Fluent style
-            // repaints the background when focused, which is what made the
-            // number hard to see.
-            var accent = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(0x00, 0x78, 0xD4));
+            // The plain WPF text box style on purpose: the app's Fluent style
+            // repaints the background when focused, which made the text hard to see.
+            var accent = new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4));
             accent.Freeze();
             var box = new TextBox
             {
                 Style = new Style(typeof(TextBox)),
-                Text = current.ToString(),
-                MinWidth = Math.Max(48, cell.ActualWidth),
-                // Room for the text so the digits are never cut off.
+                Text = text,
+                MinWidth = Math.Max(minWidth, cell?.ActualWidth ?? 0),
                 MinHeight = 0,
-                Height = Math.Max(30, cell.ActualHeight),
+                Height = Math.Max(30, cell?.ActualHeight ?? 0),      // room for the text, never cut off
                 Padding = new Thickness(4, 0, 4, 0),
-                Background = System.Windows.Media.Brushes.White,
-                Foreground = System.Windows.Media.Brushes.Black,
-                CaretBrush = System.Windows.Media.Brushes.Black,
+                Background = Brushes.White,
+                Foreground = Brushes.Black,
+                CaretBrush = Brushes.Black,
                 BorderBrush = accent,
                 BorderThickness = new Thickness(2),
                 SelectionBrush = accent,
                 SelectionOpacity = 0.35,
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 14,
-                TextAlignment = TextAlignment.Center,
+                TextAlignment = align,
                 VerticalContentAlignment = VerticalAlignment.Center,
-                ToolTip = "New quantity — Enter to save, Esc to cancel",
+                ToolTip = tip,
             };
-            var popup = new System.Windows.Controls.Primitives.Popup
+            var popup = new Popup
             {
                 PlacementTarget = cell,
-                Placement = System.Windows.Controls.Primitives.PlacementMode.Relative,
+                Placement = cell != null ? PlacementMode.Relative : PlacementMode.MousePoint,
                 StaysOpen = false,
                 AllowsTransparency = true,
                 Child = box,
             };
 
             bool done = false;
-            void Commit(bool save)
+            void Commit(bool keep)
             {
                 if (done) return;
                 done = true;
                 popup.IsOpen = false;
-                if (!save) return;
-                if (!int.TryParse(box.Text, out int n) || n < 0)
-                {
-                    ShowStatus("Enter a whole number (0 or more).", true);
-                    return;
-                }
-                if (n == current) return;
-                var result = CollectionEditService.SetQuantity(CollTag, Str(row, "ScryfallId"),
-                    Str(row, "Name"), finish, n, _currentEtchedOnly);
-                AfterEdit(result, Str(row, "ScryfallId"), finish);
+                if (keep) save(box.Text);
             }
 
-            box.PreviewTextInput += (_, e) =>
-            {
-                foreach (char c in e.Text)
-                    if (!char.IsDigit(c)) { e.Handled = true; return; }
-            };
+            if (digitsOnly)
+                box.PreviewTextInput += (_, e) =>
+                {
+                    foreach (char c in e.Text)
+                        if (!char.IsDigit(c)) { e.Handled = true; return; }
+                };
             box.PreviewKeyDown += (_, e) =>
             {
                 if (e.Key == Key.Enter || e.Key == Key.Return) { Commit(true); e.Handled = true; }
@@ -425,30 +850,82 @@ namespace BreakersOfE.Views.Pages
             popup.IsOpen = true;
         }
 
-        // ── Keys ────────────────────────────────────────────────────────
+        /// <summary>Qty cell: type the row's exact quantity (never below the copies in use).</summary>
+        private void EditQuantityInPlace(object row, DataGridCell cell)
+        {
+            SetCurrent(row);
+            int current = Int(row, "Quantity");
+            int id = CollectionEditService.RowId(row);
+            bool etchedOnly = EtchedOnly(row, null);
+            ShowCellEditor(cell, current.ToString(), 48, TextAlignment.Center, digitsOnly: true,
+                "New quantity — Enter to save, Esc to cancel", text =>
+                {
+                    if (!int.TryParse(text, out int n) || n < 0)
+                    {
+                        ShowStatus("Enter a whole number (0 or more).", true);
+                        return;
+                    }
+                    if (n == current) return;
+                    Run("Quantity", new[] { Str(row, "ScryfallId") }, () =>
+                        new List<EditResult> { CollectionEditService.SetQuantity(CollTag, id, n, etchedOnly) });
+                });
+        }
+
+        /// <summary>Notes or Storage cell: type the row's text.</summary>
+        private void EditTextInPlace(object row, DataGridCell? cell, TextField field)
+        {
+            SetCurrent(row);
+            bool storage = field == TextField.Storage;
+            string current = Str(row, storage ? "StorageLocation" : "Notes");
+            int id = CollectionEditService.RowId(row);
+            bool etchedOnly = EtchedOnly(row, null);
+            ShowCellEditor(cell, current, storage ? 200 : 280, TextAlignment.Left, digitsOnly: false,
+                (storage ? "Where these cards are kept" : "Notes for this row") + " — Enter to save, Esc to cancel", text =>
+                {
+                    if (text.Trim() == current.Trim()) return;
+                    Run(storage ? "Storage" : "Notes", new[] { Str(row, "ScryfallId") }, () =>
+                        new List<EditResult>
+                        {
+                            storage ? CollectionEditService.SetStorage(CollTag, id, text, etchedOnly)
+                                    : CollectionEditService.SetNotes(CollTag, id, text, etchedOnly),
+                        });
+                });
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // KEYS
+        // ══════════════════════════════════════════════════════════════════
         private void Top_GridPreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key != Key.Enter && e.Key != Key.Return) return;
+            _active = _top;
             if (_top.SelectedCard is { } card) SetCurrent(card);
             var mods = Keyboard.Modifiers;
-            if (mods.HasFlag(ModifierKeys.Control)) DoAdd(CardFinish.Etched);
-            else if (mods.HasFlag(ModifierKeys.Shift)) DoAdd(CardFinish.Foil);
-            else DoAdd(DefaultFinish());
+            if (mods.HasFlag(ModifierKeys.Control)) DoAdd(CardFinish.Etched, _top);
+            else if (mods.HasFlag(ModifierKeys.Shift)) DoAdd(CardFinish.Foil, _top);
+            else DoAdd(null, _top);
             e.Handled = true;           // don't let Enter move to the next row
         }
 
         private void Bottom_GridPreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key != Key.Delete) return;
-            RemoveRow(all: Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
+            _active = _bottom;
+            RemoveRows(all: Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
             e.Handled = true;
         }
 
         private void Page_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Q && Keyboard.Modifiers == ModifierKeys.Control)
+            if (Keyboard.Modifiers != ModifierKeys.Control) return;
+            if (e.Key == Key.Q)
             {
                 QtyBox.Focus();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Z && Keyboard.FocusedElement is not TextBox)
+            {
+                DoUndo();                  // a text box keeps its own Ctrl+Z
                 e.Handled = true;
             }
         }
@@ -464,7 +941,7 @@ namespace BreakersOfE.Views.Pages
         {
             if (e.Key == Key.Enter || e.Key == Key.Return)
             {
-                DoAdd(DefaultFinish());
+                DoAdd(null);
                 e.Handled = true;
             }
         }
@@ -478,6 +955,33 @@ namespace BreakersOfE.Views.Pages
 
         private static bool Bool(object o, string prop) =>
             o.GetType().GetProperty(prop)?.GetValue(o) is bool b && b;
+
+        private static int Int(object o, string prop) =>
+            o.GetType().GetProperty(prop)?.GetValue(o) is int i ? i : 0;
+
+        /// <summary>A collection row's finish as shown (v1 foil of an etched-only printing = etched).</summary>
+        private static string FinishOf(object row) =>
+            CardFinish.Normalize(Str(row, "ShownFinish") is { Length: > 0 } shown ? shown : Str(row, "Finish"));
+
+        /// <summary>Etched-only printing? From the pool card when known, else the row's flag.</summary>
+        private bool EtchedOnly(object row, object? pool)
+        {
+            if (IsOnline) return false;         // online rows are stored as they are
+            if (pool != null)
+            {
+                var (_, foil, etched) = CollectionEditService.FinishesOf(CollTag, pool);
+                return etched && !foil;
+            }
+            return row is IFinishRow && Bool(row, "PrintingEtchedOnly");
+        }
+
+        /// <summary>The key of a collection-table row (same rules as the service).</summary>
+        private static RowKey KeyOf(object row) =>
+            RowKey.Of(Str(row, "ScryfallId"), FinishOf(row), Str(row, "Language"), Str(row, "Condition"));
+
+        /// <summary>"Foil · English · Near Mint".</summary>
+        private string RowText(object row) =>
+            IsOnline ? CardFinish.Display(FinishOf(row)) : KeyOf(row).Text;     // online: no language/condition
 
         private static string CardText(object card) =>
             $"{Str(card, "Name")} ({Str(card, "SetCode").ToUpperInvariant()} #{Str(card, "CollectorNumber")})";

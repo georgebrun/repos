@@ -412,6 +412,31 @@ namespace BreakersOfE.ViewModels
             {
                 // If collection DB doesn't exist yet, that's fine — skip
             }
+
+            // Online: MTGO rows get the MTGO price in event tickets (the regular
+            // version's; Scryfall has no foil tix price). Arena has no prices.
+            try
+            {
+                using var onlineDb = new OnlineDbContext();
+                using var colDb = new CollectionDbContext();
+                var tix = onlineDb.OnlineCards
+                    .Where(c => c.IsOnMtgo)
+                    .Select(c => new { c.ScryfallId, c.PriceTix })
+                    .ToList()
+                    .GroupBy(c => c.ScryfallId)
+                    .ToDictionary(g => g.Key, g => g.First().PriceTix);
+
+                foreach (var entry in colDb.OnlineCollectionEntries.Where(e => e.Game == Models.OnlineGame.Mtgo))
+                {
+                    if (tix.TryGetValue(entry.ScryfallId, out var price))
+                        entry.Price = entry.Finish == Models.CardFinish.NonFoil ? price : null;
+                }
+                colDb.SaveChanges();
+            }
+            catch
+            {
+                // No online pool or collection yet — skip
+            }
         }
 
         /// <summary>A pool printing's prices and which finishes it exists in.</summary>
@@ -480,6 +505,7 @@ namespace BreakersOfE.ViewModels
                    $"Planar: {result.PlanarCardsImported:N0}  " +
                    $"Schemes: {result.SchemeCardsImported:N0}  " +
                    $"Conspiracy: {result.ConspiracyCardsImported:N0}  " +
+                   $"Online (MTGO/Arena): {result.OnlineCardsImported:N0}  " +
                    $"Skipped: {result.SkippedCount:N0}";
         }
     }

@@ -27,15 +27,25 @@ namespace BreakersOfE.Services
     /// </summary>
     public static class OwnedCountService
     {
+        /// <summary>"MtgoCards" → "mtgo", "ArenaCards" → "arena", else null (paper).</summary>
+        public static string? OnlineGameOf(string poolTag) => poolTag switch
+        {
+            "MtgoCards" => OnlineGame.Mtgo,
+            "ArenaCards" => OnlineGame.Arena,
+            _ => null,
+        };
+
         public static void Fill(string poolTag, IEnumerable<object> rows)
         {
             var owned = Load(poolTag);
+            bool online = OnlineGameOf(poolTag) != null;
             foreach (var card in rows.OfType<IOwnedCard>())
             {
                 if (owned.TryGetValue(card.ScryfallId ?? "", out var t))
                 {
-                    // v1 stored etched-only printings as foil rows: count them as etched.
-                    bool etchedOnly = card.IsEtched && !card.IsFoil;
+                    // v1 stored etched-only printings as foil rows: count them as
+                    // etched. (Paper only — online rows are stored as they are.)
+                    bool etchedOnly = !online && card.IsEtched && !card.IsFoil;
                     card.OwnedNonFoil = t.nonFoil;
                     card.OwnedFoil = etchedOnly ? 0 : t.foil;
                     card.OwnedEtched = t.etched + (etchedOnly ? t.foil : 0);
@@ -55,8 +65,13 @@ namespace BreakersOfE.Services
             try
             {
                 using var db = new CollectionDbContext();
+                string? game = OnlineGameOf(poolTag);
                 IEnumerable<(string sid, string finish, int qty)> rows = poolTag switch
                 {
+                    // Online pools ← that game's online collection
+                    _ when game != null => db.OnlineCollectionEntries.Where(e => e.Game == game)
+                                  .Select(e => new { e.ScryfallId, e.Finish, e.Quantity })
+                                  .ToList().Select(e => (e.ScryfallId, e.Finish, e.Quantity)),
                     "Tokens" => db.TokenCollectionEntries.Select(e => new { e.ScryfallId, e.Finish, e.Quantity })
                                   .ToList().Select(e => (e.ScryfallId, e.Finish, e.Quantity)),
                     "Planes" => db.PlanarCollectionEntries.Select(e => new { e.ScryfallId, e.Finish, e.Quantity })

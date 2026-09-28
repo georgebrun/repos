@@ -113,13 +113,17 @@ namespace BreakersOfE.Views
             string usd = Get("PriceUsd");
             string foilPrice = Get("PriceUsdFoil");
             string etchedPrice = Get("PriceUsdEtched");
+            // Online (MTGO pool / collection): the price in event tickets.
+            string tix = Get("IsOnMtgo") == "True" ? Get("PriceTix") : "";
             CardPriceMain.Text = !string.IsNullOrEmpty(usd) ? $"${usd}" :
                                  !string.IsNullOrEmpty(foilPrice) ? $"${foilPrice}" :
-                                 !string.IsNullOrEmpty(etchedPrice) ? $"${etchedPrice}" : "—";
+                                 !string.IsNullOrEmpty(etchedPrice) ? $"${etchedPrice}" :
+                                 !string.IsNullOrEmpty(tix) ? $"{tix} tix" : "—";
             var details = new List<string>();
             if (!string.IsNullOrEmpty(usd)) details.Add($"Non-Foil: ${usd}");
             if (!string.IsNullOrEmpty(foilPrice)) details.Add($"Foil: ${foilPrice}");
             if (!string.IsNullOrEmpty(etchedPrice)) details.Add($"Etched: ${etchedPrice}");
+            if (!string.IsNullOrEmpty(tix)) details.Add($"MTGO: {tix} tix");
             CardPriceDetails.Text = string.Join("  ·  ", details);
 
             // Oracle + Flavor

@@ -73,6 +73,23 @@ namespace BreakersOfE.Models
         /// <summary>On the Commander Game Changers list (Scryfall's game_changer flag).</summary>
         public bool IsGameChanger { get; set; }
 
+        // ── Online play (MTGO / Arena) ───────────────────────────────────
+        // Stored ONLY in the online pool (OnlineCards, OnlineDbContext). The
+        // paper pool (PoolCards) ignores these, so paper stays exactly as it was.
+        /// <summary>Available on Magic Online (Scryfall "games" contains "mtgo").</summary>
+        public bool IsOnMtgo { get; set; }
+        /// <summary>Available on MTG Arena (Scryfall "games" contains "arena").</summary>
+        public bool IsOnArena { get; set; }
+        /// <summary>Only released in a video game (no paper version).</summary>
+        public bool IsDigital { get; set; }
+        public int? MtgoId { get; set; }
+        public int? MtgoFoilId { get; set; }
+        public int? ArenaId { get; set; }
+
+        /// <summary>MTGO price in event tickets: "0.25 tix".</summary>
+        [NotMapped] public string PriceTixDisplay =>
+            PriceTix.HasValue ? $"{PriceTix.Value:F2} tix" : "—";
+
         // ── Pricing fields ───────────────────────────────────────────────────
         public decimal? PriceUsd { get; set; }
         public decimal? PriceUsdFoil { get; set; }

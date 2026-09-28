@@ -24,7 +24,8 @@ namespace BreakersOfE.Views.Pages
         {
             Gallery.SelectCard(PoolGrid.SelectedItem);
             Detail.ShowCard(PoolGrid.SelectedItem);
-            SelectedCardChanged?.Invoke(PoolGrid.SelectedItem);
+            // Re-selecting rows after an edit is not the user picking a card.
+            if (!_applyingSelection) SelectedCardChanged?.Invoke(PoolGrid.SelectedItem);
         }
 
 

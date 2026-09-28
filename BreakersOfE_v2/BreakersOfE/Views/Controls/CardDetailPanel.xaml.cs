@@ -82,8 +82,11 @@ namespace BreakersOfE.Views.Controls
             string usd = Get("PriceUsd") is string pu && !string.IsNullOrEmpty(pu) ? $"USD:  ${pu}" : "";
             string foilP = Get("PriceUsdFoil") is string pf && !string.IsNullOrEmpty(pf) ? $"USD Foil: ${pf}" : "";
             string etchedP = Get("PriceUsdEtched") is string pe && !string.IsNullOrEmpty(pe) ? $"USD Etched: ${pe}" : "";
+            // Online (MTGO pool / collection): the price in event tickets.
+            string tixP = Get("IsOnMtgo") == "True" && Get("PriceTix") is string pt && !string.IsNullOrEmpty(pt)
+                ? $"MTGO: {pt} tix" : "";
             DetailPrices.Text = string.Join("\n",
-                new[] { usd, foilP, etchedP }.Where(s => !string.IsNullOrEmpty(s)));
+                new[] { usd, foilP, etchedP, tixP }.Where(s => !string.IsNullOrEmpty(s)));
 
             // Mana cost symbols
             DetailManaCost.Items.Clear();

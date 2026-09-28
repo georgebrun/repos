@@ -26,6 +26,8 @@ namespace BreakersOfE.Data
         public DbSet<TradeBinderEntry> TradeBinderEntries { get; set; }
         public DbSet<WantListEntry> WantListEntries { get; set; }
         public DbSet<DeckUsage> DeckUsages { get; set; }
+        /// <summary>Online collections (MTGO and Arena, by Game) — separate from paper.</summary>
+        public DbSet<OnlineCollectionEntry> OnlineCollectionEntries { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder options)
         {
@@ -58,6 +60,9 @@ namespace BreakersOfE.Data
                 .HasIndex(e => e.ScryfallId);
             modelBuilder.Entity<DeckUsage>()
                 .HasIndex(e => e.DeckId);
+
+            modelBuilder.Entity<OnlineCollectionEntry>()
+                .HasIndex(e => new { e.Game, e.ScryfallId });
         }
 
         public void EnsureCreated()

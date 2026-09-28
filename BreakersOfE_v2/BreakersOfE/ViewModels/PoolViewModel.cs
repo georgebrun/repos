@@ -161,6 +161,29 @@ namespace BreakersOfE.ViewModels
                                           .OrderBy(c => c.Name).ThenBy(c => c.SetCode)
                                           .ToList().Cast<object>().ToList();
                             label = "want list rows"; break;
+                        // ── Online (MTGO / Arena): own pool table and own collection ──
+                        case "MtgoCards":
+                            using (var odb = new OnlineDbContext())
+                                rows = odb.OnlineCards.AsNoTracking().Where(c => c.IsOnMtgo)
+                                          .OrderBy(c => c.Name).ThenBy(c => c.SetCode)
+                                          .ToList().Cast<object>().ToList();
+                            label = "MTGO cards"; break;
+                        case "ArenaCards":
+                            using (var odb = new OnlineDbContext())
+                                rows = odb.OnlineCards.AsNoTracking().Where(c => c.IsOnArena)
+                                          .OrderBy(c => c.Name).ThenBy(c => c.SetCode)
+                                          .ToList().Cast<object>().ToList();
+                            label = "Arena cards"; break;
+                        case "MtgoCollection":
+                        case "ArenaCollection":
+                        {
+                            string game = tag == "MtgoCollection" ? Models.OnlineGame.Mtgo : Models.OnlineGame.Arena;
+                            using (var cdb = new CollectionDbContext())
+                                rows = cdb.OnlineCollectionEntries.AsNoTracking().Where(c => c.Game == game)
+                                          .OrderBy(c => c.Name).ThenBy(c => c.SetCode)
+                                          .ToList().Cast<object>().ToList();
+                            label = "collection rows"; break;
+                        }
                         case "Cards":
                         default:
                             rows = db.PoolCards.AsNoTracking()
@@ -179,7 +202,7 @@ namespace BreakersOfE.ViewModels
                 // Pool pages: how many of each printing you own (read-only).
                 if (IsPoolTag(tag))
                     Services.OwnedCountService.Fill(tag, rows);
-                else
+                else if (!IsOnlineCollectionTag(tag))
                     Services.FinishInfoService.Fill(tag, rows);   // etched facts from the pool
 
                 AssignRowIndices(rows);
@@ -195,7 +218,9 @@ namespace BreakersOfE.ViewModels
                     {
                         Items = rows;
                         IsEmpty = true;
-                        EmptyMessage = tag.StartsWith("Coll") || tag is "TradeBinder" or "WantList"
+                        EmptyMessage = IsOnlineCollectionTag(tag)
+                            ? "Nothing here yet.\n\nAdd cards with Edit → Online → Collection." :
+                            tag.StartsWith("Coll") || tag is "TradeBinder" or "WantList"
                             ? "Nothing here yet." :
                             "No cards in this pool yet.\n\n" +
                             "Use \"Update Database\" (bottom-left) to download " +
@@ -228,7 +253,11 @@ namespace BreakersOfE.ViewModels
 
         /// <summary>Card Pool pages (not the collection tables).</summary>
         private static bool IsPoolTag(string tag) =>
-            !(tag == "Collection" || tag.StartsWith("Coll") || tag is "TradeBinder" or "WantList");
+            !(tag == "Collection" || tag.StartsWith("Coll") || tag is "TradeBinder" or "WantList"
+              || IsOnlineCollectionTag(tag));
+
+        /// <summary>The MTGO or Arena collection table.</summary>
+        private static bool IsOnlineCollectionTag(string tag) => tag is "MtgoCollection" or "ArenaCollection";
 
         /// <summary>Distinct values for a column, cascaded by other active filters.</summary>
         public List<string> DistinctValuesFor(string columnName, string propertyName) =>
@@ -273,22 +302,26 @@ namespace BreakersOfE.ViewModels
 
         private static string TitleFor(string tag) => tag switch
         {
-            "Tokens" => "Card Pool — Tokens",
-            "Planes" => "Card Pool — Planes",
-            "Schemes" => "Card Pool — Schemes",
-            "Vanguards" => "Card Pool — Vanguards",
-            "ArtSeries" => "Card Pool — Art Series",
+            "Tokens"       => "Card Pool — Tokens",
+            "Planes"       => "Card Pool — Planes",
+            "Schemes"      => "Card Pool — Schemes",
+            "Vanguards"    => "Card Pool — Vanguards",
+            "ArtSeries"    => "Card Pool — Art Series",
             "Conspiracies" => "Card Pool — Conspiracies",
-            "Collection" => "Collection — Cards",
-            "CollTokens" => "Collection — Tokens",
-            "CollPlanes" => "Collection — Planes",
-            "CollSchemes" => "Collection — Schemes",
-            "CollVanguards" => "Collection — Vanguards",
-            "CollArtSeries" => "Collection — Art Series",
+            "Collection"   => "Collection — Cards",
+            "CollTokens"       => "Collection — Tokens",
+            "CollPlanes"       => "Collection — Planes",
+            "CollSchemes"      => "Collection — Schemes",
+            "CollVanguards"    => "Collection — Vanguards",
+            "CollArtSeries"    => "Collection — Art Series",
             "CollConspiracies" => "Collection — Conspiracies",
-            "TradeBinder" => "Trade Binder",
-            "WantList" => "Want List",
-            _ => "Card Pool — Cards"
+            "TradeBinder"      => "Trade Binder",
+            "WantList"         => "Want List",
+            "MtgoCards"        => "Online — MTGO Cards",
+            "ArenaCards"       => "Online — Arena Cards",
+            "MtgoCollection"   => "Online — MTGO Collection",
+            "ArenaCollection"  => "Online — Arena Collection",
+            _              => "Card Pool — Cards"
         };
     }
 }

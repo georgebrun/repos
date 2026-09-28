@@ -86,10 +86,17 @@ namespace BreakersOfE.Data
 
             // ── Indexes for fast searching ───────────────────────────────────
 
-            // PoolCards
+            // PoolCards (paper). The online fields live only in the online
+            // pool (OnlineDbContext → OnlineCards); this table never has them.
             modelBuilder.Entity<PoolCard>()
                 .HasIndex(c => c.ScryfallId)
                 .IsUnique();
+            modelBuilder.Entity<PoolCard>().Ignore(c => c.IsOnMtgo);
+            modelBuilder.Entity<PoolCard>().Ignore(c => c.IsOnArena);
+            modelBuilder.Entity<PoolCard>().Ignore(c => c.IsDigital);
+            modelBuilder.Entity<PoolCard>().Ignore(c => c.MtgoId);
+            modelBuilder.Entity<PoolCard>().Ignore(c => c.MtgoFoilId);
+            modelBuilder.Entity<PoolCard>().Ignore(c => c.ArenaId);
 
             modelBuilder.Entity<PoolCard>()
                 .HasIndex(c => c.Name);

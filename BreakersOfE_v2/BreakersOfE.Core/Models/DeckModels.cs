@@ -6,10 +6,19 @@ using System.Text.Json.Serialization;
 namespace BreakersOfE.Models
 {
     // ── Deck type ─────────────────────────────────────────────────────────────
+    // Stored in deck files as a number, so values are only ever ADDED at the
+    // end. "Standard" is Constructed (any 60-card format; the name stays for
+    // the files) — Deck.ConstructedFormat says which. Rules: DeckFormats.
     public enum DeckType
     {
-        Standard,
-        Commander
+        Standard,          // Constructed (60+): Standard, Pioneer, Modern, …
+        Commander,
+        Brawl,
+        StandardBrawl,
+        PauperCommander,
+        DuelCommander,
+        Oathbreaker,
+        Limited,
     }
 
     // ── Deck card category ────────────────────────────────────────────────────
@@ -364,6 +373,8 @@ namespace BreakersOfE.Models
         public string Name { get; set; } = "New Deck";
         public string Description { get; set; } = string.Empty;
         public DeckType DeckType { get; set; } = DeckType.Standard;
+        /// <summary>Constructed decks: the format they're built for (Scryfall key, e.g. "modern").</summary>
+        public string ConstructedFormat { get; set; } = "standard";
         public DeckArchetype Archetype { get; set; } =
             DeckArchetype.Unspecified;
         public string FilePath { get; set; } = string.Empty;

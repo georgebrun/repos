@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -14,6 +14,12 @@ namespace BreakersOfE.ViewModels
         public string Name { get; init; } = "";
         public string FilePath { get; init; } = "";
         public bool IsCommander { get; init; }
+        /// <summary>Deck browser section: the deck type's name ("Commander", "Constructed", "Brawl", …).</summary>
+        public string Section { get; init; } = "";
+        /// <summary>Its position in the list of deck types (sections sort by it).</summary>
+        public int SectionOrder { get; init; }
+        /// <summary>Constructed decks: the format they're built for ("Modern"); else "".</summary>
+        public string FormatName { get; init; } = "";
         public string CommanderName { get; init; } = "";
         /// <summary>Subfolder under the Decks folder ("" when at the top).</summary>
         public string Folder { get; init; } = "";
@@ -29,6 +35,7 @@ namespace BreakersOfE.ViewModels
             get
             {
                 var parts = new List<string>();
+                if (!string.IsNullOrEmpty(FormatName)) parts.Add(FormatName);
                 if (!string.IsNullOrEmpty(CommanderName)) parts.Add(CommanderName);
                 parts.Add(TotalValue > 0
                     ? TotalValue.ToString("C2", CultureInfo.GetCultureInfo("en-US"))

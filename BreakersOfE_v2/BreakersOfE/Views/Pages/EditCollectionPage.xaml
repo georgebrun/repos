@@ -20,14 +20,10 @@
 
         <Grid Grid.Column="1">
             <Grid.RowDefinitions>
-                <RowDefinition Height="*" MinHeight="160"/>
-                <!-- pool -->
-                <RowDefinition Height="Auto"/>
-                <!-- splitter -->
-                <RowDefinition Height="Auto"/>
-                <!-- mode buttons -->
-                <RowDefinition Height="*" MinHeight="160"/>
-                <!-- collection -->
+                <RowDefinition Height="*" MinHeight="160"/>   <!-- pool -->
+                <RowDefinition Height="Auto"/>                <!-- splitter -->
+                <RowDefinition Height="Auto"/>                <!-- mode buttons -->
+                <RowDefinition Height="*" MinHeight="160"/>   <!-- collection -->
             </Grid.RowDefinitions>
 
             <!-- ═══ TOP: pool table ═══ -->
@@ -56,6 +52,19 @@
                                  GotKeyboardFocus="QtyBox_GotKeyboardFocus"
                                  ToolTip="How many to add or remove (Ctrl+Q). Enter adds the default finish. To set an exact quantity, double-click a Qty cell in the collection table."/>
 
+                        <!-- Language and condition for cards added from the pool table.
+                             Adding from a collection row keeps that row's own. -->
+                        <TextBlock x:Name="LanguageLabel" Text="Language" VerticalAlignment="Center" Margin="0,0,6,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <ComboBox x:Name="LanguageBox" Width="170" Margin="0,0,14,0" VerticalAlignment="Center"
+                                  SelectionChanged="Defaults_SelectionChanged"
+                                  ToolTip="Language of cards added from the pool table. Adding to a selected collection row keeps that row's language."/>
+                        <TextBlock x:Name="ConditionLabel" Text="Condition" VerticalAlignment="Center" Margin="0,0,6,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <ComboBox x:Name="ConditionBox" Width="180" Margin="0,0,14,0" VerticalAlignment="Center"
+                                  SelectionChanged="Defaults_SelectionChanged"
+                                  ToolTip="Condition of cards added from the pool table. Adding to a selected collection row keeps that row's condition."/>
+
                         <Button x:Name="BtnAddNonFoil" Content="Add Non-Foil" Padding="10,4" Margin="0,0,6,0"
                                 Click="BtnAddNonFoil_Click" ToolTip="Add Qty non-foil copies (Enter)"/>
                         <Button x:Name="BtnAddFoil" Content="Add Foil" Padding="10,4" Margin="0,0,6,0"
@@ -69,8 +78,11 @@
                                 Click="BtnRemoveFoil_Click" ToolTip="Remove Qty foil copies (copies used in decks stay)"/>
                         <Button x:Name="BtnRemoveEtched" Content="Remove Etched" Padding="10,4" Margin="0,0,6,0"
                                 Click="BtnRemoveEtched_Click" ToolTip="Remove Qty etched copies (copies used in decks stay)"/>
-                        <Button x:Name="BtnRemoveAll" Content="Remove All" Padding="10,4"
-                                Click="BtnRemoveAll_Click" ToolTip="Remove every unused copy of this printing, all finishes"/>
+                        <Button x:Name="BtnRemoveAll" Content="Remove All" Padding="10,4" Margin="0,0,18,0"
+                                Click="BtnRemoveAll_Click" ToolTip="Remove every unused copy of this printing: all finishes, languages and conditions"/>
+
+                        <Button x:Name="BtnUndo" Content="Undo" Padding="10,4"
+                                Click="BtnUndo_Click" ToolTip="Nothing to undo (Ctrl+Z)"/>
                     </WrapPanel>
                     <!-- The card the buttons act on, and what you own of it -->
                     <TextBlock x:Name="ModeText" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"

@@ -36,8 +36,11 @@ namespace BreakersOfE
             // that the user then fills via Database Update.
             try
             {
-                using var pool = new AppDbContext();
-                pool.EnsureSchema();
+                using (var pool = new AppDbContext())
+                    pool.EnsureSchema();
+                // Online pool (MTGO / Arena): its own table in the same file.
+                using (var online = new OnlineDbContext())
+                    online.EnsureSchema();
             }
             catch
             {

@@ -283,27 +283,31 @@
                 <DataGridTextColumn Header="Condition" Binding="{Binding Condition}" Width="105"
                                     Visibility="Collapsed"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
+                <DataGridTextColumn Header="Language" Binding="{Binding Language}" Width="110"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
                 <DataGridTextColumn Header="Notes" Binding="{Binding Notes}" Width="150"
                                     Visibility="Collapsed"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
+                <!-- Favorite: a gold star on favorite rows -->
+                <DataGridTextColumn Header="Fav" Binding="{Binding FavoriteDisplay}" Width="60"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="#FFC000"/>
+                            <Setter Property="HorizontalAlignment" Value="Center"/>
+                            <Setter Property="VerticalAlignment" Value="Center"/>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
                 <DataGridTextColumn Header="Storage" Binding="{Binding StorageLocation}" Width="100"
                                     Visibility="Collapsed"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
-                <DataGridTextColumn Header="Desired" Binding="{Binding Desired}" Width="95"
-                                    Visibility="Collapsed"
-                                    HeaderTemplate="{StaticResource FilterableHeader}" />
-                <DataGridTextColumn Header="Group" Binding="{Binding CardGroup}" Width="85"
-                                    Visibility="Collapsed"
-                                    HeaderTemplate="{StaticResource FilterableHeader}" />
-                <DataGridTextColumn Header="Print Type" Binding="{Binding PrintType}" Width="105"
-                                    Visibility="Collapsed"
-                                    HeaderTemplate="{StaticResource FilterableHeader}" />
-                <DataGridTextColumn Header="Buy" Binding="{Binding BuyStatus}" Width="90"
-                                    Visibility="Collapsed"
-                                    HeaderTemplate="{StaticResource FilterableHeader}" />
-                <DataGridTextColumn Header="Sell" Binding="{Binding SellStatus}" Width="90"
-                                    Visibility="Collapsed"
-                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                <!-- Desired, Group, Print Type, Buy and Sell (v1 / MTG Studio) were
+                     dropped from the grid: buying and selling live in the Want List and
+                     Trade Binder, and online cards will get their own table if ever.
+                     The fields stay in the database for the v1→v2 conversion. -->
                 <DataGridTextColumn Header="Added" Binding="{Binding DateAddedDisplay}" Width="100"
                                     Visibility="Collapsed"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
@@ -331,6 +335,9 @@
                 <DataGridTextColumn Header="USD"     Binding="{Binding PriceUsdDisplay}"     Width="70"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
                 <DataGridTextColumn Header="Foil $"  Binding="{Binding PriceUsdFoilDisplay}" Width="70"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                <DataGridTextColumn Header="Tix" Binding="{Binding PriceTixDisplay}" Width="85"
+                                    Visibility="Collapsed"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
                 <DataGridTextColumn Header="Etched $" Binding="{Binding PriceUsdEtchedDisplay}" Width="85"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
@@ -627,6 +634,19 @@
 
         <!-- ═══ STATUS BAR ═══ -->
         <DockPanel Grid.Row="3" Margin="0,6,0,0" LastChildFill="True">
+            <!-- Open deck: its format's rules (hover for the list); Constructed
+                 decks can be checked as another format. Decks only. -->
+            <StackPanel x:Name="DeckRulesPanel" DockPanel.Dock="Right" Orientation="Horizontal"
+                        VerticalAlignment="Center" Visibility="Collapsed">
+                <TextBlock x:Name="DeckRulesText" VerticalAlignment="Center" FontSize="13"
+                           TextTrimming="CharacterEllipsis" MaxWidth="620" Margin="0,0,12,0"
+                           ToolTipService.ShowDuration="60000"/>
+                <TextBlock x:Name="CheckAsLabel" Text="Check as" VerticalAlignment="Center" Margin="0,0,6,0"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <ComboBox x:Name="CheckAsBox" Width="170" VerticalAlignment="Center"
+                          SelectionChanged="CheckAsBox_SelectionChanged"
+                          ToolTip="Check this Constructed deck against another format's card list. Only changes what's shown — the deck isn't changed."/>
+            </StackPanel>
             <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                        FontSize="13" Opacity="0.7"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>

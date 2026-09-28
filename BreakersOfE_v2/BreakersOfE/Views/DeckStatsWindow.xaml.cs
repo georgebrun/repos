@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -12,7 +12,7 @@ namespace BreakersOfE.Views
 {
     /// <summary>
     /// Deck statistics: Overview, Mana (curve + color symbols vs. sources),
-    /// and Format Check (Commander / Standard rules). Read-only; always the
+    /// and Format Check (the deck format's rules — DeckFormats / DeckRulesService). Read-only; always the
     /// whole deck (grid filters don't apply). Main deck = everything except
     /// the sideboard, commander included.
     /// </summary>
@@ -21,12 +21,17 @@ namespace BreakersOfE.Views
         private const double MaxBar = 260;
 
         private readonly Deck _deck;
+        /// <summary>Commander (the Bracket tab is Commander's).</summary>
         private readonly bool _isCommander;
+        /// <summary>A command-zone format (Commander, Brawl, Oathbreaker, …): identity comes from the leader.</summary>
+        private readonly bool _hasLeader;
+        private readonly DeckFormatRule _rule;
         private readonly List<DeckCard> _main;
         private readonly List<DeckCard> _side;
         private readonly List<DeckCard> _commanders;
 
-        public DeckStatsWindow(Deck deck, Window? owner = null)
+        /// <param name="constructedFormat">Constructed decks: the format to check against (null = the deck's own).</param>
+        public DeckStatsWindow(Deck deck, Window? owner = null, string? constructedFormat = null)
         {
             InitializeComponent();
             if (owner != null) Owner = owner;
@@ -37,6 +42,8 @@ namespace BreakersOfE.Views
 
             _deck = deck;
             _isCommander = deck.DeckType == DeckType.Commander;
+            _rule = DeckFormats.For(deck, constructedFormat);
+            _hasLeader = _rule.HasLeader;
             _side = deck.Cards.Where(c => c.Category == DeckCardCategory.Sideboard).ToList();
             _main = deck.Cards.Where(c => c.Category != DeckCardCategory.Sideboard).ToList();
             // A commander is marked either way: the IsCommander flag or the Commander category.
@@ -44,7 +51,7 @@ namespace BreakersOfE.Views
 
             WindowTitleBar.Title = $"Deck Statistics — {deck.Name}";
             DeckNameText.Text = deck.Name;
-            ScopeText.Text = (_isCommander ? "Commander deck" : "Standard deck") +
+            ScopeText.Text = $"{_rule.Name} deck" +
                 (_commanders.Count > 0 ? $" · {string.Join(" & ", _commanders.Select(c => c.Name))}" : "") +
                 " · whole deck (grid filters don't apply)";
 
@@ -70,11 +77,11 @@ namespace BreakersOfE.Views
         {
             // Color identity: the commander's for Commander decks, otherwise
             // every color used by the main deck. Shown as mana symbols.
-            var identitySource = _isCommander && _commanders.Count > 0 ? _commanders : _main;
+            var identitySource = _hasLeader && _commanders.Count > 0 ? _commanders : _main;
             var identity = new HashSet<char>(identitySource.SelectMany(c => c.ColorIdentity));
             string symbols = string.Concat("WUBRG".Where(identity.Contains).Select(c => $"{{{c}}}"));
             if (symbols.Length == 0) symbols = "{C}";
-            IdentityLabel.Text = _isCommander && _commanders.Count > 0
+            IdentityLabel.Text = _hasLeader && _commanders.Count > 0
                 ? "Commander color identity" : "Color identity";
             IdentitySymbols.Content = new Services.ManaCostConverter().Convert(
                 symbols, typeof(object), null!, System.Globalization.CultureInfo.CurrentCulture);
@@ -97,7 +104,7 @@ namespace BreakersOfE.Views
                 new("Avg mana value", nonLandQty > 0 ? avg.ToString("0.00") : "—"),
                 new("Deck value", $"${value:N2}"),
             };
-            if (!_isCommander || _side.Count > 0)
+            if (!_hasLeader || _side.Count > 0)
                 summary.Insert(1, new("Sideboard", Qty(_side).ToString("N0")));
             SummaryList.ItemsSource = summary;
 
@@ -633,102 +640,47 @@ namespace BreakersOfE.Views
         // ══════════════════════════════════════════════════════════════════
         private void BuildFormatCheck()
         {
-            var checks = _isCommander ? CommanderChecks() : StandardChecks();
-            CheckList.ItemsSource = checks;
-        }
-
-        private static bool CopyLimited(DeckCard c) => !c.IsBasicLand && !c.IsAnyNumber;
-
-        private List<CheckResult> CommanderChecks()
-        {
-            var checks = new List<CheckResult>();
-
-            // Commander marked
-            checks.Add(_commanders.Count > 0
-                ? CheckResult.Ok("Commander", string.Join(" & ", _commanders.Select(c => c.Name)))
-                : CheckResult.Problem("Commander", "No card is marked as the commander."));
-
-            // 100 cards
-            int size = Qty(_main);
-            checks.Add(size == 100
-                ? CheckResult.Ok("Deck size", "100 cards, commander included.")
-                : CheckResult.Problem("Deck size", $"{size} cards — a Commander deck has exactly 100, commander included."));
-
-            // Singleton by name
-            var dupes = _main.Where(CopyLimited)
-                .GroupBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(g => (name: g.Key, count: Qty(g)))
-                .Where(x => x.count > 1)
-                .OrderBy(x => x.name)
-                .Select(x => $"{x.name} × {x.count}")
+            // One set of rules for every deck type (DeckFormats → DeckRulesService),
+            // shared with the deck view's rules line.
+            // Legality isn't listed here: "Legality by format" below covers it,
+            // this deck's format included (marked "this deck").
+            var byFormatShown = Services.DeckRulesService.LegalityByFormat(_deck, _rule).Count > 0;
+            CheckList.ItemsSource = Services.DeckRulesService.Check(_deck, _rule)
+                .Where(c => !(byFormatShown && c.Title == "Legality"))
+                .Select(c => new CheckResult
+                {
+                    Title = c.Title,
+                    Summary = c.Summary,
+                    IsOk = c.IsOk,
+                    Details = c.Details,
+                })
                 .ToList();
-            checks.Add(dupes.Count == 0
-                ? CheckResult.Ok("Singleton", "Every card other than basic lands appears once.")
-                : CheckResult.Problem("Singleton", $"{dupes.Count} card name(s) appear more than once:", dupes));
 
-            // Color identity
-            if (_commanders.Count > 0)
+            // Legality by format: every format this kind of deck can be played
+            // in, with the cards each one doesn't allow.
+            var byFormat = Services.DeckRulesService.LegalityByFormat(_deck, _rule);
+            if (byFormat.Count == 0)
             {
-                var identity = new HashSet<char>(_commanders.SelectMany(c => c.ColorIdentity).Where(c => "WUBRG".Contains(c)));
-                string idText = identity.Count == 0 ? "colorless" : string.Concat("WUBRG".Where(identity.Contains));
-                var outside = _main.Where(c => !IsCommanderCard(c))
-                    .Where(c => c.ColorIdentity.Any(ch => "WUBRG".Contains(ch) && !identity.Contains(ch)))
-                    .Select(c => $"{c.Name} ({c.ColorIdentity})")
-                    .Distinct().OrderBy(x => x).ToList();
-                checks.Add(outside.Count == 0
-                    ? CheckResult.Ok("Color identity", $"All cards fit the commander's colors ({idText}).")
-                    : CheckResult.Problem("Color identity", $"{outside.Count} card(s) outside the commander's colors ({idText}):", outside));
+                LegalityHeader.Visibility = Visibility.Collapsed;
+                LegalityIntro.Visibility = Visibility.Collapsed;
+                LegalityList.Visibility = Visibility.Collapsed;
+                return;
             }
-
-            checks.Add(LegalityCheck("commander", "Commander", _main));
-            return checks;
-        }
-
-        private List<CheckResult> StandardChecks()
-        {
-            var checks = new List<CheckResult>();
-
-            int size = Qty(_main);
-            checks.Add(size >= 60
-                ? CheckResult.Ok("Deck size", $"{size} cards (minimum 60).")
-                : CheckResult.Problem("Deck size", $"{size} cards — a Standard deck needs at least 60."));
-
-            // Max 4 by name, main + sideboard together
-            var over = _deck.Cards.Where(CopyLimited)
-                .GroupBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(g => (name: g.Key, count: Qty(g)))
-                .Where(x => x.count > 4)
-                .OrderBy(x => x.name)
-                .Select(x => $"{x.name} × {x.count}")
+            LegalityIntro.Text = _rule.Type == DeckType.Standard
+                ? "Which cards each Constructed format allows (size and copies are the same 60-card rules for all of them)."
+                : $"Which cards each {_rule.Size}-card command-zone format allows. Only the card lists — size, commander and color identity for this deck's format are checked above.";
+            LegalityList.ItemsSource = byFormat
+                .Select(x => new CheckResult
+                {
+                    Title = x.IsCurrent ? $"{x.Check.Title}  (this deck)" : x.Check.Title,
+                    Summary = x.Check.Summary,
+                    IsOk = x.Check.IsOk,
+                    Details = x.Check.Details,
+                    Status = x.Check.IsOk ? "Legal" : $"{x.Check.Details.Count} illegal",
+                })
                 .ToList();
-            checks.Add(over.Count == 0
-                ? CheckResult.Ok("Copies", "No card name appears more than 4 times (main deck and sideboard together).")
-                : CheckResult.Problem("Copies", $"{over.Count} card name(s) appear more than 4 times:", over));
-
-            int sb = Qty(_side);
-            checks.Add(sb <= 15
-                ? CheckResult.Ok("Sideboard", sb == 0 ? "No sideboard." : $"{sb} cards (maximum 15).")
-                : CheckResult.Problem("Sideboard", $"{sb} cards — maximum 15."));
-
-            checks.Add(LegalityCheck("standard", "Standard", _deck.Cards));
-            return checks;
         }
 
-        private static CheckResult LegalityCheck(string formatKey, string formatName, IEnumerable<DeckCard> cards)
-        {
-            var list = cards.ToList();
-            var bad = list
-                .Select(c => (card: c, status: c.Legality[formatKey].Status))
-                .Where(x => x.status is "banned" or "not_legal" or "restricted")
-                .Select(x => $"{x.card.Name} ({x.card.SetCode}) — {LegalityInfo.ChipText(x.status)}")
-                .Distinct().OrderBy(x => x).ToList();
-            int unknown = list.Count(c => string.IsNullOrEmpty(c.Legality[formatKey].Status));
-
-            string note = unknown > 0 ? $" {unknown} card(s) have no legality data (not in the pool)." : "";
-            return bad.Count == 0
-                ? CheckResult.Ok("Legality", $"Every card is legal in {formatName}.{note}")
-                : CheckResult.Problem("Legality", $"{bad.Count} card(s) not legal in {formatName}.{note}", bad);
-        }
 
         // ══════════════════════════════════════════════════════════════════
         // Buckets + bars (same rules as the collection statistics)

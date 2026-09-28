@@ -28,6 +28,7 @@ namespace BreakersOfE.Views.Pages
             ["Rarity"] = "RarityCode",
             ["P/T"] = "PowerToughness",
             ["USD"] = "PriceUsdDisplay",
+            ["Tix"] = "PriceTixDisplay",        // MTGO price (online pool)
             ["Foil $"] = "PriceUsdFoilDisplay",
             ["Etched $"] = "PriceUsdEtchedDisplay",
             ["Text"] = "OracleText",
@@ -42,13 +43,10 @@ namespace BreakersOfE.Views.Pages
             ["Price"] = "PriceDisplay",
             ["Value"] = "RowValueDisplay",
             ["Condition"] = "Condition",
+            ["Language"] = "Language",
             ["Notes"] = "Notes",
+            ["Fav"] = "FavoriteDisplay",
             ["Storage"] = "StorageLocation",
-            ["Desired"] = "Desired",
-            ["Group"] = "CardGroup",
-            ["Print Type"] = "PrintType",
-            ["Buy"] = "BuyStatus",
-            ["Sell"] = "SellStatus",
             ["Added"] = "DateAddedDisplay",
             ["Color"] = "ColorDisplay",
             ["Flavor"] = "FlavorText",
@@ -76,10 +74,20 @@ namespace BreakersOfE.Views.Pages
         // each kind shows its own columns. Tags: "Collection" (main
         // collection), "Coll…" (tokens, planes, … collections), "TradeBinder",
         // "WantList", "Deck", else a pool.
-        private enum TableKind { Pool, Collection, SpecialCollection, TradeBinder, WantList, Deck }
+        // Online: MTGO / Arena pools and collections ("MtgoCards", "ArenaCards",
+        // "MtgoCollection", "ArenaCollection") — own tables, own columns.
+        private enum TableKind
+        {
+            Pool, Collection, SpecialCollection, TradeBinder, WantList, Deck,
+            MtgoPool, ArenaPool, MtgoCollection, ArenaCollection,
+        }
 
         private static TableKind KindOf(string tag) => tag switch
         {
+            "MtgoCards" => TableKind.MtgoPool,
+            "ArenaCards" => TableKind.ArenaPool,
+            "MtgoCollection" => TableKind.MtgoCollection,
+            "ArenaCollection" => TableKind.ArenaCollection,
             "Collection" => TableKind.Collection,
             "TradeBinder" => TableKind.TradeBinder,
             "WantList" => TableKind.WantList,
@@ -90,7 +98,8 @@ namespace BreakersOfE.Views.Pages
 
         /// <summary>Any collection table (main, special, binder, want list).</summary>
         private static bool IsCollectionKind(TableKind k) =>
-            k is TableKind.Collection or TableKind.SpecialCollection or TableKind.TradeBinder or TableKind.WantList;
+            k is TableKind.Collection or TableKind.SpecialCollection or TableKind.TradeBinder or TableKind.WantList
+              or TableKind.MtgoCollection or TableKind.ArenaCollection;
 
         /// <summary>All open decks share one table (and one saved layout).</summary>
         private const string DeckTableTag = "Deck";
@@ -104,26 +113,34 @@ namespace BreakersOfE.Views.Pages
             var B = TableKind.TradeBinder; var W = TableKind.WantList; var D = TableKind.Deck;
             var cs = new[] { C, S };                  // main + special collections
             var csb = new[] { C, S, B };              // + trade binder
-            var all = new[] { C, S, B, W };           // every collection table
-            var allD = new[] { C, S, B, W, D };       // + decks
             var pd = new[] { TableKind.Pool, D };
             var d = new[] { D };
+            var MP = TableKind.MtgoPool; var AP = TableKind.ArenaPool;
+            var MC = TableKind.MtgoCollection; var AC = TableKind.ArenaCollection;
             var map = new Dictionary<string, TableKind[]>();
-            foreach (var h in new[] { "Used", "Available",
-                                      "Storage", "Desired", "Group", "Print Type", "Buy", "Sell" })
+            foreach (var h in new[] { "Used", "Available", "Language", "Storage" })
                 map[h] = cs;
-            foreach (var h in new[] { "Qty", "Price", "Notes", "Added" })
-                map[h] = all;
+            map["Fav"] = new[] { C, S, MC, AC };
+            // Online collections: Qty / Notes / Added like the others; Price and
+            // Value (in tickets) on MTGO only — Arena has no prices.
+            foreach (var h in new[] { "Qty", "Notes", "Added" })
+                map[h] = new[] { C, S, B, W, MC, AC };
+            map["Price"] = new[] { C, S, B, W, MC };
             map["Condition"] = csb;
-            foreach (var h in new[] { "Value", "Color", "Flavor", "Power", "Toughness", "CMC", "Row" })
-                map[h] = allD;
+            map["Value"] = new[] { C, S, B, W, D, MC };
+            foreach (var h in new[] { "Color", "Flavor", "Power", "Toughness", "CMC", "Row" })
+                map[h] = new[] { C, S, B, W, D, MC, AC };
+            // MTGO pool: its price in tickets. Finish: the paper finishes mean
+            // nothing online, so the online pools and Arena don't show it.
+            map["Tix"] = new[] { MP };
+            map["Finish"] = new[] { TableKind.Pool, C, S, B, W, D, MC };
             map["Asking"] = new[] { B };
             map["Offer"] = new[] { W };
             foreach (var h in new[] { "USD", "Foil $", "Etched $" })
                 map[h] = pd;
             foreach (var h in new[] { "SB", "Non-Foil", "Foil", "Total", "Free", "Missing", "Wanted", "Other Decks" })
                 map[h] = d;
-            map["Owned"] = new[] { TableKind.Pool, D };
+            map["Owned"] = new[] { TableKind.Pool, D, MP, AP };
             return map;
         }
 
@@ -217,6 +234,8 @@ namespace BreakersOfE.Views.Pages
         {
             _inSetsContext = false;
             _inDecksContext = false;
+            _pendingSelect = null;             // a new table: no re-select left over from an edit
+            _pendingFallback = null;
             LoadPoolCore(tag);
             SetViewMode(SwitchMode);
         }

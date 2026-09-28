@@ -19,7 +19,7 @@ namespace BreakersOfE.Views.Pages
     {
         // ══════════════════════════════════════════════════════════════════
         // DECK BROWSER — every .deck file under Documents\BoE_V2\Decks
-        // (subfolders too), grouped Commander / Standard, A→Z. Click a tile →
+        // (subfolders too), grouped by deck type (DeckFormats order), A→Z. Click a tile →
         // the deck opens read-only in the grid or gallery (per the switch).
         // ══════════════════════════════════════════════════════════════════
         private List<DeckTile> _deckTiles = new();
@@ -27,7 +27,9 @@ namespace BreakersOfE.Views.Pages
         private List<DeckBrowserRow> _deckRows = new();
         private int _decksPerRow = 1;
         private DeckTile? _deckHighlighted;
-        private string _openDeckFormat = "standard";
+        /// <summary>Constructed decks: the format they're checked against on screen (not saved).</summary>
+        private string? _checkAsFormat;
+        private bool _fillingCheckAs;
         private Models.Deck? _openDeck;
         private string? _openDeckPath;             // its file (the pop-up leaves it out of IN YOUR OTHER DECKS)            // the deck on screen (for Statistics)
 
@@ -56,10 +58,11 @@ namespace BreakersOfE.Views.Pages
 
                     string folder = Path.GetRelativePath(root, Path.GetDirectoryName(path) ?? root);
 
-                    // Color identity: the commander's (Commander decks), else the main deck's.
+                    // Color identity: the commander's (command-zone formats), else the main deck's.
+                    var rule = Models.DeckFormats.For(deck.DeckType);
                     var main = deck.Cards.Where(c => c.Category != Models.DeckCardCategory.Sideboard).ToList();
                     var commanders = main.Where(c => c.IsCommander || c.Category == Models.DeckCardCategory.Commander).ToList();
-                    var identitySource = deck.DeckType == Models.DeckType.Commander && commanders.Count > 0
+                    var identitySource = rule.HasLeader && commanders.Count > 0
                         ? commanders : main;
                     var identity = new HashSet<char>(identitySource.SelectMany(c => c.ColorIdentity));
                     string symbols = string.Concat("WUBRG".Where(identity.Contains).Select(c => $"{{{c}}}"));
@@ -69,9 +72,12 @@ namespace BreakersOfE.Views.Pages
                         Name = string.IsNullOrWhiteSpace(deck.Name)
                             ? Path.GetFileNameWithoutExtension(path) : deck.Name,
                         FilePath = path,
-                        IsCommander = deck.DeckType == Models.DeckType.Commander,
-                        CommanderName = string.Join(" & ",
-                            deck.Cards.Where(c => c.IsCommander).Select(c => c.Name)),
+                        IsCommander = rule.HasLeader,
+                        Section = rule.Name,
+                        SectionOrder = Models.DeckFormats.All.ToList().IndexOf(rule),
+                        FormatName = rule.Type == Models.DeckType.Standard
+                            ? Models.DeckFormats.Constructed(deck.ConstructedFormat).Name : "",
+                        CommanderName = string.Join(" & ", commanders.Select(c => c.Name)),
                         Folder = folder == "." ? "" : folder,
                         IdentitySymbols = symbols,
                         CardCount = deck.Cards.Sum(c => c.TotalQuantity),
@@ -86,9 +92,9 @@ namespace BreakersOfE.Views.Pages
 
             _deckTiles = tiles;
             _deckGroups = tiles
-                .GroupBy(t => t.IsCommander ? "Commander" : "Standard")
-                .OrderBy(g => g.Key == "Commander" ? 0 : 1)
-                .Select(g => (section: g.Key,
+                .GroupBy(t => (t.Section, t.SectionOrder))
+                .OrderBy(g => g.Key.SectionOrder)
+                .Select(g => (section: g.Key.Section,
                               tiles: g.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ToList()))
                 .ToList();
         }
@@ -160,12 +166,10 @@ namespace BreakersOfE.Views.Pages
             }
             if (deck == null) return;
 
-            // Legal column checks each card against this deck's format.
-            string format = deck.DeckType == Models.DeckType.Commander ? "commander" : "standard";
-            foreach (var card in deck.Cards) card.DeckFormat = format;
-            _openDeckFormat = format;
             _openDeck = deck;
             _openDeckPath = tile.FilePath;
+            _checkAsFormat = null;               // a Constructed deck is checked as its own format
+            ApplyDeckFormat();
 
             // Deck vs. collection: Owned / Free / Missing / Wanted per card (read-only).
             Services.DeckCollectionService.Annotate(deck);
@@ -180,6 +184,74 @@ namespace BreakersOfE.Views.Pages
                          deck.Cards.Cast<object>().ToList(),
                          deck.Cards.Count == 1 ? "line" : "lines");
             SetViewMode(SwitchMode);          // grid or gallery, per the switch
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // DECK RULES — the open deck against its format's rules (DeckFormats
+        // → DeckRulesService): a one-line summary under the grid, the full list
+        // in Statistics → Format Check. Constructed decks can be checked as
+        // another format (Standard, Modern, …) without changing the deck.
+        // ══════════════════════════════════════════════════════════════════
+        private void ApplyDeckFormat()
+        {
+            if (_openDeck == null) return;
+            var rule = Models.DeckFormats.For(_openDeck, _checkAsFormat);
+
+            // Legal column + totals: each card against this format's card list.
+            string key = rule.LegalityKey ?? "";
+            foreach (var card in _openDeck.Cards) card.DeckFormat = key;
+
+            // "Check as" list: Constructed decks only.
+            bool constructed = rule.Type == Models.DeckType.Standard;
+            _fillingCheckAs = true;
+            try
+            {
+                CheckAsLabel.Visibility = CheckAsBox.Visibility =
+                    constructed ? Visibility.Visible : Visibility.Collapsed;
+                if (constructed)
+                {
+                    CheckAsBox.ItemsSource = Models.DeckFormats.ConstructedFormats;
+                    CheckAsBox.DisplayMemberPath = nameof(Models.ConstructedFormat.Name);
+                    CheckAsBox.SelectedItem = Models.DeckFormats.Constructed(_checkAsFormat ?? _openDeck.ConstructedFormat);
+                }
+            }
+            finally
+            {
+                _fillingCheckAs = false;
+            }
+
+            ShowDeckRules(rule);
+        }
+
+        private void ShowDeckRules(Models.DeckFormatRule rule)
+        {
+            if (_openDeck == null) return;
+            var checks = Services.DeckRulesService.Check(_openDeck, rule);
+            var problems = checks.Where(c => !c.IsOk).ToList();
+            DeckRulesText.Text = Services.DeckRulesService.SummaryLine(rule, checks);
+            // ISA-101: plain when all is well, amber only when something needs attention.
+            if (problems.Count > 0)
+                DeckRulesText.Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xA3, 0x17));
+            else
+                DeckRulesText.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+            DeckRulesText.ToolTip = string.Join("\n", checks.Select(c =>
+                $"{(c.IsOk ? "✓" : "⚠")} {c.Title}: {c.Summary}" +
+                (c.Details.Count > 0 ? "\n      " + string.Join("\n      ", c.Details.Take(8)) +
+                    (c.Details.Count > 8 ? $"\n      … and {c.Details.Count - 8} more" : "") : ""))) +
+                "\n\nStatistics → Format Check shows the full list.";
+        }
+
+        /// <summary>Constructed: check the open deck as another format (not saved).</summary>
+        private void CheckAsBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_fillingCheckAs || _openDeck == null) return;
+            if (CheckAsBox.SelectedItem is not Models.ConstructedFormat cf) return;
+            _checkAsFormat = cf.Key;
+            ApplyDeckFormat();
+            var keep = PoolGrid.SelectedItem;
+            PoolGrid.Items.Refresh();            // Legal column re-reads the format
+            if (keep != null) { PoolGrid.SelectedItem = keep; PoolGrid.ScrollIntoView(keep); }
+            UpdateTotals();
         }
 
         /// <summary>Search in the deck browser: jump to the first deck name that begins with the text.</summary>
