@@ -69,6 +69,7 @@ namespace BreakersOfE.Views
             var editVis = open == NavSection.Edit ? Visibility.Visible : Visibility.Collapsed;
             NavEditPoolToCollection.Visibility = editVis;
             NavEditOnline.Visibility = editVis;
+            NavEditDecks.Visibility = editVis;
 
             // Edit button: at the bottom only while View is open; otherwise
             // stacked at the top under View.
@@ -135,6 +136,14 @@ namespace BreakersOfE.Views
                     string tag = (sender.SelectedItem as NavigationViewItem)?.Tag as string ?? "";
                     editPage.LoadPair(tag.StartsWith("Edit:") ? tag.Substring(5) : "Cards");
                 }), System.Windows.Threading.DispatcherPriority.Loaded);
+                return;
+            }
+
+            // Edit → Decks → Pool → Deck.
+            if (args.Page is EditDeckPage deckPage)
+            {
+                Dispatcher.BeginInvoke(new Action(deckPage.Start),
+                    System.Windows.Threading.DispatcherPriority.Loaded);
                 return;
             }
 

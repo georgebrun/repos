@@ -47,6 +47,25 @@ namespace BreakersOfE.Services
                 return Refresh().Select(kv => (kv.Key, kv.Value.Deck)).ToList();
         }
 
+        /// <summary>
+        /// Card keys (names, front face) used by one deck file, or by every deck
+        /// when <paramref name="deckPath"/> is null. For "in a deck" filters.
+        /// </summary>
+        public static HashSet<string> CardKeys(string? deckPath = null)
+        {
+            lock (_lock)
+            {
+                var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var (path, entry) in Refresh())
+                {
+                    if (deckPath != null && !string.Equals(path, deckPath, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    keys.UnionWith(entry.Copies.Keys);
+                }
+                return keys;
+            }
+        }
+
         /// <summary>How many deck files were read (after a refresh).</summary>
         public static int DeckCount
         {

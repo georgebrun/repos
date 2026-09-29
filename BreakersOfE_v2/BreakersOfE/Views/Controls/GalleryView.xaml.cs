@@ -21,16 +21,38 @@ namespace BreakersOfE.Views.Controls
     /// </summary>
     public partial class GalleryView : UserControl
     {
-        /// <summary>Single click on a tile.</summary>
-        public event Action<object>? CardClicked;
+        /// <summary>Single click on a tile (with Ctrl / Shift for several).</summary>
+        public event Action<object, System.Windows.Input.ModifierKeys>? CardClicked;
         /// <summary>Double click on a tile.</summary>
         public event Action<object>? CardOpened;
+        /// <summary>Right-click on a tile (before its menu opens).</summary>
+        public event Action<object>? CardRightClicked;
+        /// <summary>Edit pages: the tile's + (with the keys held: Shift = foil, Ctrl = etched).</summary>
+        public event Action<object, System.Windows.Input.ModifierKeys>? CardAdd;
+        /// <summary>Edit pages: the tile's −.</summary>
+        public event Action<object, System.Windows.Input.ModifierKeys>? CardRemove;
+
+        /// <summary>Show the + / − buttons on the tiles (Edit pages).</summary>
+        public static readonly DependencyProperty ShowEditButtonsProperty = DependencyProperty.Register(
+            nameof(ShowEditButtons), typeof(bool), typeof(GalleryView), new PropertyMetadata(false));
+        public bool ShowEditButtons
+        {
+            get => (bool)GetValue(ShowEditButtonsProperty);
+            set => SetValue(ShowEditButtonsProperty, value);
+        }
+
+        /// <summary>The menu for right-clicking a tile (Edit pages: the same as the grid's rows).</summary>
+        public ContextMenu? TileContextMenu
+        {
+            get => GalleryList.ContextMenu;
+            set => GalleryList.ContextMenu = value;
+        }
 
         private readonly Dictionary<object, GalleryItem> _items =
             new(ReferenceEqualityComparer.Instance);
         private readonly List<GalleryItem> _ordered = new();
         private List<GalleryRow> _rows = new();
-        private GalleryItem? _selected;
+        private readonly List<GalleryItem> _selected = new();
         private int _perRow = 1;
         private double _rowHeight = 1;
 
@@ -67,18 +89,22 @@ namespace BreakersOfE.Views.Controls
         /// </summary>
         public void Show(IEnumerable cardsInOrder, object? selected)
         {
+            // Keep tiles only for the cards shown now (an Edit reload brings new
+            // row objects; the old tiles must not pile up).
             _ordered.Clear();
+            var keep = new Dictionary<object, GalleryItem>(ReferenceEqualityComparer.Instance);
             foreach (var card in cardsInOrder)
             {
                 if (card == null) continue;
                 if (!_items.TryGetValue(card, out var gi))
-                {
                     gi = GalleryItem.FromCard(card);
-                    _items[card] = gi;
-                }
+                keep[card] = gi;
                 gi.IsDimmed = DimWhen?.Invoke(card) ?? false;
                 _ordered.Add(gi);
             }
+            _items.Clear();
+            foreach (var kv in keep) _items[kv.Key] = kv.Value;
+            _selected.RemoveAll(gi => !keep.ContainsKey(gi.Card));
             RebuildRows(keepPosition: false);
             SelectCard(selected);
         }
@@ -89,20 +115,36 @@ namespace BreakersOfE.Views.Controls
             _items.Clear();
             _ordered.Clear();
             _rows = new List<GalleryRow>();
-            _selected = null;
+            _selected.Clear();
             GalleryList.ItemsSource = null;
         }
 
         /// <summary>Highlight the tile for this card (null clears).</summary>
-        public void SelectCard(object? card)
+        public void SelectCard(object? card) =>
+            SelectCards(card == null ? Array.Empty<object>() : new[] { card });
+
+        /// <summary>Highlight these cards' tiles (several on Edit pages).</summary>
+        public void SelectCards(IEnumerable<object> cards)
         {
-            if (_selected != null) _selected.IsSelected = false;
-            _selected = null;
-            if (card != null && _items.TryGetValue(card, out var gi))
+            foreach (var gi in _selected) gi.IsSelected = false;
+            _selected.Clear();
+            foreach (var card in cards)
             {
-                gi.IsSelected = true;
-                _selected = gi;
+                if (card != null && _items.TryGetValue(card, out var gi))
+                {
+                    gi.IsSelected = true;
+                    _selected.Add(gi);
+                }
             }
+        }
+
+        /// <summary>The card tiles have keyboard focus (not the size slider).</summary>
+        public bool TilesHaveFocus => GalleryList.IsKeyboardFocusWithin;
+
+        /// <summary>Re-read a tile's count marker (after an edit).</summary>
+        public void RefreshCard(object card)
+        {
+            if (_items.TryGetValue(card, out var gi)) gi.RefreshCounts();
         }
 
         /// <summary>
@@ -203,9 +245,34 @@ namespace BreakersOfE.Views.Controls
         {
             if ((sender as FrameworkElement)?.DataContext is not GalleryItem gi) return;
 
-            CardClicked?.Invoke(gi.Card);
+            GalleryList.Focus();               // keys (Enter, Delete, Ctrl+Z) go to the gallery
+            CardClicked?.Invoke(gi.Card, System.Windows.Input.Keyboard.Modifiers);
             if (e.ClickCount == 2)
                 CardOpened?.Invoke(gi.Card);
+        }
+
+        private void GalleryTile_PreviewMouseRightButtonDown(object sender,
+            System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.DataContext is GalleryItem gi)
+            {
+                GalleryList.Focus();
+                CardRightClicked?.Invoke(gi.Card);
+            }
+        }
+
+        private void TileAdd_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            if ((sender as FrameworkElement)?.DataContext is GalleryItem gi)
+                CardAdd?.Invoke(gi.Card, System.Windows.Input.Keyboard.Modifiers);
+        }
+
+        private void TileRemove_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            if ((sender as FrameworkElement)?.DataContext is GalleryItem gi)
+                CardRemove?.Invoke(gi.Card, System.Windows.Input.Keyboard.Modifiers);
         }
 
         // ── Downloads pill ──────────────────────────────────────────────

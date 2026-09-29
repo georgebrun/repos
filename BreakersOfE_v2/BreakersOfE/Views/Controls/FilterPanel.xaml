@@ -1,0 +1,135 @@
+<UserControl x:Class="BreakersOfE.Views.Controls.FilterPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Filters panel: one place for card filters, above the grid AND the gallery.
+         The page turns these choices into filters on the same engine the column
+         funnels use (colors, rarity and set ARE the Color / Rarity / Edition
+         column filters), so grid, gallery and funnels always agree. -->
+    <UserControl.Resources>
+        <Style x:Key="Group" TargetType="Border">
+            <Setter Property="Background" Value="#15808080"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="10,6,10,8"/>
+            <Setter Property="Margin" Value="0,0,8,8"/>
+        </Style>
+        <Style x:Key="GroupHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+        <Style x:Key="Label" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+            Padding="0,8,0,4" Margin="0,0,0,8">
+        <DockPanel>
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" LastChildFill="False">
+                <TextBlock x:Name="ActiveText" DockPanel.Dock="Left" VerticalAlignment="Center" FontSize="12"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <Button DockPanel.Dock="Right" Content="Clear panel" Padding="10,3"
+                        Click="BtnClear_Click" ToolTip="Clear every filter in this panel"/>
+            </DockPanel>
+
+            <WrapPanel>
+                <!-- ═══ CARD ═══ -->
+                <Border Style="{StaticResource Group}">
+                    <StackPanel>
+                        <TextBlock Text="CARD" Style="{StaticResource GroupHeader}"/>
+                        <WrapPanel>
+                            <TextBlock Text="Color" Style="{StaticResource Label}"/>
+                            <ToggleButton x:Name="ColW" Content="W" Tag="W" MinWidth="34" Margin="0,0,4,0" Padding="6,3" ToolTip="White"/>
+                            <ToggleButton x:Name="ColU" Content="U" Tag="U" MinWidth="34" Margin="0,0,4,0" Padding="6,3" ToolTip="Blue"/>
+                            <ToggleButton x:Name="ColB" Content="B" Tag="B" MinWidth="34" Margin="0,0,4,0" Padding="6,3" ToolTip="Black"/>
+                            <ToggleButton x:Name="ColR" Content="R" Tag="R" MinWidth="34" Margin="0,0,4,0" Padding="6,3" ToolTip="Red"/>
+                            <ToggleButton x:Name="ColG" Content="G" Tag="G" MinWidth="34" Margin="0,0,4,0" Padding="6,3" ToolTip="Green"/>
+                            <ToggleButton x:Name="ColM" Content="Multi" Tag="M" MinWidth="34" Margin="0,0,4,0" Padding="6,3" ToolTip="Multicolor"/>
+                            <ToggleButton x:Name="ColN" Content="None" Tag="N" MinWidth="34" Padding="6,3" Margin="0,0,14,0"
+                                          ToolTip="Colorless (and lands)"/>
+
+                            <TextBlock Text="Rarity" Style="{StaticResource Label}"/>
+                            <ToggleButton x:Name="RarC" Content="C" Tag="C" MinWidth="34" Margin="0,0,4,0" Padding="6,3" ToolTip="Common"/>
+                            <ToggleButton x:Name="RarU" Content="U" Tag="U" MinWidth="34" Margin="0,0,4,0" Padding="6,3" ToolTip="Uncommon"/>
+                            <ToggleButton x:Name="RarR" Content="R" Tag="R" MinWidth="34" Margin="0,0,4,0" Padding="6,3" ToolTip="Rare"/>
+                            <ToggleButton x:Name="RarM" Content="M" Tag="M" MinWidth="34" Margin="0,0,4,0" Padding="6,3" ToolTip="Mythic"/>
+                            <ToggleButton x:Name="RarS" Content="S" Tag="S" MinWidth="34" Margin="0,0,4,0" Padding="6,3" ToolTip="Special / bonus"/>
+                        </WrapPanel>
+                        <WrapPanel Margin="0,6,0,0">
+                            <TextBlock Text="Type" Style="{StaticResource Label}"/>
+                            <ComboBox x:Name="TypeBox" Width="140" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Legal in" Style="{StaticResource Label}"/>
+                            <ComboBox x:Name="FormatBox" Width="160" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Finish" Style="{StaticResource Label}"/>
+                            <ComboBox x:Name="FinishBox" Width="110" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Artist" Style="{StaticResource Label}"/>
+                            <TextBox x:Name="ArtistBox" Width="150"/>
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══ COLLECTION / SET / DECKS & LISTS ═══ -->
+                <Border Style="{StaticResource Group}">
+                    <StackPanel>
+                        <TextBlock Text="COLLECTION · SET · DECKS &amp; LISTS" Style="{StaticResource GroupHeader}"/>
+                        <WrapPanel>
+                            <TextBlock Text="Collection" Style="{StaticResource Label}"/>
+                            <ComboBox x:Name="CollectionBox" Width="150" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Set" Style="{StaticResource Label}"/>
+                            <ComboBox x:Name="SetBox" Width="240" Margin="0,0,12,0" VerticalAlignment="Center" IsTextSearchEnabled="True"
+                                      ToolTip="Type to jump to a set"/>
+                        </WrapPanel>
+                        <WrapPanel Margin="0,6,0,0">
+                            <TextBlock Text="Deck" Style="{StaticResource Label}"/>
+                            <ComboBox x:Name="DeckBox" Width="220" Margin="0,0,12,0" VerticalAlignment="Center" IsTextSearchEnabled="True"
+                                      ToolTip="By card name, any printing"/>
+                            <TextBlock Text="List" Style="{StaticResource Label}"/>
+                            <ComboBox x:Name="ListsBox" Width="140" Margin="0,0,12,0" VerticalAlignment="Center"
+                                      ToolTip="This exact printing is on the Want List / in the Trade Binder"/>
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══ DETAILS ═══ -->
+                <Border Style="{StaticResource Group}">
+                    <StackPanel>
+                        <TextBlock Text="DETAILS" Style="{StaticResource GroupHeader}"/>
+                        <WrapPanel>
+                            <TextBlock Text="Text" Style="{StaticResource Label}"/>
+                            <TextBox x:Name="FullTextBox" Width="220"
+                                     ToolTip="Card name or rules text contains"/>
+                        </WrapPanel>
+                        <WrapPanel Margin="0,6,0,0">
+                            <TextBlock x:Name="PriceLabel" Text="Price" Style="{StaticResource Label}"/>
+                            <TextBox x:Name="PriceMin" Width="64" TextAlignment="Center" ToolTip="From"/>
+                            <TextBlock Text="–" Style="{StaticResource Label}" Margin="4,0,4,0"/>
+                            <TextBox x:Name="PriceMax" Width="64" TextAlignment="Center" Margin="0,0,14,0" ToolTip="To"/>
+                            <TextBlock Text="Mana value" Style="{StaticResource Label}"/>
+                            <TextBox x:Name="MvMin" Width="64" TextAlignment="Center"/>
+                            <TextBlock Text="–" Style="{StaticResource Label}" Margin="4,0,4,0"/>
+                            <TextBox x:Name="MvMax" Width="64" TextAlignment="Center" Margin="0,0,14,0"/>
+                        </WrapPanel>
+                        <WrapPanel Margin="0,6,0,0">
+                            <TextBlock Text="Power" Style="{StaticResource Label}"/>
+                            <TextBox x:Name="PowMin" Width="64" TextAlignment="Center"/>
+                            <TextBlock Text="–" Style="{StaticResource Label}" Margin="4,0,4,0"/>
+                            <TextBox x:Name="PowMax" Width="64" TextAlignment="Center" Margin="0,0,14,0"/>
+                            <TextBlock Text="Toughness" Style="{StaticResource Label}"/>
+                            <TextBox x:Name="TouMin" Width="64" TextAlignment="Center"/>
+                            <TextBlock Text="–" Style="{StaticResource Label}" Margin="4,0,4,0"/>
+                            <TextBox x:Name="TouMax" Width="64" TextAlignment="Center" Margin="0,0,14,0"/>
+                            <TextBlock x:Name="OwnedLabel" Text="Owned" Style="{StaticResource Label}"/>
+                            <TextBox x:Name="OwnMin" Width="64" TextAlignment="Center"/>
+                            <TextBlock Text="–" Style="{StaticResource Label}" Margin="4,0,4,0"/>
+                            <TextBox x:Name="OwnMax" Width="64" TextAlignment="Center"/>
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+            </WrapPanel>
+        </DockPanel>
+    </Border>
+</UserControl>

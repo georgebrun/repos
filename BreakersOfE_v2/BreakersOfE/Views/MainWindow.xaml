@@ -325,6 +325,19 @@
                     </ui:NavigationViewItem.MenuItems>
                 </ui:NavigationViewItem>
 
+                <!-- Decks: build and change decks (pool on top, the deck below) -->
+                <ui:NavigationViewItem x:Name="NavEditDecks" Content="Decks"
+                                       Icon="{ui:SymbolIcon Layer24}"
+                                       Visibility="Collapsed"
+                                       IsExpanded="True">
+                    <ui:NavigationViewItem.MenuItems>
+                        <ui:NavigationViewItem Content="Pool → Deck"
+                                               Tag="EditDeck:Pool"
+                                               TargetPageType="{x:Type pages:EditDeckPage}"
+                                               Icon="{ui:SymbolIcon ArrowRight24}" />
+                    </ui:NavigationViewItem.MenuItems>
+                </ui:NavigationViewItem>
+
                 <!-- Online → Collection: the MTGO or Arena pool on top, that game's collection below -->
                 <ui:NavigationViewItem x:Name="NavEditOnline" Content="Online → Collection"
                                        Icon="{ui:SymbolIcon Cloud24}"

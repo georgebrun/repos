@@ -30,10 +30,29 @@ namespace BreakersOfE.Views.Pages
         private static bool IsBrowser(PoolViewMode m) => m == PoolViewMode.Sets || m == PoolViewMode.Decks;
         private PoolViewMode _viewMode = PoolViewMode.Grid;
 
-        /// <summary>The card view the switch above the navigation is set to.</summary>
-        private static PoolViewMode SwitchMode =>
-            Services.CardViewModeService.Mode == Services.CardViewMode.Gallery
-                ? PoolViewMode.Gallery : PoolViewMode.Grid;
+        /// <summary>
+        /// Edit pages: this table's own Grid / Gallery choice (remembered per
+        /// table). Null = follow the switch above the navigation (View).
+        /// </summary>
+        private bool? _embeddedGallery;
+        /// <summary>Edit pages: what a table starts as before it's ever switched.</summary>
+        private bool? _embeddedGalleryDefault;
+
+        /// <summary>The card view: the Edit table's own choice, else the switch above the navigation.</summary>
+        private PoolViewMode SwitchMode =>
+            _embeddedGallery is bool g
+                ? (g ? PoolViewMode.Gallery : PoolViewMode.Grid)
+                : Services.CardViewModeService.Mode == Services.CardViewMode.Gallery
+                    ? PoolViewMode.Gallery : PoolViewMode.Grid;
+
+        /// <summary>Edit pages: the table's Grid / Gallery button.</summary>
+        private void BtnViewMode_Click(object sender, RoutedEventArgs e)
+        {
+            if (_embeddedGallery == null) return;
+            _embeddedGallery = !_embeddedGallery.Value;
+            Services.GridLayoutService.SetEditGallery(LayoutKey(_currentTag), _embeddedGallery.Value);
+            SetViewMode(SwitchMode);
+        }
 
         /// <summary>
         /// Switch flipped. In the set browser nothing changes on screen; the
@@ -41,6 +60,7 @@ namespace BreakersOfE.Views.Pages
         /// </summary>
         private void OnCardViewModeChanged(Services.CardViewMode _)
         {
+            if (_embeddedGallery != null) return;      // Edit tables have their own switch
             if (!IsBrowser(_viewMode)) SetViewMode(SwitchMode);
         }
 
@@ -61,6 +81,14 @@ namespace BreakersOfE.Views.Pages
             // browsers use none of the card-view buttons.
             bool cardView = !IsBrowser(mode);
             BtnClearFilters.Visibility = cardView ? Visibility.Visible : Visibility.Collapsed;
+            // Edit tables: their own Grid / Gallery button.
+            BtnViewMode.Visibility = cardView && _embeddedGallery != null ? Visibility.Visible : Visibility.Collapsed;
+            BtnViewMode.Content = mode == PoolViewMode.Gallery ? "Show as Grid" : "Show as Gallery";
+            // Filters panel + sort: every card view (grid and gallery), never the browsers.
+            var cv = cardView ? Visibility.Visible : Visibility.Collapsed;
+            BtnFilters.Visibility = SortLabel.Visibility = SortBox.Visibility = BtnSortDir.Visibility = cv;
+            FilterPanelView.Visibility = cardView && BtnFilters.IsChecked == true
+                ? Visibility.Visible : Visibility.Collapsed;
             BtnEditionOrder.Visibility = mode == PoolViewMode.Grid ? Visibility.Visible : Visibility.Collapsed;
             BtnColumns.Visibility = mode == PoolViewMode.Grid ? Visibility.Visible : Visibility.Collapsed;
             BtnSetCompletion.Visibility = mode == PoolViewMode.Sets ? Visibility.Visible : Visibility.Collapsed;
@@ -101,10 +129,12 @@ namespace BreakersOfE.Views.Pages
                 {
                     case PoolViewMode.Gallery:
                         Gallery.Show(GridOrder(), selected);
+                        Gallery.SelectCards(PoolGrid.SelectedItems.Cast<object>());   // several on Edit pages
                         if (selected != null) Gallery.ScrollToCard(selected, toTop: true);
                         break;
                     case PoolViewMode.Grid:
-                        if (selected != null && previous != PoolViewMode.Grid)
+                        // (several selected in the gallery stay selected)
+                        if (selected != null && previous != PoolViewMode.Grid && PoolGrid.SelectedItems.Count <= 1)
                             FocusGridRow(selected);
                         break;
                     case PoolViewMode.Sets:
@@ -157,7 +187,9 @@ namespace BreakersOfE.Views.Pages
         /// <summary>Gallery follows the grid's data and order.</summary>
         private void RebuildGalleryIfVisible()
         {
-            if (_galleryMode) Gallery.Show(GridOrder(), PoolGrid.SelectedItem);
+            if (!_galleryMode) return;
+            Gallery.Show(GridOrder(), PoolGrid.SelectedItem);
+            Gallery.SelectCards(PoolGrid.SelectedItems.Cast<object>());
         }
 
         /// <summary>The grid's cards in display order (sort + filters applied).</summary>

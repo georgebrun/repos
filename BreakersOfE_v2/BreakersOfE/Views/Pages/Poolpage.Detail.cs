@@ -22,7 +22,7 @@ namespace BreakersOfE.Views.Pages
         // ══════════════════════════════════════════════════════════════════
         private void PoolGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            Gallery.SelectCard(PoolGrid.SelectedItem);
+            Gallery.SelectCards(PoolGrid.SelectedItems.Cast<object>());
             Detail.ShowCard(PoolGrid.SelectedItem);
             // Re-selecting rows after an edit is not the user picking a card.
             if (!_applyingSelection) SelectedCardChanged?.Invoke(PoolGrid.SelectedItem);
@@ -44,7 +44,7 @@ namespace BreakersOfE.Views.Pages
             // Edit page: a double-click on some cells (e.g. Qty) edits instead.
             if (CellDoubleClickHandler != null &&
                 FindParent<DataGridCell>(e.OriginalSource as DependencyObject) is { } cell &&
-                CellDoubleClickHandler(PoolGrid.SelectedItem, ColumnHeader(cell.Column), cell))
+                CellDoubleClickHandler(cell.DataContext ?? PoolGrid.SelectedItem, ColumnHeader(cell.Column), cell))
             {
                 e.Handled = true;
                 return;
@@ -101,7 +101,10 @@ namespace BreakersOfE.Views.Pages
         }
 
         private void PoolPage_Loaded(object sender, RoutedEventArgs e)
-            => DisableParentScrollViewers();
+        {
+            DisableParentScrollViewers();
+            RestoreDetailWidth();
+        }
 
         // NavigationView wraps pages in a ScrollViewer → infinite height →
         // virtualization defeated → freeze. Kill it.

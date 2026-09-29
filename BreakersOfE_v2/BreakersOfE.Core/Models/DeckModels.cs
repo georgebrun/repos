@@ -146,8 +146,10 @@ namespace BreakersOfE.Models
         public decimal? PriceUsdFoil { get; set; }
 
         // ── Etched (filled from the pool when the deck opens; not saved) ──────
-        // Deck files count non-foil and foil copies only. The "foil" copies of
-        // an ETCHED-ONLY printing (no foil version exists) are etched copies.
+        // Etched copies have their own count (EtchedQuantity, saved). Older
+        // deck files had none: there, the "foil" copies of an ETCHED-ONLY
+        // printing were its etched copies — they're moved to the etched count
+        // when the deck opens (DeckService.Load) and saved that way next time.
         /// <summary>The printing exists as etched.</summary>
         [JsonIgnore] public bool IsEtched { get; set; }
         /// <summary>Etched price (usd_etched).</summary>
@@ -156,10 +158,14 @@ namespace BreakersOfE.Models
         [JsonIgnore] public bool IsEtchedOnly => IsEtched && !IsFoil;
         /// <summary>Price of the deck's "foil" copies: etched price for etched-only printings.</summary>
         [JsonIgnore] public decimal? FoilCopyPrice => IsEtchedOnly ? PriceUsdEtched : PriceUsdFoil;
+        /// <summary>Price of the deck's etched copies (the etched price only — never another finish's).</summary>
+        [JsonIgnore] public decimal? EtchedCopyPrice => PriceUsdEtched;
 
         // ── Deck-specific ─────────────────────────────────────────────────────
         public int Quantity { get; set; } = 0;
         public int FoilQuantity { get; set; } = 0;
+        /// <summary>Etched copies (0 in deck files written before v2 deck editing).</summary>
+        public int EtchedQuantity { get; set; } = 0;
         public string FoilBadge => FoilQuantity > 0 ? "★" : string.Empty;
         public DeckCardCategory Category { get; set; } =
             DeckCardCategory.Mainboard;
@@ -221,25 +227,50 @@ namespace BreakersOfE.Models
             PriceUsdEtched.HasValue ? $"${PriceUsdEtched.Value:F2}" : "—";
 
         [JsonIgnore]
-        public int TotalQuantity => Quantity + FoilQuantity;
+        public int TotalQuantity => Quantity + FoilQuantity + EtchedQuantity;
 
-        /// <summary>Gold pill when any copies are foil: "F", or "E" for an etched-only printing.</summary>
+        /// <summary>Gold pill for the special finishes in this line: "F", "E" or "F E".</summary>
         [JsonIgnore]
-        public string FinishPill => FoilQuantity > 0 ? (IsEtchedOnly ? "E" : "F") : string.Empty;
+        public string FinishPill =>
+            FoilQuantity > 0 && IsEtchedOnly ? "E"                       // older file, not converted
+            : FoilQuantity > 0 && EtchedQuantity > 0 ? "F E"
+            : FoilQuantity > 0 ? "F"
+            : EtchedQuantity > 0 ? "E" : string.Empty;
 
         /// <summary>
-        /// Deck value of this line: non-foil copies × USD + foil copies × their
-        /// finish's price (etched price for etched-only printings). A missing
-        /// price borrows the other finish's (deck files carry old snapshots).
+        /// Deck value of this line: each finish's copies × that finish's price.
+        /// Non-foil and foil borrow each other's when missing (older deck files
+        /// carry old price snapshots); etched uses the etched price only.
         /// </summary>
         [JsonIgnore]
         public decimal RowValue =>
             (PriceUsd ?? FoilCopyPrice ?? 0m) * Quantity +
-            (FoilCopyPrice ?? PriceUsd ?? 0m) * FoilQuantity;
+            (FoilCopyPrice ?? PriceUsd ?? 0m) * FoilQuantity +
+            (EtchedCopyPrice ?? 0m) * EtchedQuantity;
 
         [JsonIgnore]
         public string RowValueDisplay =>
-            PriceUsd.HasValue || FoilCopyPrice.HasValue ? $"${RowValue:F2}" : "—";
+            PriceUsd.HasValue || FoilCopyPrice.HasValue || PriceUsdEtched.HasValue ? $"${RowValue:F2}" : "—";
+
+        /// <summary>Copies of one finish ("nonfoil", "foil", "etched").</summary>
+        public int CountOf(string finish) => finish switch
+        {
+            CardFinish.Foil => FoilQuantity,
+            CardFinish.Etched => EtchedQuantity,
+            _ => Quantity,
+        };
+
+        /// <summary>Set the copies of one finish.</summary>
+        public void SetCount(string finish, int n)
+        {
+            n = Math.Max(0, n);
+            switch (finish)
+            {
+                case CardFinish.Foil: FoilQuantity = n; break;
+                case CardFinish.Etched: EtchedQuantity = n; break;
+                default: Quantity = n; break;
+            }
+        }
 
         [JsonIgnore]
         public string ValueDisplay =>
@@ -365,8 +396,8 @@ namespace BreakersOfE.Models
     public class Deck
     {
         // ── Identity ──────────────────────────────────────────────────────────
-        /// <summary>Stable deck GUID written by v1 (used for collection deck
-        /// usage). Read so it isn't lost; v2 doesn't create or change it yet.</summary>
+        /// <summary>Stable deck GUID (collection deck usage is keyed on it).
+        /// v1 wrote it; v2 gives one to any deck it saves that has none.</summary>
         public string DeckId { get; set; } = string.Empty;
         /// <summary>Legacy v1 flag, kept only so the file round-trips. Nothing reads it.</summary>
         public bool CollectionLinked { get; set; }
@@ -453,7 +484,7 @@ namespace BreakersOfE.Models
         [JsonIgnore]
         public int FoilCount =>
             Cards.Where(c => c.Category != DeckCardCategory.Sideboard)
-                .Sum(c => c.FoilQuantity);
+                .Sum(c => c.FoilQuantity + c.EtchedQuantity);
 
         [JsonIgnore]
         public int NonFoilCount =>
@@ -548,10 +579,7 @@ namespace BreakersOfE.Models
 
         // ── Collection value ──────────────────────────────────────────────────
         [JsonIgnore]
-        public decimal TotalValue =>
-            Cards.Sum(c =>
-                (c.PriceUsd.HasValue ? c.PriceUsd.Value * c.Quantity : 0m) +
-                (c.PriceUsdFoil.HasValue ? c.PriceUsdFoil.Value * c.FoilQuantity : 0m));
+        public decimal TotalValue => Cards.Sum(c => c.RowValue);
 
         [JsonIgnore]
         public string TotalValueDisplay =>

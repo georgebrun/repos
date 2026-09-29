@@ -60,6 +60,7 @@ namespace BreakersOfE.Views.Pages
             view.CustomSort = new PoolSortComparer(
                 propName, ascending, _editionChronological);
             ShowSortArrow();
+            SyncSortBox();
             OnSortChanged();
         }
 
@@ -76,9 +77,28 @@ namespace BreakersOfE.Views.Pages
             string prop = ColumnToProperty.TryGetValue(header, out var p) ? p
                         : !string.IsNullOrEmpty(e.Column.SortMemberPath) ? e.Column.SortMemberPath
                         : header;
+            prop = SortPropFor(prop);
             bool ascending = !(prop == _lastSortProp && _lastSortAsc);
             SortColumn(prop, ascending);
         }
+
+        /// <summary>
+        /// Money columns show text ("$0.19", "0.25 tix", "—"); they sort by
+        /// the number behind it, so 10.00 tix comes after 9.00 tix. The Sort
+        /// list uses the same names, so it and the header arrow stay in step.
+        /// </summary>
+        private static readonly Dictionary<string, string> SortByNumber = new(StringComparer.Ordinal)
+        {
+            ["PriceUsdDisplay"] = "PriceUsd",
+            ["PriceUsdFoilDisplay"] = "PriceUsdFoil",
+            ["PriceUsdEtchedDisplay"] = "PriceUsdEtched",
+            ["PriceTixDisplay"] = "PriceTix",
+            ["PriceDisplay"] = "Price",
+            ["RowValueDisplay"] = "RowValue",
+        };
+
+        private static string SortPropFor(string prop) =>
+            SortByNumber.TryGetValue(prop, out var raw) ? raw : prop;
 
         /// <summary>The arrow sits on the column that owns the current sort.</summary>
         private void ShowSortArrow()
@@ -86,7 +106,7 @@ namespace BreakersOfE.Views.Pages
             foreach (var col in PoolGrid.Columns)
             {
                 string header = ColumnHeader(col);
-                string prop = ColumnToProperty.TryGetValue(header, out var p) ? p : col.SortMemberPath ?? header;
+                string prop = SortPropFor(ColumnToProperty.TryGetValue(header, out var p) ? p : col.SortMemberPath ?? header);
                 col.SortDirection = prop == _lastSortProp
                     ? (_lastSortAsc ? ListSortDirection.Ascending : ListSortDirection.Descending)
                     : null;
@@ -139,6 +159,8 @@ namespace BreakersOfE.Views.Pages
 
             ResetSearch();
             OnSortChanged();
+            LoadPanelFromFilters();            // the Filters panel is cleared too
+            SyncSortBox();
 
             // Viewing a set from the set browser: the set filter is gone now.
             if (_inSetsContext) _vm.Title = "Sets — All Cards";

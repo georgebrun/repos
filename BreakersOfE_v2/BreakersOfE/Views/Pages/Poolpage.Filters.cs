@@ -43,13 +43,14 @@ namespace BreakersOfE.Views.Pages
             // right-hand columns' filters aren't cut off at the edge.
             PlaceInsideWindow(popup, btn);
 
-            popup.SortRequested += (_, ascending) => SortColumn(propName, ascending);
+            popup.SortRequested += (_, ascending) => SortColumn(SortPropFor(propName), ascending);
 
             popup.FilterChanged += (_, __) =>
             {
                 _vm.ApplyFilters();
                 UpdateFunnelIcon(btn, state.IsActive);
                 ResetSearch();
+                LoadPanelFromFilters();        // Color / Rarity / Edition show in the panel too
             };
 
             _activePopup = popup;

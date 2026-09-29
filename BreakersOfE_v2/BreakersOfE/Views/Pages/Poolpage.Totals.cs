@@ -39,6 +39,7 @@ namespace BreakersOfE.Views.Pages
             ["Legal"] = nameof(CollectionTotalsRow.Legal),
             ["Non-Foil"] = nameof(CollectionTotalsRow.NonFoil),
             ["Foil"] = nameof(CollectionTotalsRow.Foil),
+            ["Etched"] = nameof(CollectionTotalsRow.Etched),
             ["Total"] = nameof(CollectionTotalsRow.Total),
             ["Owned"] = nameof(CollectionTotalsRow.Owned),
             ["Missing"] = nameof(CollectionTotalsRow.Missing),
@@ -158,6 +159,7 @@ namespace BreakersOfE.Views.Pages
                         Legal = illegal == 0 ? "All legal" : $"{illegal} illegal",
                         NonFoil = cards.Sum(c => c.Quantity).ToString("N0"),
                         Foil = cards.Sum(c => c.FoilQuantity).ToString("N0"),
+                        Etched = cards.Sum(c => c.EtchedQuantity).ToString("N0"),
                         Total = cards.Sum(c => c.TotalQuantity).ToString("N0"),
                         Value = $"${cards.Sum(c => c.RowValue):N2}",
                     }
@@ -253,6 +255,7 @@ namespace BreakersOfE.Views.Pages
         public string Legal { get; init; } = "";
         public string NonFoil { get; init; } = "";
         public string Foil { get; init; } = "";
+        public string Etched { get; init; } = "";
         public string Total { get; init; } = "";
         public string Owned { get; init; } = "";
         public string OtherDecks { get; init; } = "";

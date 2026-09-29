@@ -61,8 +61,9 @@ namespace BreakersOfE.Services
                 // Constructed counts main deck and sideboard together.
                 var counted = rule.SideboardMax == null ? main : deck.Cards;
                 // Seven Dwarves / Nazgûl: "up to seven / nine" of that card.
+                // By card NAME (front face), whatever the set or printing.
                 var over = counted.Where(CopyLimited)
-                    .GroupBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+                    .GroupBy(c => DeckIndexService.CardKey(c.Name), StringComparer.OrdinalIgnoreCase)
                     .Select(g => (name: g.Key, count: Qty(g), limit: Math.Max(rule.CopyLimit, NamedLimit(g.First()))))
                     .Where(x => x.count > x.limit)
                     .OrderBy(x => x.name)
@@ -82,7 +83,7 @@ namespace BreakersOfE.Services
                 {
                     var restricted = counted
                         .Where(c => c.Legality[rule.LegalityKey].Status == "restricted")
-                        .GroupBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+                        .GroupBy(c => DeckIndexService.CardKey(c.Name), StringComparer.OrdinalIgnoreCase)
                         .Select(g => (name: g.Key, count: Qty(g)))
                         .Where(x => x.count > 1)
                         .Select(x => $"{x.name} × {x.count}")
@@ -189,6 +190,145 @@ namespace BreakersOfE.Services
             }
             return list;
         }
+
+        // ══════════════════════════════════════════════════════════════════
+        // ADD WARNINGS — asked BEFORE a card goes into a deck (Edit → Decks).
+        // Same rules as the check above; a warning, never a block: the user
+        // can add anyway (a deck in progress, a house rule, a proxy…).
+        // ══════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// What adding <paramref name="adding"/> copies of <paramref name="card"/>
+        /// to <paramref name="section"/> would break (empty = nothing). The copy
+        /// limit counts the card's NAME across every printing and set in the
+        /// deck (main deck and sideboard together for Constructed; the deck
+        /// only for singleton formats).
+        /// </summary>
+        public static List<string> AddWarnings(Deck deck, DeckFormatRule rule, DeckCard card,
+                                               DeckCardCategory section, int adding)
+        {
+            var warnings = new List<string>();
+            if (adding <= 0) return warnings;
+
+            bool toSide = section == DeckCardCategory.Sideboard;
+            bool asLeader = section == DeckCardCategory.Commander;
+            // Formats without a sideboard: sideboard cards aren't part of the deck.
+            bool counts = !toSide || rule.SideboardMax != null || rule.Type == DeckType.Limited;
+            var main = deck.Cards.Where(c => c.Category != DeckCardCategory.Sideboard).ToList();
+            string name = card.Name;
+            string key = DeckIndexService.CardKey(name);
+
+            // ── Copies, by name ─────────────────────────────────────────
+            if (counts && rule.CopyLimit > 0 && CopyLimited(card))
+            {
+                var counted = rule.SideboardMax == null ? main : deck.Cards;
+                var same = counted.Where(c => string.Equals(DeckIndexService.CardKey(c.Name), key,
+                                                            StringComparison.OrdinalIgnoreCase)).ToList();
+                int have = Qty(same);
+                int limit = Math.Max(rule.CopyLimit, NamedLimit(card));
+                if (have + adding > limit)
+                {
+                    string where = have == 0 ? "" : " (" + string.Join(", ", same
+                        .GroupBy(c => c.SetCode.ToUpperInvariant())
+                        .Select(g => $"{Qty(g)}× {g.Key}")) + ")";
+                    string allows = limit == 1 ? "1 copy" : $"{limit} copies";
+                    string scope = rule.SideboardMax != null ? " (main deck and sideboard together, any printing)" : " (any printing)";
+                    warnings.Add(have == 0
+                        ? $"{name}: adding {adding} — {rule.Name} allows {allows}{scope}."
+                        : $"{name}: {have} already in the deck{where} — {rule.Name} allows {allows}{scope}.");
+                }
+
+                // Vintage restricted: one copy.
+                if (rule.LegalityKey != null && !rule.HasLeader &&
+                    card.Legality[rule.LegalityKey].Status == "restricted" && have + adding > 1)
+                    warnings.Add($"{name} is restricted in {FormatName(rule)} — 1 copy allowed.");
+            }
+
+            // ── Card legality (Scryfall) ────────────────────────────────
+            if (counts && rule.LegalityKey != null)
+            {
+                string status = card.Legality[rule.LegalityKey].Status;
+                var leaders = main.Where(IsLeaderCard).ToList();
+                if (asLeader) leaders.Add(card);
+                bool allowed = StatusAllowed(rule, card, status, leaders) ||
+                               (status == "restricted" && rule.Leader == DeckLeader.None);   // counted above
+                if (!allowed)
+                    warnings.Add(status == "restricted" && rule.Leader == DeckLeader.PauperCommander
+                        ? $"{name} is an uncommon — in Pauper Commander it can only be the commander."
+                        : status switch
+                        {
+                            "banned" => $"{name} is banned in {FormatName(rule)}.",
+                            "restricted" => $"{name} is restricted in {FormatName(rule)}.",
+                            _ => $"{name} is not legal in {FormatName(rule)}.",
+                        });
+            }
+
+            // ── Color identity (command-zone formats) ──────────────────
+            if (rule.HasLeader && !toSide && !asLeader)
+            {
+                var leaders = main.Where(IsLeaderCard).ToList();
+                var from = rule.Leader == DeckLeader.Oathbreaker
+                    ? leaders.Where(c => FrontIs(c, "Planeswalker")).ToList()
+                    : leaders;
+                if (from.Count > 0)
+                {
+                    var identity = new HashSet<char>(from.SelectMany(c => c.ColorIdentity).Where(IsColor));
+                    string outside = string.Concat("WUBRG".Where(ch => card.ColorIdentity.Contains(ch) && !identity.Contains(ch)));
+                    if (outside.Length > 0)
+                    {
+                        string idText = identity.Count == 0 ? "colorless" : string.Concat("WUBRG".Where(identity.Contains));
+                        string whose = rule.Leader == DeckLeader.Oathbreaker ? "the Oathbreaker's" : "the commander's";
+                        warnings.Add($"{name} ({card.ColorIdentity}) is outside {whose} colors ({idText}).");
+                    }
+                }
+            }
+
+            // ── Deck size / sideboard size ──────────────────────────────
+            if (!toSide && rule.ExactSize)
+            {
+                int size = Qty(main);
+                if (size + adding > rule.Size)
+                    warnings.Add($"The deck would have {size + adding} cards — {rule.Name} needs exactly {rule.Size}.");
+            }
+            if (toSide && rule.SideboardMax is int max)
+            {
+                int sb = Qty(deck.Cards.Where(c => c.Category == DeckCardCategory.Sideboard));
+                if (sb + adding > max)
+                    warnings.Add($"The sideboard would have {sb + adding} cards — maximum {max}.");
+            }
+
+            return warnings;
+        }
+
+        /// <summary>
+        /// Can this card lead the deck (commander, Oathbreaker or Signature
+        /// Spell)? Null = yes; otherwise why not. Used when marking a card.
+        /// </summary>
+        public static string? LeaderProblem(DeckFormatRule rule, DeckCard c)
+        {
+            bool legendary = FrontIs(c, "Legendary");
+            return rule.Leader switch
+            {
+                DeckLeader.None => $"{rule.Name} has no commander.",
+                DeckLeader.Oathbreaker =>
+                    FrontIs(c, "Planeswalker") || FrontIs(c, "Instant") || FrontIs(c, "Sorcery")
+                        ? null : $"{c.Name} isn't a planeswalker (Oathbreaker) or an instant or sorcery (Signature Spell).",
+                DeckLeader.Brawl =>
+                    legendary && (FrontIs(c, "Creature") || FrontIs(c, "Planeswalker")) || CanBeCommander(c) || FrontIs(c, "Background")
+                        ? null : $"{c.Name} isn't a legendary creature or planeswalker.",
+                DeckLeader.PauperCommander =>
+                    FrontIs(c, "Creature") &&
+                    (c.Legality["paupercommander"].Status is "legal" or "restricted" ||
+                     string.Equals(c.Rarity, "uncommon", StringComparison.OrdinalIgnoreCase))
+                        ? null : $"{c.Name} isn't an uncommon creature.",
+                _ => legendary && FrontIs(c, "Creature") || CanBeCommander(c) || FrontIs(c, "Background")
+                        ? null : $"{c.Name} isn't a legendary creature (and doesn't say it can be your commander).",
+            };
+        }
+
+        /// <summary>"Commander", "Oathbreaker or Signature Spell" — what a leader is called in this format.</summary>
+        public static string LeaderName(DeckFormatRule rule) =>
+            rule.Leader == DeckLeader.Oathbreaker ? "Oathbreaker / Signature Spell" : "Commander";
 
         /// <summary>One line for the deck view: "Commander · all rules met" / "… · 2 problems: Deck size, Legality".</summary>
         public static string SummaryLine(DeckFormatRule rule, List<DeckRuleCheck> checks)

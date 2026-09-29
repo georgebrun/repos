@@ -58,6 +58,7 @@ namespace BreakersOfE.Views.Pages
             ["SB"] = "SideboardDisplay",
             ["Non-Foil"] = "Quantity",
             ["Foil"] = "FoilQuantity",
+            ["Etched"] = "EtchedQuantity",
             ["Total"] = "TotalQuantity",
             ["Owned"] = "OwnedTotal",           // Pool + Deck: copies of this printing you own
             ["Free"] = "CollectionFree",
@@ -138,7 +139,7 @@ namespace BreakersOfE.Views.Pages
             map["Offer"] = new[] { W };
             foreach (var h in new[] { "USD", "Foil $", "Etched $" })
                 map[h] = pd;
-            foreach (var h in new[] { "SB", "Non-Foil", "Foil", "Total", "Free", "Missing", "Wanted", "Other Decks" })
+            foreach (var h in new[] { "SB", "Non-Foil", "Foil", "Etched", "Total", "Free", "Missing", "Wanted", "Other Decks" })
                 map[h] = d;
             map["Owned"] = new[] { TableKind.Pool, D, MP, AP };
             return map;
@@ -202,8 +203,11 @@ namespace BreakersOfE.Views.Pages
 
             // Gallery view: selection goes through the grid (one selection,
             // two views); double-click opens the detail window.
-            Gallery.CardClicked += card => PoolGrid.SelectedItem = card;
+            Gallery.CardClicked += GalleryCardClicked;
             Gallery.CardOpened += OpenCardDetailPopup;
+            Gallery.CardRightClicked += GalleryCardRightClicked;
+            Gallery.CardAdd += (card, keys) => { SelectForTileButton(card); GalleryAdd?.Invoke(card, keys); };
+            Gallery.CardRemove += (card, keys) => { SelectForTileButton(card); GalleryRemove?.Invoke(card, keys); };
 
             // Grid / Gallery switch above the left navigation (app-wide).
             // Listen only while this page is on screen.
@@ -223,6 +227,9 @@ namespace BreakersOfE.Views.Pages
 
             // Grid zoom (Ctrl + wheel / Ctrl + = - 0), saved per table.
             InitZoom();
+
+            // Filters panel + Sort list (grid and gallery).
+            InitFilterPanel();
         }
 
         private string _currentTag = "";
@@ -237,6 +244,9 @@ namespace BreakersOfE.Views.Pages
             _pendingSelect = null;             // a new table: no re-select left over from an edit
             _pendingFallback = null;
             LoadPoolCore(tag);
+            // Edit tables: this table's own Grid / Gallery (saved, else the page's default).
+            if (_embeddedGalleryDefault is bool d)
+                _embeddedGallery = Services.GridLayoutService.GetEditGallery(LayoutKey(tag)) ?? d;
             SetViewMode(SwitchMode);
         }
 
@@ -300,6 +310,7 @@ namespace BreakersOfE.Views.Pages
             }
             SaveColumnLayoutNow();
             ApplyColumnLayout(tag);
+            FilterPanelView.CancelPending();     // a filter still waiting for typing belongs to the old table
 
             _currentTag = tag;
             ResetSearch();
@@ -339,6 +350,9 @@ namespace BreakersOfE.Views.Pages
                 _vm.Title = "Sets";
                 _vm.StatusText = $"{_setTiles!.Count:N0} sets";
             }
+
+            // Filters panel: this table's lists and settings; Sort list in step.
+            SyncFilterPanel();
 
             // Edit page: re-select the row an edit just touched.
             ApplyPendingSelection();

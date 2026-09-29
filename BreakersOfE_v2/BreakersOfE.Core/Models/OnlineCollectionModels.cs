@@ -23,7 +23,7 @@ namespace BreakersOfE.Models
     /// language. MTGO has foils ("Premium") and prices in event tickets;
     /// Arena has neither (non-foil only, no price).
     /// </summary>
-    public class OnlineCollectionEntry
+    public class OnlineCollectionEntry : ILegalityRow
     {
         [Key]
         public int OnlineCollectionEntryId { get; set; }
@@ -89,6 +89,9 @@ namespace BreakersOfE.Models
         [NotMapped] public decimal? PriceTix => IsOnMtgo ? Price : null;
 
         [NotMapped] public string FinishPill => CardFinish.Pill(Finish);
+
+        private LegalityAccessor? _legality;
+        [NotMapped] public LegalityAccessor Legality => _legality ??= new LegalityAccessor(() => LegalitiesJson);
         [NotMapped] public string FavoriteDisplay => IsFavorite ? "★" : string.Empty;
 
         /// <summary>"0.25 tix" (MTGO) or "—".</summary>

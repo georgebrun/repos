@@ -6,13 +6,45 @@
          download (cached by ScryfallId), own size slider. Self-contained so any
          page can host it: the pool page now, collection pages later. The host
          feeds it cards in display order and reacts to CardClicked/CardOpened. -->
+    <UserControl.Resources>
+        <!-- Round + / − buttons on the tiles (Edit pages) -->
+        <Style x:Key="TileButton" TargetType="Button">
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="15" Background="#E0202020"
+                                BorderBrush="#A0FFFFFF" BorderThickness="1">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="0,-3,0,0"
+                                              TextElement.Foreground="White"
+                                              TextElement.FontSize="18"
+                                              TextElement.FontWeight="Bold"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FF5A5A5A"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FF808080"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <ListBox Grid.Row="0" x:Name="GalleryList"
+    <ListBox Grid.Row="0" x:Name="GalleryList"
              Background="Transparent" BorderThickness="0"
              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
              ScrollViewer.CanContentScroll="True"
@@ -20,124 +52,143 @@
              VirtualizingPanel.VirtualizationMode="Recycling"
              VirtualizingPanel.ScrollUnit="Pixel"
              SizeChanged="GalleryList_SizeChanged">
-            <ListBox.ItemContainerStyle>
-                <!-- Strip ListBoxItem chrome: we draw our own tile selection -->
-                <Style TargetType="ListBoxItem">
-                    <Setter Property="Focusable" Value="False"/>
-                    <Setter Property="Template">
-                        <Setter.Value>
-                            <ControlTemplate TargetType="ListBoxItem">
-                                <ContentPresenter/>
-                            </ControlTemplate>
-                        </Setter.Value>
-                    </Setter>
-                </Style>
-            </ListBox.ItemContainerStyle>
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <ItemsControl ItemsSource="{Binding Items}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <StackPanel Orientation="Horizontal"/>
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Width="{Binding TileWidth}" Height="{Binding TileHeight}"
+        <ListBox.ItemContainerStyle>
+            <!-- Strip ListBoxItem chrome: we draw our own tile selection -->
+            <Style TargetType="ListBoxItem">
+                <Setter Property="Focusable" Value="False"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ListBoxItem">
+                            <ContentPresenter/>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </ListBox.ItemContainerStyle>
+        <ListBox.ItemTemplate>
+            <DataTemplate>
+                <ItemsControl ItemsSource="{Binding Items}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Width="{Binding TileWidth}" Height="{Binding TileHeight}"
                                     Margin="4" CornerRadius="10" BorderThickness="3"
                                     Background="#18808080" Cursor="Hand"
                                     ToolTip="{Binding Name}"
-                                    MouseLeftButtonDown="GalleryTile_MouseLeftButtonDown">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="BorderBrush" Value="Transparent"/>
-                                            <Style.Triggers>
-                                                <!-- Deck gallery: the commander's tile is outlined
+                                    MouseLeftButtonDown="GalleryTile_MouseLeftButtonDown"
+                                    PreviewMouseRightButtonDown="GalleryTile_PreviewMouseRightButtonDown">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="BorderBrush" Value="Transparent"/>
+                                        <Style.Triggers>
+                                            <!-- Deck gallery: the commander's tile is outlined
                                                  in gold (selection blue still wins, below). -->
-                                                <DataTrigger Binding="{Binding IsCommander}" Value="True">
-                                                    <Setter Property="BorderBrush" Value="#C8A200"/>
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                    <Setter Property="BorderBrush"
+                                            <DataTrigger Binding="{Binding IsCommander}" Value="True">
+                                                <Setter Property="BorderBrush" Value="#C8A200"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                <Setter Property="BorderBrush"
                                                         Value="#4CA0FF"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <Grid>
-                                        <!-- Placeholder: card name until the image arrives
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <!-- Placeholder: card name until the image arrives
                                          (stays if offline). The image covers it. -->
-                                        <TextBlock Text="{Binding Name}" TextWrapping="Wrap"
+                                    <TextBlock Text="{Binding Name}" TextWrapping="Wrap"
                                                TextAlignment="Center" FontSize="12"
                                                VerticalAlignment="Center" Margin="8"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                        <!-- Set checklist: printings you don't own are dimmed
+                                    <!-- Set checklist: printings you don't own are dimmed
                                          (the price badge stays bright). -->
-                                        <Image Source="{Binding Image}" Stretch="Uniform"
+                                    <Image Source="{Binding Image}" Stretch="Uniform"
                                            RenderOptions.BitmapScalingMode="HighQuality">
-                                            <Image.Style>
-                                                <Style TargetType="Image">
-                                                    <Setter Property="Opacity" Value="1"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsDimmed}" Value="True">
-                                                            <Setter Property="Opacity" Value="0.3"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Image.Style>
-                                        </Image>
-                                        <!-- Owned marker + finish pill sit just below the title bar
+                                        <Image.Style>
+                                            <Style TargetType="Image">
+                                                <Setter Property="Opacity" Value="1"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsDimmed}" Value="True">
+                                                        <Setter Property="Opacity" Value="0.3"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Image.Style>
+                                    </Image>
+                                    <!-- Owned marker + finish pill sit just below the title bar
                                          (at the top of the art), so the name and mana cost stay
                                          readable. Proportional rows keep them there at any card size. -->
-                                        <Grid>
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="11*"/>
-                                                <RowDefinition Height="89*"/>
-                                            </Grid.RowDefinitions>
-                                            <!-- Count marker (top-left): owned (pool), quantity (collection), copies in deck (deck) -->
-                                            <Border Grid.Row="1" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="11*"/>
+                                            <RowDefinition Height="89*"/>
+                                        </Grid.RowDefinitions>
+                                        <!-- Count marker (top-left): owned (pool), quantity (collection), copies in deck (deck) -->
+                                        <Border Grid.Row="1" HorizontalAlignment="Left" VerticalAlignment="Top"
                                                 Margin="8,2,0,0" CornerRadius="8" Padding="7,1"
                                                 Background="#D0202020"
                                                 ToolTip="{Binding OwnedTip}"
                                                 Visibility="{Binding HasOwned, Converter={StaticResource BoolToVisibilityConverter}}">
-                                                <TextBlock Text="{Binding OwnedText}" FontSize="12"
+                                            <TextBlock Text="{Binding OwnedText}" FontSize="12"
                                                        FontWeight="Bold" Foreground="White"/>
-                                            </Border>
-                                            <!-- Finish pill (top-right): gold "F" = foil row or
+                                        </Border>
+                                        <!-- Finish pill (top-right): gold "F" = foil row or
                                              foil-only printing, "E" = etched -->
-                                            <Border Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                        <Border Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top"
                                                 Margin="0,2,8,0" CornerRadius="8" Padding="7,1"
                                                 Background="#D0202020"
                                                 Visibility="{Binding HasFinishPill, Converter={StaticResource BoolToVisibilityConverter}}">
-                                                <TextBlock Text="{Binding FinishPill}" FontSize="12"
+                                            <TextBlock Text="{Binding FinishPill}" FontSize="12"
                                                        FontWeight="Bold" Foreground="#FFC000"/>
-                                            </Border>
-                                        </Grid>
-                                        <!-- Price badge -->
-                                        <Border HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                                        </Border>
+                                    </Grid>
+                                    <!-- Edit pages: + / − on the right edge, like a tally.
+                                         + adds Qty (Shift = foil, Ctrl = etched), − removes. -->
+                                    <Grid Visibility="{Binding ShowEditButtons, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="55*"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="12*"/>
+                                        </Grid.RowDefinitions>
+                                        <Button Grid.Row="1" Content="+" Style="{StaticResource TileButton}"
+                                                HorizontalAlignment="Right" Margin="0,0,8,6"
+                                                Click="TileAdd_Click"
+                                                ToolTip="Add Qty (Shift+click = foil, Ctrl+click = etched). Right-click the card for more."/>
+                                        <Button Grid.Row="2" Content="−" Style="{StaticResource TileButton}"
+                                                HorizontalAlignment="Right" Margin="0,0,8,0"
+                                                Click="TileRemove_Click"
+                                                ToolTip="Remove Qty (Shift+click = foil, Ctrl+click = etched). Right-click the card for more."/>
+                                    </Grid>
+                                    <!-- Price badge -->
+                                    <Border HorizontalAlignment="Center" VerticalAlignment="Bottom"
                                             Margin="0,0,0,6" CornerRadius="8" Padding="8,2"
                                             Background="#D0202020"
                                             Visibility="{Binding HasPrice, Converter={StaticResource BoolToVisibilityConverter}}">
-                                            <TextBlock Text="{Binding PriceText}" FontSize="11"
+                                        <TextBlock Text="{Binding PriceText}" FontSize="11"
                                                    FontWeight="SemiBold" Foreground="White"/>
-                                        </Border>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </DataTemplate>
+        </ListBox.ItemTemplate>
+    </ListBox>
 
-        <!-- Downloads-in-progress pill (gallery image downloads) -->
-        <Border Grid.Row="0" x:Name="DownloadsPill"
+    <!-- Downloads-in-progress pill (gallery image downloads) -->
+    <Border Grid.Row="0" x:Name="DownloadsPill"
             Visibility="Collapsed" IsHitTestVisible="False"
             HorizontalAlignment="Center" VerticalAlignment="Bottom"
             Margin="0,0,0,16" CornerRadius="14" Padding="14,6"
             Background="#E0202020" BorderBrush="#60808080" BorderThickness="1">
-            <TextBlock x:Name="DownloadsPillText" FontSize="12" Foreground="White"/>
-        </Border>
+        <TextBlock x:Name="DownloadsPillText" FontSize="12" Foreground="White"/>
+    </Border>
 
         <!-- Card size slider -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right"

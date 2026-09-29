@@ -21,10 +21,35 @@ namespace BreakersOfE.Services
             if (string.IsNullOrEmpty(deck.FilePath))
                 deck.FilePath = AppFolderService.DeckFilePath(deck.Name);
 
+            // Collection deck usage is keyed on the deck's GUID: every saved deck has one.
+            if (string.IsNullOrWhiteSpace(deck.DeckId))
+                deck.DeckId = Guid.NewGuid().ToString();
+
             deck.Modified = DateTime.Now;
             string json = JsonSerializer.Serialize(deck, _jsonOptions);
-            File.WriteAllText(deck.FilePath, json);
+            // Write a temporary file, then swap it in: a crash mid-save can't
+            // leave a half-written deck (decks are saved after every edit).
+            string tmp = deck.FilePath + ".saving";
+            File.WriteAllText(tmp, json);
+            File.Move(tmp, deck.FilePath, overwrite: true);
             deck.IsModified = false;
+        }
+
+        /// <summary>The deck as it would be written to its file (for Undo snapshots).</summary>
+        public static string ToJson(Deck deck) => JsonSerializer.Serialize(deck, _jsonOptions);
+
+        /// <summary>
+        /// A new deck's file: Decks\<name>.deck, or "<name> (2).deck", … when
+        /// that file already exists (a new deck never overwrites another).
+        /// </summary>
+        public static string NewDeckPath(string deckName)
+        {
+            string path = AppFolderService.DeckFilePath(deckName);
+            string dir = Path.GetDirectoryName(path) ?? AppFolderService.DecksFolder;
+            string stem = Path.GetFileNameWithoutExtension(path);
+            for (int i = 2; File.Exists(path); i++)
+                path = Path.Combine(dir, $"{stem} ({i}).deck");
+            return path;
         }
 
         public static void SaveAs(Deck deck, string filePath)
@@ -88,7 +113,7 @@ namespace BreakersOfE.Services
                 var map = pdb.PoolCards.AsNoTracking()
                     .Where(p => scryfallIds.Contains(p.ScryfallId))
                     .Select(p => new { p.ScryfallId, p.PoolId, p.LegalitiesJson, p.IsGameChanger,
-                                       p.IsFoil, p.IsEtched, p.PriceUsdEtched })
+                                       p.IsNonFoil, p.IsFoil, p.IsEtched, p.PriceUsdEtched })
                     .ToList()
                     .GroupBy(p => p.ScryfallId)
                     .ToDictionary(g => g.Key, g => g.First());
@@ -104,11 +129,24 @@ namespace BreakersOfE.Services
                     if (string.IsNullOrWhiteSpace(card.LegalitiesJson))
                         card.LegalitiesJson = pc.LegalitiesJson ?? string.Empty;
                     card.IsGameChanger = pc.IsGameChanger;   // for Commander brackets
-                    // Etched: deck files count only non-foil/foil copies; the
-                    // pool says whether "foil" copies are really etched.
+                    // Finishes: the pool says which the printing has (deck
+                    // files from imports or older versions may not).
+                    card.IsNonFoil = pc.IsNonFoil;
+                    card.IsFoil = pc.IsFoil;
                     card.IsEtched = pc.IsEtched;
                     card.PriceUsdEtched = pc.PriceUsdEtched;
-                    if (pc.IsEtched && !pc.IsFoil) card.IsFoil = false;   // etched-only printing
+                    if (pc.IsEtched && !pc.IsFoil)
+                    {
+                        card.IsFoil = false;                               // etched-only printing
+                        // Older deck files had no etched count: their "foil"
+                        // copies of an etched-only printing ARE etched copies.
+                        // Moved here (in memory); the file changes when saved.
+                        if (card.FoilQuantity > 0)
+                        {
+                            card.EtchedQuantity += card.FoilQuantity;
+                            card.FoilQuantity = 0;
+                        }
+                    }
                 }
             }
             catch (Exception ex)
@@ -623,12 +661,15 @@ namespace BreakersOfE.Services
                 Artist = pool.Artist,
                 IsFoil = pool.IsFoil,
                 IsNonFoil = pool.IsNonFoil,
+                IsEtched = pool.IsEtched,
+                IsGameChanger = pool.IsGameChanger,
                 ImageNormalUrl = pool.ImageNormalUrl,
                 LocalImagePath = pool.LocalImagePath,
                 ImageBackUrl = pool.ImageBackUrl,
                 LocalImageBackPath = pool.LocalImageBackPath,
                 PriceUsd = pool.PriceUsd,
-                PriceUsdFoil = pool.PriceUsdFoil
+                PriceUsdFoil = pool.PriceUsdFoil,
+                PriceUsdEtched = pool.PriceUsdEtched,
             };
         }
     }

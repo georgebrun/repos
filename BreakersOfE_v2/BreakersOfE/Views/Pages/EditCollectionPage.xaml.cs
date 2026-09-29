@@ -59,13 +59,32 @@ namespace BreakersOfE.Views.Pages
         {
             InitializeComponent();
 
-            _top.SetEmbedded();
-            _bottom.SetEmbedded();
+            // Pool on top starts as card pictures (+ / − on each), the collection
+            // below as a grid; each has its own Grid / Gallery button, remembered.
+            _top.SetEmbedded(galleryByDefault: true);
+            _bottom.SetEmbedded(galleryByDefault: false);
             TopFrame.Content = _top;
             BottomFrame.Content = _bottom;
 
             _top.SelectedCardChanged += card => OnSelected(_top, card);
             _bottom.SelectedCardChanged += card => OnSelected(_bottom, card);
+
+            // Gallery tiles: + adds Qty (Shift = foil, Ctrl = etched), − removes.
+            _top.GalleryAdd += (card, keys) => { _active = _top; SetCurrent(card); DoAdd(FinishFromKeys(keys), _top); };
+            _top.GalleryRemove += (card, keys) =>
+            {
+                _active = _top;
+                SetCurrent(card);
+                DoRemove(FinishFromKeys(keys) ?? OwnedFinish(), _top);
+            };
+            _bottom.GalleryAdd += (card, keys) => { _active = _bottom; SetCurrent(card); DoAdd(FinishFromKeys(keys), _bottom); };
+            _bottom.GalleryRemove += (card, keys) =>
+            {
+                _active = _bottom;
+                SetCurrent(card);
+                if (FinishFromKeys(keys) is { } f) DoRemove(f, _bottom);
+                else RemoveRows(all: false);           // − on a collection tile: that row itself
+            };
 
             _top.GridPreviewKeyDown += Top_GridPreviewKeyDown;
             _bottom.GridPreviewKeyDown += Bottom_GridPreviewKeyDown;
@@ -584,7 +603,11 @@ namespace BreakersOfE.Views.Pages
             // Pool rows of these printings: Owned updates in place.
             var wanted = new HashSet<string>(sids);
             var poolRows = _top.FindAllLoaded(r => r is IOwnedCard && wanted.Contains(Str(r, "ScryfallId"))).ToArray();
-            if (poolRows.Length > 0) OwnedCountService.Fill(_poolTag, poolRows);
+            if (poolRows.Length > 0)
+            {
+                OwnedCountService.Fill(_poolTag, poolRows);
+                _top.RefreshGalleryCards(poolRows);      // gallery tiles show the new counts
+            }
 
             // Collection table: re-read, re-select the rows the edit ended in
             // (or a row of the same printing if those are gone).
@@ -654,6 +677,7 @@ namespace BreakersOfE.Views.Pages
             _bottomMenu.Items.Add(new Separator());
             Item(_bottomMenu, "Remove Qty from the selected rows", "Delete", () => RemoveRows(all: false), qty: true);
             Item(_bottomMenu, "Remove all of the selected rows", "Shift+Delete", () => RemoveRows(all: true));
+            Item(_bottomMenu, "Set quantity…", "", SetQuantityOfSelected);
             Item(_bottomMenu, "Remove All (every finish, language, condition)", "", () => DoRemoveAllOfPrintings(_bottom), () => BtnRemoveAll.IsEnabled);
             _bottomMenu.Items.Add(new Separator());
 
@@ -783,7 +807,7 @@ namespace BreakersOfE.Views.Pages
         /// every row color). Enter or clicking away saves, Esc cancels. With no
         /// cell (the Notes or Storage column is hidden) it opens at the mouse.
         /// </summary>
-        private static void ShowCellEditor(DataGridCell? cell, string text, double minWidth,
+        internal static void ShowCellEditor(DataGridCell? cell, string text, double minWidth,
                                            TextAlignment align, bool digitsOnly, string tip, Action<string> save)
         {
             // The plain WPF text box style on purpose: the app's Fluent style
@@ -850,8 +874,39 @@ namespace BreakersOfE.Views.Pages
             popup.IsOpen = true;
         }
 
+        /// <summary>Right-click → Set quantity… (grid or gallery): the Qty editor over the cell, or at the mouse.</summary>
+        private void SetQuantityOfSelected()
+        {
+            if (Targets(_bottom).FirstOrDefault(IsCollectionRow) is not { } row)
+            {
+                ShowStatus("Select a row in the collection table first.", true);
+                return;
+            }
+            // After the right-click menu has closed, or it would close the editor at once.
+            Dispatcher.BeginInvoke(new Action(() => EditQuantityInPlace(row, _bottom.CellFor(row, "Qty"))),
+                System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        /// <summary>A tile button's keys: Shift = foil, Ctrl = etched, none = the default.</summary>
+        private static string? FinishFromKeys(ModifierKeys keys) =>
+            keys.HasFlag(ModifierKeys.Control) ? CardFinish.Etched :
+            keys.HasFlag(ModifierKeys.Shift) ? CardFinish.Foil : null;
+
+        /// <summary>
+        /// − on a pool tile: the finish you own of the current card (the only
+        /// one, else non-foil, foil, etched in that order).
+        /// </summary>
+        private string OwnedFinish()
+        {
+            if (_counts.NonFoil > 0 && _counts.Foil == 0 && _counts.Etched == 0) return CardFinish.NonFoil;
+            if (_counts.Foil > 0 && _counts.NonFoil == 0 && _counts.Etched == 0) return CardFinish.Foil;
+            if (_counts.Etched > 0 && _counts.NonFoil == 0 && _counts.Foil == 0) return CardFinish.Etched;
+            return _counts.NonFoil > 0 ? CardFinish.NonFoil : _counts.Foil > 0 ? CardFinish.Foil
+                 : _counts.Etched > 0 ? CardFinish.Etched : CardFinish.NonFoil;
+        }
+
         /// <summary>Qty cell: type the row's exact quantity (never below the copies in use).</summary>
-        private void EditQuantityInPlace(object row, DataGridCell cell)
+        private void EditQuantityInPlace(object row, DataGridCell? cell)
         {
             SetCurrent(row);
             int current = Int(row, "Quantity");
@@ -986,10 +1041,32 @@ namespace BreakersOfE.Views.Pages
         private static string CardText(object card) =>
             $"{Str(card, "Name")} ({Str(card, "SetCode").ToUpperInvariant()} #{Str(card, "CollectorNumber")})";
 
+        // ── Splitters: sizes are remembered (all Edit pages share them) ──
+        private void TableSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+        {
+            double total = TopRow.ActualHeight + BottomRow.ActualHeight;
+            if (total > 0) Services.GridLayoutService.SetNumber("Edit:TopShare", TopRow.ActualHeight / total);
+        }
+
+        private void DetailSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e) =>
+            Services.GridLayoutService.SetNumber("Edit:DetailWidth", DetailColumn.ActualWidth);
+
+        private void RestoreSplitters()
+        {
+            if (Services.GridLayoutService.GetNumber("Edit:TopShare") is double share && share > 0.05 && share < 0.95)
+            {
+                TopRow.Height = new GridLength(share, GridUnitType.Star);
+                BottomRow.Height = new GridLength(1 - share, GridUnitType.Star);
+            }
+            if (Services.GridLayoutService.GetNumber("Edit:DetailWidth") is double w && w >= DetailColumn.MinWidth)
+                DetailColumn.Width = new GridLength(Math.Min(w, DetailColumn.MaxWidth));
+        }
+
         // NavigationView wraps pages in a ScrollViewer → infinite height →
         // virtualization defeated → freeze. Same fix as PoolPage.
         private void Page_Loaded(object sender, RoutedEventArgs e)
         {
+            RestoreSplitters();
             DependencyObject current = this;
             while (current != null)
             {

@@ -183,7 +183,32 @@ namespace BreakersOfE.Filtering
         public ColumnFilterState? Get(string columnName) =>
             _filters.TryGetValue(columnName, out var s) ? s : null;
 
-        public bool HasActiveFilters => _filters.Values.Any(f => f.IsActive);
+        // ── Panel filters (the Filters panel above grid and gallery) ─────
+        // Rules a column's value list can't express — "type contains
+        // Creature", "price between 1 and 5", "in any deck"… Each is a test
+        // on the row, AND-ed with the column filters. Colors, rarity and set
+        // use the columns themselves, so the funnels and the panel agree.
+        private readonly Dictionary<string, (string Label, Func<object, bool> Test)> _extras =
+            new(StringComparer.Ordinal);
+
+        /// <summary>Set (or with null remove) one panel rule.</summary>
+        public void SetExtra(string key, string label, Func<object, bool>? test)
+        {
+            if (test == null) _extras.Remove(key);
+            else _extras[key] = (label, test);
+            Version++;
+        }
+
+        /// <summary>Goes up whenever panel rules are set or everything is cleared (the panel re-reads then).</summary>
+        public int Version { get; private set; }
+
+        /// <summary>Labels of the panel rules in force ("Type: Creature", …).</summary>
+        public IReadOnlyList<string> ExtraLabels => _extras.Values.Select(e => e.Label).ToList();
+
+        /// <summary>The Filters panel's own settings for this table (the panel reads it back).</summary>
+        public object? PanelState { get; set; }
+
+        public bool HasActiveFilters => _filters.Values.Any(f => f.IsActive) || _extras.Count > 0;
 
         public IEnumerable<ColumnFilterState> ActiveFilters =>
             _filters.Values.Where(f => f.IsActive);
@@ -191,6 +216,9 @@ namespace BreakersOfE.Filtering
         public void ClearAll()
         {
             foreach (var f in _filters.Values) f.Clear();
+            _extras.Clear();
+            PanelState = null;
+            Version++;
         }
 
         /// <summary>
@@ -228,14 +256,19 @@ namespace BreakersOfE.Filtering
         public List<object> Apply(IEnumerable<object> source)
         {
             var active = ActiveFilters.ToList();
+            var extras = _extras.Values.Select(e => e.Test).ToList();
             var list = source as List<object> ?? source.ToList();
-            if (active.Count == 0) return list;
+            if (active.Count == 0 && extras.Count == 0) return list;
 
             return list.Where(item =>
             {
                 foreach (var f in active)
                 {
                     if (!f.Matches(ValueOf(item, f.PropertyName))) return false;
+                }
+                foreach (var test in extras)
+                {
+                    if (!test(item)) return false;
                 }
                 return true;
             }).ToList();
@@ -255,15 +288,20 @@ namespace BreakersOfE.Filtering
             var others = ActiveFilters
                 .Where(f => f.ColumnName != columnName)
                 .ToList();
+            var extras = _extras.Values.Select(e => e.Test).ToList();
 
             IEnumerable<object> cascaded = all;
-            if (others.Count > 0)
+            if (others.Count > 0 || extras.Count > 0)
             {
                 cascaded = all.Where(item =>
                 {
                     foreach (var f in others)
                     {
                         if (!f.Matches(ValueOf(item, f.PropertyName))) return false;
+                    }
+                    foreach (var test in extras)
+                    {
+                        if (!test(item)) return false;
                     }
                     return true;
                 });

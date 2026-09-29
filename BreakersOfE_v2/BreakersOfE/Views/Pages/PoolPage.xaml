@@ -55,16 +55,34 @@
 
     <Grid x:Name="RootGrid" Margin="16">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition x:Name="DetailColumn" Width="240" MinWidth="180" MaxWidth="320"/>
-            <ColumnDefinition Width="*"/>
+            <ColumnDefinition x:Name="DetailColumn" Width="240" MinWidth="180" MaxWidth="480"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*" MinWidth="300"/>
         </Grid.ColumnDefinitions>
 
         <!-- ═══ LEFT DETAIL PANEL ═══ -->
-        <ctl:CardDetailPanel x:Name="Detail" Grid.Column="0" Margin="0,0,12,0"
+        <ctl:CardDetailPanel x:Name="Detail" Grid.Column="0" Margin="0,0,4,0"
                              ImageDoubleClicked="Detail_ImageDoubleClicked"/>
 
+        <!-- Drag to widen or narrow the card panel (remembered) -->
+        <GridSplitter x:Name="DetailSplitter" Grid.Column="1" Width="8" Margin="0,0,4,0"
+                      HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                      ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                      Background="Transparent" Cursor="SizeWE"
+                      DragCompleted="DetailSplitter_DragCompleted"
+                      ToolTip="Drag to resize the card panel">
+            <GridSplitter.Template>
+                <ControlTemplate TargetType="GridSplitter">
+                    <Border Background="Transparent">
+                        <Border Width="4" Height="48" CornerRadius="2" Background="#60A0A0A0"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </GridSplitter.Template>
+        </GridSplitter>
+
         <!-- ═══ RIGHT CONTENT (header + grid + status) ═══ -->
-        <Grid Grid.Column="1">
+        <Grid Grid.Column="2">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -79,6 +97,14 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Filters panel (row 2 of the header): same filters in grid and gallery -->
+            <ctl:FilterPanel x:Name="FilterPanelView" Grid.Row="1" Grid.ColumnSpan="3" Margin="0,8,0,0"
+                             Visibility="Collapsed"/>
 
             <TextBlock Grid.Column="0" Text="{Binding Title}"
                        FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center"
@@ -87,6 +113,21 @@
             <StackPanel Grid.Column="1" Orientation="Horizontal"
                         HorizontalAlignment="Right" VerticalAlignment="Center"
                         Margin="0,0,12,0">
+                <!-- Edit pages: this table's own Grid / Gallery switch (remembered) -->
+                <Button x:Name="BtnViewMode" Content="Show as Gallery" Padding="10,4" Margin="0,0,8,0"
+                        Visibility="Collapsed" Click="BtnViewMode_Click"
+                        ToolTip="Show this table as a grid or as card pictures (remembered for this table)"/>
+                <!-- Filters panel toggle + sort (grid and gallery alike) -->
+                <ToggleButton x:Name="BtnFilters" Content="Filters" Padding="10,4" Margin="0,0,8,0"
+                              Click="BtnFilters_Click"
+                              ToolTip="Show or hide the Filters panel (colors, rarity, type, set, decks, price…)"/>
+                <TextBlock x:Name="SortLabel" Text="Sort" VerticalAlignment="Center" Margin="0,0,6,0"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <ComboBox x:Name="SortBox" Width="150" Margin="0,0,4,0" VerticalAlignment="Center"
+                          SelectionChanged="SortBox_SelectionChanged"
+                          ToolTip="Sort the grid and the gallery"/>
+                <Button x:Name="BtnSortDir" Content="↑" Padding="8,4" Margin="0,0,12,0"
+                        Click="BtnSortDir_Click" ToolTip="Ascending / descending"/>
                 <Button x:Name="BtnBackToSets" Content="◀  All Sets"
                         Padding="10,4" Margin="0,0,8,0"
                         Visibility="Collapsed"
@@ -221,6 +262,9 @@
                                     Visibility="Collapsed"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
                 <DataGridTextColumn Header="Foil"     Binding="{Binding FoilQuantity}"     Width="70"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+                <DataGridTextColumn Header="Etched"   Binding="{Binding EtchedQuantity}"   Width="80"
                                     Visibility="Collapsed"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
                 <DataGridTextColumn Header="Total"    Binding="{Binding TotalQuantity}"    Width="75"
