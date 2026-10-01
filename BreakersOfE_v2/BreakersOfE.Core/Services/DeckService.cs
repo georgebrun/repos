@@ -148,6 +148,26 @@ namespace BreakersOfE.Services
                         }
                     }
                 }
+
+                // The deck's tokens: finishes from the token pool.
+                var tokenIds = deck.Cards.Where(c => c.IsTokenLine && !string.IsNullOrEmpty(c.ScryfallId))
+                    .Select(c => c.ScryfallId).Distinct().ToList();
+                if (tokenIds.Count > 0)
+                {
+                    var tokens = pdb.TokenCards.AsNoTracking()
+                        .Where(t => tokenIds.Contains(t.ScryfallId))
+                        .Select(t => new { t.ScryfallId, t.IsNonFoil, t.IsFoil, t.IsEtched })
+                        .ToList()
+                        .GroupBy(t => t.ScryfallId)
+                        .ToDictionary(g => g.Key, g => g.First());
+                    foreach (var card in deck.Cards.Where(c => c.IsTokenLine))
+                    {
+                        if (!tokens.TryGetValue(card.ScryfallId, out var t)) continue;
+                        card.IsNonFoil = t.IsNonFoil;
+                        card.IsFoil = t.IsFoil;
+                        card.IsEtched = t.IsEtched;
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -633,6 +653,31 @@ namespace BreakersOfE.Services
 
             return result;
         }
+
+        /// <summary>A token from the token pool, as a deck line template (Edit → Decks → Tokens).</summary>
+        public static DeckCard FromTokenCard(TokenCard t) => new()
+        {
+            ScryfallId = t.ScryfallId,
+            Name = t.Name,
+            SetCode = t.SetCode,
+            SetName = t.SetName,
+            CollectorNumber = t.CollectorNumber,
+            ColorIdentity = t.ColorIdentity,
+            TypeLine = t.TypeLine,
+            Power = t.Power,
+            Toughness = t.Toughness,
+            OracleText = t.OracleText,
+            FlavorText = t.FlavorText,
+            Rarity = t.Rarity,
+            Artist = t.Artist,
+            IsFoil = t.IsFoil,
+            IsNonFoil = t.IsNonFoil,
+            IsEtched = t.IsEtched,
+            IsToken = true,
+            ImageNormalUrl = t.ImageNormalUrl,
+            LocalImagePath = t.LocalImagePath,
+            Category = DeckCardCategory.Tokens,
+        };
 
         /// <summary>
         /// Creates DeckCard from a PoolCard

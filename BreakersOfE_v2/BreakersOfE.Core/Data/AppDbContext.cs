@@ -49,6 +49,8 @@ namespace BreakersOfE.Data
             // data lost). Checked first, so there are no "duplicate column"
             // exceptions. The next Full Database Update fills it in.
             AddColumnIfMissing("PoolCards", "IsGameChanger", "INTEGER NOT NULL DEFAULT 0");
+            // Tokens a card makes (Scryfall all_parts): suggestions in Edit → Decks.
+            AddColumnIfMissing("PoolCards", "TokenIds", "TEXT NOT NULL DEFAULT ''");
 
             // Etched finish (Scryfall "finishes"), on every pool table.
             foreach (var table in new[] { "PoolCards", "TokenCards", "PlanarCards", "SchemeCards",

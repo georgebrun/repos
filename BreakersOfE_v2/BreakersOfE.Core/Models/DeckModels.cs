@@ -22,11 +22,15 @@ namespace BreakersOfE.Models
     }
 
     // ── Deck card category ────────────────────────────────────────────────────
+    // Stored in deck files as a number: values are only ever ADDED at the end.
     public enum DeckCardCategory
     {
         Commander,
         Mainboard,
-        Sideboard
+        Sideboard,
+        /// <summary>Tokens the deck uses (play aids): never part of the deck's
+        /// size, copies, legality or colors.</summary>
+        Tokens,
     }
 
     // ── Archetype ─────────────────────────────────────────────────────────────
@@ -105,6 +109,8 @@ namespace BreakersOfE.Models
         [JsonIgnore] public string OwnedDisplay => CollectionOwned.ToString();
         /// <summary>Copies of this card (any printing) on the Want List.</summary>
         [JsonIgnore] public int WantedCount { get; set; }
+        /// <summary>Copies of this line claimed from the collection for this deck (Edit → Decks).</summary>
+        [JsonIgnore] public int ClaimedCount { get; set; }
 
         // ── Cards shared between decks (filled when the deck opens; not saved) ──
         /// <summary>How many of your OTHER decks use this card (any printing).</summary>
@@ -132,7 +138,12 @@ namespace BreakersOfE.Models
         // ── Sideboard ─────────────────────────────────────────────────────────
         [JsonIgnore]
         public string SideboardDisplay =>
-            Category == DeckCardCategory.Sideboard ? "SB" : string.Empty;
+            Category == DeckCardCategory.Sideboard ? "SB"
+            : Category == DeckCardCategory.Tokens ? "Token" : string.Empty;
+
+        /// <summary>A token line (the deck's Tokens part): not part of the deck itself.</summary>
+        [JsonIgnore]
+        public bool IsTokenLine => Category == DeckCardCategory.Tokens;
 
         // ── Row index ─────────────────────────────────────────────────────────
         public int RowIndex { get; set; }
@@ -211,6 +222,7 @@ namespace BreakersOfE.Models
             DeckCardCategory.Commander => "Commander",
             DeckCardCategory.Mainboard => "Mainboard",
             DeckCardCategory.Sideboard => "Sideboard",
+            DeckCardCategory.Tokens => "Tokens",
             _ => "Mainboard"
         };
 
@@ -465,15 +477,19 @@ namespace BreakersOfE.Models
         [JsonIgnore]
         public int TotalCount => MainboardCount + SideboardCount;
 
+        /// <summary>Deck lines that are part of the deck (not the Tokens part).</summary>
+        [JsonIgnore]
+        public List<DeckCard> PlayCards => Cards.Where(c => !c.IsTokenLine).ToList();
+
         [JsonIgnore]
         public int LandCount =>
-            Cards.Where(c => c.IsLand &&
+            PlayCards.Where(c => c.IsLand &&
                 c.Category != DeckCardCategory.Sideboard)
                 .Sum(c => c.TotalQuantity);
 
         [JsonIgnore]
         public int CreatureCount =>
-            Cards.Where(c => c.IsCreature &&
+            PlayCards.Where(c => c.IsCreature &&
                 c.Category != DeckCardCategory.Sideboard)
                 .Sum(c => c.TotalQuantity);
 
@@ -483,12 +499,12 @@ namespace BreakersOfE.Models
 
         [JsonIgnore]
         public int FoilCount =>
-            Cards.Where(c => c.Category != DeckCardCategory.Sideboard)
+            PlayCards.Where(c => c.Category != DeckCardCategory.Sideboard)
                 .Sum(c => c.FoilQuantity + c.EtchedQuantity);
 
         [JsonIgnore]
         public int NonFoilCount =>
-            Cards.Where(c => c.Category != DeckCardCategory.Sideboard)
+            PlayCards.Where(c => c.Category != DeckCardCategory.Sideboard)
                 .Sum(c => c.Quantity);
 
         // ── Color identity ────────────────────────────────────────────────────
@@ -498,7 +514,7 @@ namespace BreakersOfE.Models
             get
             {
                 var colors = new System.Collections.Generic.HashSet<char>();
-                foreach (var card in Cards)
+                foreach (var card in PlayCards)
                     foreach (char c in card.ColorIdentity)
                         if ("WUBRG".Contains(c))
                             colors.Add(c);
@@ -519,7 +535,7 @@ namespace BreakersOfE.Models
         {
             get
             {
-                var nonLands = Cards
+                var nonLands = PlayCards
                     .Where(c => !c.IsLand &&
                         c.Category != DeckCardCategory.Sideboard)
                     .ToList();
@@ -538,7 +554,8 @@ namespace BreakersOfE.Models
         {
             get
             {
-                if (Cards.Count == 0) return 1;
+                var cards = PlayCards;
+                if (cards.Count == 0) return 1;
 
                 double score = 5.0; // start at middle
 
@@ -549,7 +566,7 @@ namespace BreakersOfE.Models
                 else if (AverageCmc >= 5.0) score -= 2;
 
                 // Average card price
-                var priced = Cards
+                var priced = cards
                     .Where(c => c.PriceUsd.HasValue).ToList();
                 if (priced.Count > 0)
                 {
@@ -561,10 +578,10 @@ namespace BreakersOfE.Models
                 }
 
                 // Expensive cards ratio
-                int expensiveCount = Cards
+                int expensiveCount = cards
                     .Count(c => c.PriceUsd >= 10);
-                double ratio = Cards.Count > 0
-                    ? (double)expensiveCount / Cards.Count : 0;
+                double ratio = cards.Count > 0
+                    ? (double)expensiveCount / cards.Count : 0;
                 if (ratio >= 0.3) score += 1;
 
                 return Math.Max(1, Math.Min(10, (int)Math.Round(score)));

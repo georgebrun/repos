@@ -88,6 +88,23 @@ namespace BreakersOfE.Views
             };
         }
 
+        // ── Open a deck in Edit → Decks → Deck → Collection ────────────
+        /// <summary>A deck to open when the Deck → Collection page arrives (from a "Used in" table).</summary>
+        private string? _pendingDeckPath;
+
+        /// <summary>
+        /// "Used in" table → double-click a deck: open Edit, go to Decks →
+        /// Deck → Collection, and open that deck there.
+        /// </summary>
+        public void OpenDeckToCollection(string deckPath)
+        {
+            _pendingDeckPath = deckPath;
+            if (_openSection != NavSection.Edit) ApplySection(NavSection.Edit);
+            NavEditDecks.IsExpanded = true;
+            if (!RootNavigation.Navigate("editdeck-d2c"))
+                RootNavigation.Navigate(typeof(EditDeckPage));
+        }
+
         // ── Grid / Gallery switch ───────────────────────────────────────
         private void BtnModeGrid_Click(object sender, RoutedEventArgs e)
         {
@@ -140,10 +157,24 @@ namespace BreakersOfE.Views
             }
 
             // Edit → Decks → Pool → Deck.
+            // Edit → Decks: tag "EditDeck:<mode>" picks Pool → Deck, Collection → Deck or Deck → Collection.
             if (args.Page is EditDeckPage deckPage)
             {
-                Dispatcher.BeginInvoke(new Action(deckPage.Start),
-                    System.Windows.Threading.DispatcherPriority.Loaded);
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    string tag = (sender.SelectedItem as NavigationViewItem)?.Tag as string ?? "";
+                    var mode = tag switch
+                    {
+                        "EditDeck:Collection" => DeckEditMode.Collection,
+                        "EditDeck:DeckToCollection" => DeckEditMode.DeckToCollection,
+                        _ => DeckEditMode.Pool,
+                    };
+                    // Opened from a "Used in" table: Deck → Collection with that deck.
+                    string? open = _pendingDeckPath;
+                    _pendingDeckPath = null;
+                    if (open != null) mode = DeckEditMode.DeckToCollection;
+                    deckPage.Start(mode, open);
+                }), System.Windows.Threading.DispatcherPriority.Loaded);
                 return;
             }
 

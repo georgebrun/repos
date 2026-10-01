@@ -1049,6 +1049,7 @@ namespace BreakersOfE.Services
                 LegalitiesJson = GetRawJson(c, "legalities"),
                 Keywords = GetStringArray(c, "keywords", "|"),
                 IsGameChanger = GetBool(c, "game_changer"),
+                TokenIds = GetTokenIds(c),
                 LocalImagePath = string.Empty,
                 PriceUsd = prices.usd,
                 PriceUsdFoil = prices.usdFoil,
@@ -1340,6 +1341,25 @@ namespace BreakersOfE.Services
                 return false;
             }
             return finish is "foil" or "nonfoil" && GetBool(c, finish);
+        }
+
+        /// <summary>
+        /// Scryfall IDs of the tokens a card makes: its "all_parts" entries with
+        /// component "token" (the card itself left out), space-separated.
+        /// </summary>
+        private static string GetTokenIds(JsonElement c)
+        {
+            if (!c.TryGetProperty("all_parts", out var parts) || parts.ValueKind != JsonValueKind.Array)
+                return string.Empty;
+            string self = GetString(c, "id");
+            var ids = new List<string>();
+            foreach (var p in parts.EnumerateArray())
+            {
+                if (GetString(p, "component") != "token") continue;
+                string id = GetString(p, "id");
+                if (id.Length > 0 && id != self && !ids.Contains(id)) ids.Add(id);
+            }
+            return string.Join(" ", ids);
         }
 
         private static bool GetBool(JsonElement el, string prop)

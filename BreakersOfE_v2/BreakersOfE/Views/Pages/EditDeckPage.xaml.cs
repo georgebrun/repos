@@ -12,14 +12,30 @@ using BreakersOfE.Views.Dialogs;
 
 namespace BreakersOfE.Views.Pages
 {
+    /// <summary>Which Edit → Decks item the page is.</summary>
+    public enum DeckEditMode
+    {
+        /// <summary>Pool → Deck: build from the card pool (nothing claimed).</summary>
+        Pool,
+        /// <summary>Collection → Deck: build from your collection (copies claimed).</summary>
+        Collection,
+        /// <summary>Deck → Collection: the deck on top; claim or add its copies.</summary>
+        DeckToCollection,
+    }
+
     /// <summary>
-    /// Edit → Decks → Pool → Deck. The card pool on top, the deck below (the
-    /// same tables as View, embedded), the card panel on the left.
+    /// Edit → Decks: Pool → Deck, Collection → Deck and Deck → Collection. Two
+    /// tables (the same as View, embedded) and the card panel on the left:
+    /// the source (card pool or collection) and the deck — the deck is on top
+    /// in Deck → Collection, below otherwise.
     ///
-    /// The deck is a pure card list: nothing here touches the collection
-    /// (Collection → Deck comes later). Each line is one printing in one part
-    /// of the deck (command zone, main deck, sideboard) with a count per
-    /// finish (Non-Foil, Foil, Etched).
+    /// The deck file is a pure card list. Decks CLAIM collection copies
+    /// (collection.db only — CollectionEditService.Claims): Collection → Deck
+    /// claims the row a card comes from; Deck → Collection claims copies you
+    /// own or adds new ones. A deck never claims more than it lists: after
+    /// every change the extra claims are freed. Each deck line is one printing
+    /// in one part of the deck (command zone, main deck, sideboard, tokens)
+    /// with a count per finish (Non-Foil, Foil, Etched).
     ///
     /// Every change goes through <see cref="Edit"/>: the deck file as it was
     /// (for Undo) → DeckEditService → save at once → the deck table re-read,
@@ -34,8 +50,22 @@ namespace BreakersOfE.Views.Pages
     /// </summary>
     public partial class EditDeckPage : Page
     {
-        private readonly PoolPage _top = new();
-        private readonly PoolPage _bottom = new();
+        // The tables. The card pool has its own (loaded once — 100,000 cards),
+        // shown on top in Pool → Deck. The other two swap roles with the mode:
+        // the deck is the upper one in Deck → Collection, the lower otherwise.
+        private readonly PoolPage _poolPage = new();
+        private readonly PoolPage _upper = new();
+        private readonly PoolPage _lower = new();
+        private DeckEditMode _mode = DeckEditMode.Pool;
+        private PoolPage _src => _mode switch
+        {
+            DeckEditMode.Pool => _poolPage,
+            DeckEditMode.DeckToCollection => _lower,
+            _ => _upper,
+        };
+        private PoolPage _deckT => _mode == DeckEditMode.DeckToCollection ? _upper : _lower;
+        /// <summary>The source table is your collection (copies are claimed).</summary>
+        private bool FromCollection => _mode != DeckEditMode.Pool;
         private bool _started;
 
         // The deck being edited (as read from its file after the last change).
@@ -47,13 +77,14 @@ namespace BreakersOfE.Views.Pages
         private PoolPage? _active;
         private object? _current;
 
-        private readonly ContextMenu _topMenu = new();
-        private readonly ContextMenu _bottomMenu = new();
+        private readonly ContextMenu _srcMenu = new();
+        private readonly ContextMenu _deckMenu = new();
 
-        // Undo, per deck file: the file before and after each change (newest last).
+        // Undo, per deck file: the file before and after each change, and the
+        // deck's collection claims (with the rows they touch) before it.
         private const int UndoSteps = 30;
-        private static readonly Dictionary<string, List<(string Before, string After, string Text)>> _undo =
-            new(StringComparer.OrdinalIgnoreCase);
+        private sealed record UndoStep(string Before, string After, string Text, ClaimSnapshot? Claims);
+        private static readonly Dictionary<string, List<UndoStep>> _undo = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>One deck in the Deck list.</summary>
         private sealed record DeckChoice(string Path, string Name, string Label)
@@ -65,71 +96,121 @@ namespace BreakersOfE.Views.Pages
         {
             InitializeComponent();
 
-            // Pool on top starts as card pictures (+ / − on each), the deck
-            // below as a grid; each has its own Grid / Gallery button, remembered.
-            _top.SetEmbedded(galleryByDefault: true);
-            _bottom.SetEmbedded(galleryByDefault: false);
-            TopFrame.Content = _top;
-            BottomFrame.Content = _bottom;
-
-            _top.SelectedCardChanged += card => OnSelected(_top, card);
-            _bottom.SelectedCardChanged += card => OnSelected(_bottom, card);
-
-            // Gallery tiles: + adds Qty (Shift = foil, Ctrl = etched), − removes.
-            _top.GalleryAdd += (card, keys) => { _active = _top; SetCurrent(card); DoAdd(FinishFromKeys(keys), _top); };
-            _top.GalleryRemove += (card, keys) =>
+            // The pool and upper tables start as card pictures (+ / − on each),
+            // the lower as a grid; each table has its own Grid / Gallery button, remembered.
+            _poolPage.SetEmbedded(galleryByDefault: true);
+            _upper.SetEmbedded(galleryByDefault: true);
+            _lower.SetEmbedded(galleryByDefault: false);
+            TopFrame.Content = _poolPage;
+            BottomFrame.Content = _lower;
+            // Switching the top table (Pool ↔ the others) navigates the frame: keep
+            // no history, so Back (mouse button, Alt+Left) can't bring the other table back.
+            TopFrame.Navigated += (_, _) => { while (TopFrame.CanGoBack) TopFrame.RemoveBackEntry(); };
+            TopFrame.Navigating += (_, e) =>
             {
-                _active = _top;
-                SetCurrent(card);
-                DoRemove(FinishFromKeys(keys), _top);
-            };
-            _bottom.GalleryAdd += (card, keys) => { _active = _bottom; SetCurrent(card); DoAdd(FinishFromKeys(keys), _bottom); };
-            _bottom.GalleryRemove += (card, keys) =>
-            {
-                _active = _bottom;
-                SetCurrent(card);
-                DoRemove(FinishFromKeys(keys), _bottom);
+                if (e.NavigationMode != System.Windows.Navigation.NavigationMode.New) e.Cancel = true;
             };
 
-            _top.GridPreviewKeyDown += Top_GridPreviewKeyDown;
-            _bottom.GridPreviewKeyDown += Bottom_GridPreviewKeyDown;
+            foreach (var table in new[] { _poolPage, _upper, _lower })
+            {
+                var t = table;
+                t.SelectedCardChanged += card => OnSelected(t, card);
+                // Gallery tiles: + adds Qty (Shift = foil, Ctrl = etched), − removes.
+                t.GalleryAdd += (card, keys) => { _active = t; SetCurrent(card); TileAdd(t, keys); };
+                t.GalleryRemove += (card, keys) => { _active = t; SetCurrent(card); TileRemove(t, keys); };
+                t.GridPreviewKeyDown += (s, e) =>
+                {
+                    if (t == _src) Src_GridPreviewKeyDown(s, e);
+                    else Deck_GridPreviewKeyDown(s, e);
+                };
+                // Double-click a Non-Foil / Foil / Etched cell of a deck line to type its count.
+                t.CellDoubleClickHandler = DeckCellDoubleClick;
+                // A collection table re-read after a claim: the row shown is a new object now.
+                t.ItemsReloaded += () =>
+                {
+                    if (t != _src || _current == null || !IsCollectionRow(_current)) return;
+                    var key = RowKeyOf(_current);
+                    var now = t.SelectedCard is { } sel && IsCollectionRow(sel) && RowKeyOf(sel) == key ? sel
+                            : t.FindLoaded(r => IsCollectionRow(r) && RowKeyOf(r) == key);
+                    if (now != null && !ReferenceEquals(now, _current)) { _current = now; UpdateButtons(); }
+                };
+            }
 
             AddToBox.ItemsSource = new[] { "Main deck", "Sideboard" };
             AddToBox.SelectedIndex = 0;
+            LanguageBox.ItemsSource = CardLanguage.All;
+            LanguageBox.SelectedItem = CardLanguage.Default;
+            ConditionBox.ItemsSource = CardCondition.All;
+            ConditionBox.SelectedItem = CardCondition.Default;
 
             BuildMenus();
-
-            // Double-click a Non-Foil / Foil / Etched cell of a deck line to type its count.
-            _bottom.CellDoubleClickHandler = (row, header, cell) =>
-            {
-                if (row is not DeckCard line) return false;
-                string? finish = header switch
-                {
-                    "Non-Foil" => CardFinish.NonFoil,
-                    "Foil" => CardFinish.Foil,
-                    "Etched" => CardFinish.Etched,
-                    _ => null,
-                };
-                if (finish == null) return false;
-                EditCountInPlace(line, cell, finish);
-                return true;
-            };
-
             UpdateButtons();
             UpdateUndo();
         }
 
-        /// <summary>Called each time the page is shown (Edit → Decks → Pool → Deck).</summary>
-        public void Start()
+        /// <summary>Double-click a Non-Foil / Foil / Etched cell of a deck line (not in Deck → Collection).</summary>
+        private bool DeckCellDoubleClick(object row, string header, DataGridCell cell)
         {
-            if (!_started)
+            if (row is not DeckCard line || _mode == DeckEditMode.DeckToCollection) return false;
+            string? finish = header switch
+            {
+                "Non-Foil" => CardFinish.NonFoil,
+                "Foil" => CardFinish.Foil,
+                "Etched" => CardFinish.Etched,
+                _ => null,
+            };
+            if (finish == null) return false;
+            EditCountInPlace(line, cell, finish);
+            return true;
+        }
+
+        /// <summary>The source table's tag: the card or token pool, or collection.</summary>
+        private string SourceTag => (FromCollection, PoolBox.SelectedIndex == 1) switch
+        {
+            (true, true) => CollectionEditService.TokensTable,
+            (true, false) => CollectionEditService.CardsTable,
+            (false, true) => "Tokens",
+            _ => "Cards",
+        };
+
+        /// <summary>
+        /// Called each time the page is shown (Edit → Decks → one of the three).
+        /// Always starts with no deck open: nothing can be added, removed or
+        /// claimed by accident until a deck is picked.
+        /// </summary>
+        public void Start(DeckEditMode mode, string? openDeckPath = null)
+        {
+            bool first = !_started;
+            _mode = mode;
+            if (first)
             {
                 _started = true;
-                _top.LoadPool("Cards");
+                PoolBox.ItemsSource = new[] { "Cards", "Tokens" };
+                _fillingPool = true;
+                PoolBox.SelectedIndex = 0;
+                _fillingPool = false;
             }
-            // Always starts with no deck open: nothing can be added to or
-            // removed from a deck by accident until one is picked.
-            FillDecks(null);
+            _active = null;
+            SetCurrentNone();
+            ShowStatus("", false);
+            ShowModeControls();
+            TopFrame.Content = _mode == DeckEditMode.Pool ? _poolPage : _upper;
+            SetMenus();
+            // The pool loads once (100,000 cards; again only for Cards ↔ Tokens);
+            // a collection is re-read each time (it may have changed on another page).
+            if (FromCollection || _src.CurrentTag != SourceTag) _src.LoadPool(SourceTag);
+            FillDecks(openDeckPath);          // a deck asked for (from a "Used in" table), else none
+        }
+
+        /// <summary>What each mode shows: its buttons, and where the source comes from.</summary>
+        private void ShowModeControls()
+        {
+            bool claim = _mode == DeckEditMode.DeckToCollection;
+            EditBar.Visibility = claim ? Visibility.Collapsed : Visibility.Visible;
+            ClaimBar.Visibility = claim ? Visibility.Visible : Visibility.Collapsed;
+            // Token suggestions only where the collection is involved (the cards are yours).
+            BtnSuggestTokens.Visibility = FromCollection ? Visibility.Visible : Visibility.Collapsed;
+            PoolLabel.Text = FromCollection ? "Collection" : "Pool";
         }
 
         // ══════════════════════════════════════════════════════════════════
@@ -193,7 +274,7 @@ namespace BreakersOfE.Views.Pages
         private void DeckBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (_fillingDecks) return;
-            if (DeckBox.SelectedItem == NoDeck)
+            if (ReferenceEquals(DeckBox.SelectedItem, NoDeck))
             {
                 BtnCloseDeck_Click(sender, e);
                 return;
@@ -219,7 +300,7 @@ namespace BreakersOfE.Views.Pages
             _deck = null;
             _deckPath = null;
             SetCurrentNone();
-            _bottom.ShowNoDeck(message);
+            _deckT.ShowNoDeck(message);
             ShowAddTo();
             UpdateButtons();
             UpdateUndo();
@@ -242,6 +323,14 @@ namespace BreakersOfE.Views.Pages
                 return false;
             }
             if (deck == null) { ShowStatus("Could not open the deck.", true); return false; }
+            // Claims are keyed on the deck's id: an older deck gets one now.
+            if (string.IsNullOrWhiteSpace(deck.DeckId))
+            {
+                try { deck.FilePath = path; DeckService.Save(deck); }
+                catch (Exception ex) { ShowStatus($"Could not save the deck: {ex.Message}", true); return false; }
+            }
+            // A deck never claims more than it lists (the file may have changed elsewhere).
+            CollectionEditService.SyncClaims(deck);
             // Lines without a ScryfallId (very old files) can't be told apart: not editable here.
             int unkeyed = deck.Cards.Count(c => string.IsNullOrEmpty(c.ScryfallId));
 
@@ -265,7 +354,7 @@ namespace BreakersOfE.Views.Pages
                 else SetCurrentNone();
             }
             ShowAddTo();
-            _bottom.ShowDeck(deck, path, select, fallback);
+            _deckT.ShowDeck(deck, path, select, fallback);
             UpdateButtons();
             UpdateUndo();
             if (unkeyed > 0 && other)
@@ -277,9 +366,11 @@ namespace BreakersOfE.Views.Pages
         private void ShowAddTo()
         {
             var rule = Rule;
-            bool side = _deck != null && (rule.SideboardMax != null || rule.Type == DeckType.Limited);
+            bool side = _deck != null && _mode != DeckEditMode.DeckToCollection &&
+                        (rule.SideboardMax != null || rule.Type == DeckType.Limited);
             AddToLabel.Visibility = AddToBox.Visibility = side ? Visibility.Visible : Visibility.Collapsed;
-            BtnDeckSettings.IsEnabled = BtnCloseDeck.IsEnabled = _deck != null;
+            BtnDeckSettings.IsEnabled = BtnCloseDeck.IsEnabled = BtnSuggestTokens.IsEnabled =
+                BtnTearDown.IsEnabled = BtnWholeOwned.IsEnabled = BtnWholeNew.IsEnabled = _deck != null;
         }
 
         private DeckCardCategory AddSection =>
@@ -347,7 +438,7 @@ namespace BreakersOfE.Views.Pages
 
             // Undo follows the deck to its new file name.
             if (_undo.Remove(oldPath, out var stack)) _undo[path] = stack;
-            if (ReadFile(path) is { } after) PushUndo(path, before, after, "Deck settings");
+            if (ReadFile(path) is { } after) PushUndo(path, new UndoStep(before, after, "Deck settings", null));
             _deckPath = path;
             FillDecks(path);
             ShowStatus($"Deck settings saved: {_deck?.Name} — {Rule.Name}.", false);
@@ -376,22 +467,32 @@ namespace BreakersOfE.Views.Pages
             Detail.ShowCard(null);
         }
 
-        // Pool cards by ScryfallId (finishes and legality for deck lines), built once.
-        private Dictionary<string, PoolCard>? _poolById;
-        private int _poolCount = -1;
+        // Pool printings by table + ScryfallId (finishes and legality), looked up once each.
+        private readonly Dictionary<(bool Token, string Sid), object?> _poolCache = new();
 
-        private PoolCard? PoolFor(string sid)
+        /// <summary>The pool printing (PoolCard, or TokenCard when <paramref name="token"/>).</summary>
+        private object? PoolFor(string sid, bool token = false)
         {
-            if (_poolById == null || _poolCount != _top.LoadedCount)
-            {
-                _poolCount = _top.LoadedCount;
-                var rows = _top.FindAllLoaded(r => r is PoolCard);
-                if (rows.Count == 0) return null;             // still loading: try again later
-                _poolById = new Dictionary<string, PoolCard>(StringComparer.OrdinalIgnoreCase);
-                foreach (PoolCard p in rows) _poolById.TryAdd(p.ScryfallId, p);
-            }
-            return _poolById.TryGetValue(sid, out var pc) ? pc : null;
+            if (string.IsNullOrEmpty(sid)) return null;
+            if (_poolCache.TryGetValue((token, sid), out var hit)) return hit;
+            var found = CollectionEditService.FindPoolCard(
+                token ? CollectionEditService.TokensTable : CollectionEditService.CardsTable, sid);
+            if (_poolCache.Count > 5000) _poolCache.Clear();
+            return _poolCache[(token, sid)] = found;
         }
+
+        /// <summary>A row of your collection (cards or tokens) in the source table.</summary>
+        private static bool IsCollectionRow(object row) => row is CollectionEntry || row is TokenCollectionEntry;
+
+        /// <summary>A collection row's finish as shown (v1 foil of an etched-only printing = etched).</summary>
+        private static string RowFinish(object row) =>
+            CardFinish.Normalize(Str(row, "ShownFinish") is { Length: > 0 } shown ? shown : Str(row, "Finish"));
+
+        private static int Int(object o, string prop) =>
+            o.GetType().GetProperty(prop)?.GetValue(o) is int i ? i : 0;
+
+        /// <summary>Free copies of a collection row (owned, not claimed by any deck).</summary>
+        private static int FreeOf(object row) => Math.Max(0, Int(row, "Quantity") - Math.Max(0, Int(row, "UsedCount")));
 
         /// <summary>
         /// What a row adds to the deck: a pool card becomes a deck card; a deck
@@ -400,11 +501,21 @@ namespace BreakersOfE.Views.Pages
         private DeckCard? TemplateFor(object row)
         {
             if (row is PoolCard p) return DeckService.FromPoolCard(p);
+            if (row is TokenCard t) return DeckService.FromTokenCard(t);
+            if (IsCollectionRow(row))
+                return PoolFor(Str(row, "ScryfallId"), row is TokenCollectionEntry) switch
+                {
+                    PoolCard pc => DeckService.FromPoolCard(pc),
+                    TokenCard tc => DeckService.FromTokenCard(tc),
+                    _ => null,
+                };
             if (row is DeckCard line)
-            {
-                var pool = PoolFor(line.ScryfallId);
-                return pool != null ? DeckService.FromPoolCard(pool) : line;
-            }
+                return PoolFor(line.ScryfallId, line.IsTokenLine) switch
+                {
+                    PoolCard pc => DeckService.FromPoolCard(pc),
+                    TokenCard tc => DeckService.FromTokenCard(tc),
+                    _ => line,
+                };
             return null;
         }
 
@@ -432,25 +543,71 @@ namespace BreakersOfE.Views.Pages
             var lines = _current != null ? LinesOf(Str(_current, "ScryfallId")) : new List<DeckCard>();
             if (_current is DeckCard cur) lines = lines.Where(l => DeckLineKey.Of(l) == DeckLineKey.Of(cur)).ToList();
 
-            BtnAddNonFoil.IsEnabled = haveDeck && (many || tmpl?.IsNonFoil == true);
-            BtnAddFoil.IsEnabled = haveDeck && (many || tmpl?.IsFoil == true);
-            BtnAddEtched.IsEnabled = haveDeck && (many || tmpl?.IsEtched == true);
+            // A collection row is one finish (and only its free copies can go in).
+            bool row = _current != null && IsCollectionRow(_current);
+            string rowFin = row ? RowFinish(_current!) : "";
+            bool rowFree = row && FreeOf(_current!) > 0;
+            BtnAddNonFoil.IsEnabled = haveDeck && (many || (row ? rowFree && rowFin == CardFinish.NonFoil : tmpl?.IsNonFoil == true));
+            BtnAddFoil.IsEnabled = haveDeck && (many || (row ? rowFree && rowFin == CardFinish.Foil : tmpl?.IsFoil == true));
+            BtnAddEtched.IsEnabled = haveDeck && (many || (row ? rowFree && rowFin == CardFinish.Etched : tmpl?.IsEtched == true));
             BtnRemoveNonFoil.IsEnabled = haveDeck && (many || lines.Any(l => l.Quantity > 0));
             BtnRemoveFoil.IsEnabled = haveDeck && (many || lines.Any(l => l.FoilQuantity > 0));
             BtnRemoveEtched.IsEnabled = haveDeck && (many || lines.Any(l => l.EtchedQuantity > 0));
             BtnRemoveLine.IsEnabled = haveDeck && (many || lines.Count > 0);
 
+            // Deck → Collection: claim buttons (the deck's selected lines, or one collection row).
+            var deckLines = _mode == DeckEditMode.DeckToCollection ? SelectedDeckLines() : new List<DeckCard>();
+            BtnUseOwned.IsEnabled = BtnAddNew.IsEnabled = haveDeck && deckLines.Any(l => l.ClaimedCount < l.TotalQuantity);
+            BtnFreeCopies.IsEnabled = haveDeck && deckLines.Any(l => l.ClaimedCount > 0);
+            BtnUseRow.IsEnabled = haveDeck && _current != null && IsCollectionRow(_current) && FreeOf(_current) > 0;
+
+            string title = _mode switch
+            {
+                DeckEditMode.Collection => "Collection → Deck",
+                DeckEditMode.DeckToCollection => "Deck → Collection",
+                _ => "Pool → Deck",
+            };
+            string where = _mode == DeckEditMode.Pool ? "pool" : "collection";
             if (!haveDeck)
-                ModeText.Text = "Pool → Deck. Pick a deck (or make a new one), then add cards from the pool table.";
+                ModeText.Text = _mode switch
+                {
+                    DeckEditMode.Collection => $"{title}. Pick a deck (or make a new one), then add cards from your collection — the copies are claimed for the deck.",
+                    DeckEditMode.DeckToCollection => $"{title}. Pick a deck, then claim copies you own for it, or add its cards to your collection as new copies.",
+                    _ => $"{title}. Pick a deck (or make a new one), then add cards from the pool table.",
+                };
             else if (_current == null)
-                ModeText.Text = $"Pool → Deck · {_deck!.Name} ({Rule.Name}). Select a card in either table " +
+                ModeText.Text = $"{title} · {_deck!.Name} ({Rule.Name}) · {ClaimSummary()}. Select a card in either table " +
                                 "(Ctrl+click or Shift+click for several).";
             else if (many)
-                ModeText.Text = $"{selected} rows selected in the {(_active == _bottom ? "deck" : "pool")} table" +
-                                (_active == _top ? $"  ·  adds go to the {DeckEditService.SectionName(AddSection)}" : "");
+                ModeText.Text = $"{selected} rows selected in the {(_active == _deckT ? "deck" : where)} table" +
+                                (_active == _src && _mode != DeckEditMode.DeckToCollection
+                                    ? $"  ·  adds go to the {DeckEditService.SectionName(AddSection)}" : "");
             else
-                ModeText.Text = $"{CardText(_current)}  ·  {InDeckText(_current)}";
+                ModeText.Text = $"{CardText(_current)}  ·  {InDeckText(_current)}" +
+                                (IsCollectionRow(_current) ? $"  ·  this row: {Int(_current, "Quantity")} owned, {FreeOf(_current)} free" : "");
         }
+
+        /// <summary>
+        /// "Claimed from your collection: Main 60 of 60 · Sideboard 15 of 15 ·
+        /// Tokens 0 of 4" — each part apart (the command zone counts with the
+        /// main deck; Sideboard and Tokens only when the deck has them).
+        /// </summary>
+        private string ClaimSummary()
+        {
+            if (_deck == null) return "";
+            string Part(string name, List<DeckCard> lines) =>
+                $"{name} {lines.Sum(c => c.ClaimedCount)} of {lines.Sum(c => c.TotalQuantity)}";
+            var main = _deck.Cards.Where(c => !c.IsTokenLine && c.Category != DeckCardCategory.Sideboard).ToList();
+            var side = _deck.Cards.Where(c => c.Category == DeckCardCategory.Sideboard).ToList();
+            var tokens = _deck.Cards.Where(c => c.IsTokenLine).ToList();
+            var parts = new List<string> { Part("Main", main) };
+            if (side.Count > 0) parts.Add(Part("Sideboard", side));
+            if (tokens.Count > 0) parts.Add(Part("Tokens", tokens));
+            return "Claimed from your collection: " + string.Join("  ·  ", parts);
+        }
+
+        /// <summary>The deck table's selected lines (or the current one).</summary>
+        private List<DeckCard> SelectedDeckLines() => Targets(_deckT).OfType<DeckCard>().ToList();
 
         /// <summary>
         /// "in this deck: 2 Non-Foil (main deck) · 4 named Lightning Bolt, any
@@ -465,12 +622,15 @@ namespace BreakersOfE.Views.Pages
                 : "in this deck: " + string.Join(", ", lines.Select(l =>
                     $"{FinishCounts(l)} ({DeckEditService.SectionName(DeckEditService.SectionOf(l))})"));
 
+            if (IsToken(card)) return $"{printing}  ·  tokens aren't part of the deck (no rules apply)";
+
             var rule = Rule;
             string name = Str(card, "Name");
             string key = DeckIndexService.CardKey(name);
+            var play = _deck.PlayCards;
             var counted = rule.SideboardMax == null
-                ? _deck.Cards.Where(c => c.Category != DeckCardCategory.Sideboard)
-                : _deck.Cards;
+                ? play.Where(c => c.Category != DeckCardCategory.Sideboard)
+                : play;
             int byName = counted.Where(c => string.Equals(DeckIndexService.CardKey(c.Name), key, StringComparison.OrdinalIgnoreCase))
                                 .Sum(c => c.TotalQuantity);
             string limit = rule.CopyLimit == 0 ? "no copy limit"
@@ -514,7 +674,7 @@ namespace BreakersOfE.Views.Pages
                 if (rows.Count > 0) return rows;
             }
             if (_current == null) return new List<object>();
-            bool fits = table == null || (table == _bottom) == (_current is DeckCard);
+            bool fits = table == null || (table == _deckT) == (_current is DeckCard);
             return fits ? new List<object> { _current } : new List<object>();
         }
 
@@ -540,10 +700,14 @@ namespace BreakersOfE.Views.Pages
         /// from <paramref name="work"/> means "cancelled": the deck is re-read
         /// from its file and nothing changes.
         /// </summary>
-        private void Edit(string what, Func<List<DeckEditResult>?> work)
+        private void Edit(string what, Func<List<DeckEditResult>?> work,
+                          IEnumerable<(string Table, string Sid)>? claims = null)
         {
             if (_deck == null || _deckPath == null) return;
             string before = ReadFile(_deckPath) ?? DeckService.ToJson(_deck);
+            // The deck's claims and the collection rows they touch, for Undo.
+            var claimSnap = CollectionEditService.TakeClaimSnapshot(_deck,
+                claims ?? Enumerable.Empty<(string, string)>());
 
             var results = work();
             if (results == null)
@@ -553,6 +717,7 @@ namespace BreakersOfE.Views.Pages
                 return;
             }
             var result = Combine(what, results);
+            bool claimsChanged = false;
             if (result.Changed > 0)
             {
                 try
@@ -566,9 +731,22 @@ namespace BreakersOfE.Views.Pages
                     ShowStatus($"Could not save the deck: {ex.Message}", true);
                     return;
                 }
-                if (ReadFile(_deckPath) is { } after) PushUndo(_deckPath, before, after, result.Message);
+                // A deck never claims more than it lists: free the extra copies.
+                int freed = CollectionEditService.SyncClaims(_deck);
+                if (freed > 0)
+                    result = new DeckEditResult
+                    {
+                        Changed = result.Changed,
+                        Warning = result.Warning,
+                        Touched = result.Touched,
+                        Message = $"{result.Message}  ({freed} claimed {(freed == 1 ? "copy" : "copies")} freed in the collection.)",
+                    };
+                if (claimSnap != null) CollectionEditService.MarkClaimsAfter(claimSnap);
+                claimsChanged = freed > 0 || (claimSnap != null && CollectionEditService.ClaimsChanged(claimSnap));
+                if (ReadFile(_deckPath) is { } after)
+                    PushUndo(_deckPath, new UndoStep(before, after, result.Message, claimsChanged ? claimSnap : null));
             }
-            AfterEdit(result);
+            AfterEdit(result, claimsChanged);
         }
 
         private static DeckEditResult Combine(string what, List<DeckEditResult> results)
@@ -587,11 +765,21 @@ namespace BreakersOfE.Views.Pages
             };
         }
 
+        /// <summary>Collection → Deck / Deck → Collection: re-read the collection (Used / Available changed).</summary>
+        private void ReloadSource()
+        {
+            if (!FromCollection || _src.CurrentTag != SourceTag) return;
+            RowKey? shown = _current != null && IsCollectionRow(_current) ? RowKeyOf(_current) : null;
+            _src.ReloadRows(shown == null ? null : r => IsCollectionRow(r) && RowKeyOf(r) == shown);
+        }
+
         /// <summary>After every change: status line, then the deck re-read with the changed lines selected.</summary>
-        private void AfterEdit(DeckEditResult result)
+        private void AfterEdit(DeckEditResult result, bool collectionChanged = false)
         {
             ShowStatus(result.Message, result.Warning);
             if (result.Changed <= 0 || _deckPath == null) { UpdateButtons(); return; }
+
+            if (collectionChanged) ReloadSource();
 
             var keys = new HashSet<DeckLineKey>(result.Touched);
             string sid = _current != null ? Str(_current, "ScryfallId") : "";
@@ -601,7 +789,51 @@ namespace BreakersOfE.Views.Pages
         }
 
         // ── Add ─────────────────────────────────────────────────────────
-        private sealed record AddPlan(DeckCard Card, string Finish, DeckCardCategory Section, int Qty);
+        /// <summary>One card to add; <paramref name="Claim"/>: the collection row its copies are claimed from.</summary>
+        private sealed record AddPlan(DeckCard Card, string Finish, DeckCardCategory Section, int Qty,
+                                      RowKey? Claim = null, string Table = "", string Note = "");
+
+        /// <summary>The plan's note ("only 2 free…") on the end of the result's message.</summary>
+        private static DeckEditResult WithNote(DeckEditResult r, AddPlan p) =>
+            p.Note.Length == 0 ? r
+                : new DeckEditResult
+                {
+                    Changed = r.Changed,
+                    Warning = true,
+                    Touched = r.Touched,
+                    Message = r.Message.TrimEnd('.') + p.Note + "."
+                };
+
+        /// <summary>Add to the deck, and claim the copies when they come from a collection row.</summary>
+        private DeckEditResult AddOne(AddPlan p)
+        {
+            var added = WithNote(DeckEditService.Add(_deck!, p.Card, p.Finish, p.Qty, p.Section), p);
+            if (p.Claim == null || added.Changed <= 0) return added;
+            var claimed = CollectionEditService.ClaimRow(p.Table, _deck!, p.Claim, p.Qty, p.Card.Name);
+            return claimed.Warning
+                ? new DeckEditResult
+                {
+                    Changed = added.Changed,
+                    Warning = true,
+                    Touched = added.Touched,
+                    Message = $"{added.Message} {claimed.Message}"
+                }
+                : new DeckEditResult
+                {
+                    Changed = added.Changed,
+                    Touched = added.Touched,
+                    Message = $"{added.Message} Claimed from your collection ({p.Claim.Text})."
+                };
+        }
+
+        private static RowKey RowKeyOf(object row) =>
+            RowKey.Of(Str(row, "ScryfallId"), RowFinish(row), Str(row, "Language"), Str(row, "Condition"));
+
+        private static string TableOfRow(object row) =>
+            row is TokenCollectionEntry ? CollectionEditService.TokensTable : CollectionEditService.CardsTable;
+
+        /// <summary>"Foil · English · Near Mint".</summary>
+        private static string RowText(object row) => RowKeyOf(row).Text;
 
         /// <summary>
         /// Add Qty copies of each selected card. <paramref name="finish"/> null =
@@ -614,6 +846,13 @@ namespace BreakersOfE.Views.Pages
             table ??= _active;
             var rows = Targets(table);
             if (!Ready(rows)) return;
+            if (_mode == DeckEditMode.DeckToCollection)
+            {
+                // Deck → Collection: + on the deck claims owned copies; on the collection, uses that row.
+                if (table == _deckT) ClaimLines(useOwned: true);
+                else UseThisRow();
+                return;
+            }
             bool leader = section == DeckCardCategory.Commander;
             int qty = leader ? 1 : Qty;
 
@@ -622,17 +861,52 @@ namespace BreakersOfE.Views.Pages
             foreach (var row in rows)
             {
                 var card = TemplateFor(row);
-                if (card == null) continue;
+                if (card == null)
+                {
+                    refused.Add(DeckEditResult.Refused($"{CardText(row)}: not in the card pool."));
+                    continue;
+                }
                 var line = row as DeckCard;
-                string fin = finish ?? (line != null ? LineFinish(line) : DefaultFinish(card));
-                var sec = section ?? (line != null ? DeckEditService.SectionOf(line) : AddSection);
+                bool fromRow = IsCollectionRow(row);
+                // A collection row is one finish; it gives only its free copies.
+                if (fromRow && finish != null && finish != RowFinish(row))
+                {
+                    refused.Add(DeckEditResult.Refused($"{CardText(row)}: this collection row is {CardFinish.Display(RowFinish(row))}."));
+                    continue;
+                }
+                string fin = fromRow ? RowFinish(row) : finish ?? (line != null ? LineFinish(line) : DefaultFinish(card));
+                int want = qty;
+                string note = "";
+                if (fromRow)
+                {
+                    int free = FreeOf(row);
+                    if (free <= 0)
+                    {
+                        refused.Add(DeckEditResult.Refused($"{CardText(row)} ({RowText(row)}): no free copies — all are in decks."));
+                        continue;
+                    }
+                    if (free < want)
+                    {
+                        note = $" (only {free} free in that collection row)";
+                        want = free;
+                    }
+                }
+                var sec = IsToken(row) ? DeckCardCategory.Tokens
+                        : section ?? (line != null ? DeckEditService.SectionOf(line) : AddSection);
+                if (sec == DeckCardCategory.Tokens && section == DeckCardCategory.Commander)
+                {
+                    refused.Add(DeckEditResult.Refused($"{DeckEditService.CardText(card)} is a token — it can't lead the deck."));
+                    continue;
+                }
                 if (!DeckEditService.HasFinish(card, fin))
                 {
                     refused.Add(DeckEditResult.Refused($"{DeckEditService.CardText(card)} doesn't come in {CardFinish.Display(fin)}."));
                     continue;
                 }
-                if (!plan.Any(p => p.Card.ScryfallId == card.ScryfallId && p.Finish == fin && p.Section == sec))
-                    plan.Add(new AddPlan(card, fin, sec, qty));
+                if (!plan.Any(p => p.Card.ScryfallId == card.ScryfallId && p.Finish == fin && p.Section == sec &&
+                                   p.Claim == (fromRow ? RowKeyOf(row) : null)))
+                    plan.Add(new AddPlan(card, fin, sec, want,
+                        fromRow ? RowKeyOf(row) : null, fromRow ? TableOfRow(row) : "", note));
             }
             if (plan.Count == 0)
             {
@@ -653,22 +927,33 @@ namespace BreakersOfE.Views.Pages
                 var warnings = new List<string>();
                 var warned = new HashSet<AddPlan>();
                 var results = new List<DeckEditResult>(refused);
+                var added = new List<AddPlan>();
                 foreach (var p in plan)
                 {
                     var w = DeckRulesService.AddWarnings(_deck!, rule, p.Card, p.Section, p.Qty);
                     if (p.Section == DeckCardCategory.Commander && DeckRulesService.LeaderProblem(rule, p.Card) is { } why)
                         w.Insert(0, why);
                     if (w.Count > 0) { warned.Add(p); warnings.AddRange(w); }
-                    results.Add(DeckEditService.Add(_deck!, p.Card, p.Finish, p.Qty, p.Section));
+                    var r = DeckEditService.Add(_deck!, p.Card, p.Finish, p.Qty, p.Section);
+                    results.Add(WithNote(r, p));
+                    if (r.Changed > 0) added.Add(p);
                 }
-                if (warned.Count == 0) return results;
-
+                // Claims only once it's settled what's added (the dialog below can cancel).
+                void Claim(IEnumerable<AddPlan> these)
+                {
+                    foreach (var p in these.Where(p => p.Claim != null))
+                    {
+                        var c = CollectionEditService.ClaimRow(p.Table, _deck!, p.Claim!, p.Qty, p.Card.Name);
+                        if (c.Warning) results.Add(DeckEditResult.Refused(c.Message));
+                    }
+                }
+                if (warned.Count == 0) { Claim(added); return results; }
                 string header = plan.Count == 1
                     ? $"Add {DeckEditService.CardText(plan[0].Card)} to {_deck!.Name} anyway?"
                     : $"{warned.Count} of the {plan.Count} cards break a {rule.Name} rule. Add anyway?";
                 var choice = AddWarningsDialog.Ask(Window.GetWindow(this), header,
                     warnings.Distinct().ToList(), warned.Count, plan.Count - warned.Count);
-                if (choice == AddWarningsChoice.AddAll) return results;
+                if (choice == AddWarningsChoice.AddAll) { Claim(added); return results; }
                 if (choice == AddWarningsChoice.Cancel) return null;
 
                 // Only the cards without a warning: start again from the file.
@@ -679,9 +964,324 @@ namespace BreakersOfE.Views.Pages
                 _deck = fresh;
                 var some = new List<DeckEditResult>(refused);
                 foreach (var p in plan.Where(p => !warned.Contains(p)))
-                    some.Add(DeckEditService.Add(_deck, p.Card, p.Finish, p.Qty, p.Section));
+                    some.Add(AddOne(p));
                 return some;
-            });
+            }, plan.Where(p => p.Claim != null).Select(p => (p.Table, p.Card.ScryfallId)));
+        }
+
+        // ── Tokens ──────────────────────────────────────────────────────
+        /// <summary>A token (from the Tokens pool, or a line in the deck's Tokens part).</summary>
+        private static bool IsToken(object row) =>
+            row is TokenCard || row is TokenCollectionEntry || row is DeckCard { IsTokenLine: true };
+
+        private bool _fillingPool;
+
+        /// <summary>The source table: cards or tokens (pool or collection).</summary>
+        private void PoolBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_fillingPool || !_started) return;
+            if (_current != null && _current is not DeckCard) SetCurrentNone();   // the old pool's card
+            _src.LoadPool(SourceTag);
+            UpdateButtons();
+        }
+
+        /// <summary>
+        /// "Suggested Tokens…" (the whole deck) or right-click → "Add its
+        /// tokens…" (the selected deck cards): the tokens Scryfall links to
+        /// those cards; the ticked ones go to the deck's Tokens part.
+        /// </summary>
+        private void SuggestTokens(bool selectedOnly)
+        {
+            if (_deck == null) { ShowStatus("Pick a deck first (or click New Deck…).", true); return; }
+            var makers = selectedOnly
+                ? Targets(_deckT).OfType<DeckCard>().Where(c => !c.IsTokenLine).ToList()
+                : _deck.PlayCards;
+            if (selectedOnly && makers.Count == 0) { ShowStatus("Select a card (not a token) in the deck table first.", true); return; }
+
+            string header = selectedOnly
+                ? makers.Count == 1 ? $"Suggested tokens — {makers[0].Name}" : $"Suggested tokens — {makers.Count} selected cards"
+                : $"Suggested tokens — {_deck.Name}";
+            const string anyToken = "Older cards, and cards that copy something, may not be linked — " +
+                                    "you can still add any token from the Tokens pool.";
+
+            List<TokenSuggestion> list = new();
+            bool noData = false;
+            if (makers.Count > 0)
+            {
+                try
+                {
+                    list = TokenSuggestionService.Suggest(_deck, makers, out noData);
+                }
+                catch (Exception ex)
+                {
+                    ShowStatus($"Could not read the token links: {ex.Message}", true);
+                    return;
+                }
+            }
+
+            // Why the list is empty (shown instead of the list).
+            string empty =
+                makers.Count == 0 ? "This deck has no cards yet." :
+                noData ? "The card pool doesn't have token links yet. Run a Full Database Update once, then try again." :
+                selectedOnly && makers.Count == 1 ? $"{makers[0].Name} makes no tokens that Scryfall links. {anyToken}" :
+                selectedOnly ? $"None of the {makers.Count} selected cards make tokens that Scryfall links. {anyToken}" :
+                $"None of this deck's cards make tokens (as far as Scryfall links them). {anyToken}";
+            var dlg = TokenSuggestionsDialog.Ask(Window.GetWindow(this), header, list, empty);
+            if (dlg == null) return;
+
+            int copies = dlg.Copies;
+            var picked = dlg.Picked;
+            // The tokens go to the deck's Tokens part; the copies you own are claimed.
+            Edit($"Added {copies} of each token", () => picked.Select(s =>
+            {
+                var t = DeckService.FromTokenCard(s.Token);
+                string fin = DefaultFinish(t);
+                var added = DeckEditService.Add(_deck!, t, fin, copies, DeckCardCategory.Tokens);
+                if (added.Changed <= 0 || s.Owned == 0) return added;
+                var claimed = CollectionEditService.ClaimOwned(CollectionEditService.TokensTable, _deck!,
+                                                               t.ScryfallId, fin, copies, t.Name);
+                return claimed.Changed > 0
+                    ? new DeckEditResult
+                    {
+                        Changed = added.Changed,
+                        Touched = added.Touched,
+                        Warning = claimed.Warning,
+                        Message = $"{added.Message} {claimed.Message}"
+                    }
+                    : added;
+            }).ToList(), picked.Select(s => (CollectionEditService.TokensTable, s.Token.ScryfallId)));
+        }
+
+        private void BtnSuggestTokens_Click(object sender, RoutedEventArgs e) => SuggestTokens(selectedOnly: false);
+
+        // ══════════════════════════════════════════════════════════════════
+        // DECK → COLLECTION: claim copies you own, or add new ones
+        // ══════════════════════════════════════════════════════════════════
+        private string AddLanguage => LanguageBox.SelectedItem as string ?? CardLanguage.Default;
+        private string AddCondition => ConditionBox.SelectedItem as string ?? CardCondition.Default;
+
+        /// <summary>Etched-only printing (its foil copies are etched)?</summary>
+        private bool EtchedOnly(string sid, bool token) =>
+            PoolFor(sid, token) is { } p && p.GetType().GetProperty("IsEtched")?.GetValue(p) is true &&
+            p.GetType().GetProperty("IsFoil")?.GetValue(p) is not true;
+
+        /// <summary>What the deck still needs, per printing + finish (optionally only these lines' printings).</summary>
+        private List<ClaimLine> Needs(IEnumerable<DeckCard>? only = null)
+        {
+            var status = CollectionEditService.ClaimStatus(_deck!);
+            if (only != null)
+            {
+                // The selected lines' printings, in the finishes those lines list.
+                var keys = new HashSet<(string, string, string)>(only.Where(l => !string.IsNullOrEmpty(l.ScryfallId)).SelectMany(l =>
+                    new[] { CardFinish.NonFoil, CardFinish.Foil, CardFinish.Etched }
+                        .Where(f => l.CountOf(f) > 0)
+                        .Select(f => (CollectionEditService.TableOf(l), l.ScryfallId.ToLowerInvariant(), f))));
+                status = status.Where(s => keys.Contains((s.Table, s.ScryfallId.ToLowerInvariant(), s.Finish))).ToList();
+            }
+            return status;
+        }
+
+        private static DeckEditResult FromEdit(EditResult r) =>
+            new() { Changed = r.Changed, Message = r.Message, Warning = r.Warning };
+
+        /// <summary>
+        /// The selected deck lines: claim free copies you own (<paramref name="useOwned"/>),
+        /// or add new copies to the collection (Language · Condition from the bar), for what they still need.
+        /// </summary>
+        private void ClaimLines(bool useOwned)
+        {
+            if (_deck == null) { ShowStatus("Pick a deck first.", true); return; }
+            var lines = SelectedDeckLines();
+            if (lines.Count == 0) { ShowStatus("Select a card in the deck table first.", true); return; }
+            var needs = Needs(lines).Where(n => n.Needed > 0).ToList();
+            if (needs.Count == 0) { ShowStatus("Every copy of the selected cards is already claimed.", false); return; }
+            if (!useOwned && needs.Sum(n => n.Needed) > 1 &&
+                !Confirm($"Add {needs.Sum(n => n.Needed)} new copies to your collection as {AddLanguage} · {AddCondition}?\n\n" +
+                         string.Join("\n", needs.Take(12).Select(n => $"{n.Needed} × {n.Text}")) +
+                         (needs.Count > 12 ? $"\n… and {needs.Count - 12} more" : ""),
+                         "Add as new copies"))
+                return;
+            RunClaims(useOwned, needs);
+        }
+
+        /// <summary>Whole deck: preview what would be claimed (or added), then do it.</summary>
+        private void WholeDeck(bool useOwned)
+        {
+            if (_deck == null) { ShowStatus("Pick a deck first.", true); return; }
+            var needs = Needs().Where(n => n.Needed > 0).ToList();
+            if (needs.Count == 0) { ShowStatus($"Every copy in {_deck.Name} is already claimed from your collection.", false); return; }
+
+            var preview = new List<string>();
+            int will = 0, missing = 0;
+            foreach (var n in needs.OrderBy(n => n.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                if (useOwned)
+                {
+                    bool token = n.Table == CollectionEditService.TokensTable;
+                    var counts = CollectionEditService.Counts(n.Table, n.ScryfallId, EtchedOnly(n.ScryfallId, token));
+                    int used = n.Finish switch
+                    {
+                        CardFinish.Foil => counts.UsedFoil,
+                        CardFinish.Etched => counts.UsedEtched,
+                        _ => counts.UsedNonFoil,
+                    };
+                    int free = Math.Max(0, counts.Owned(n.Finish) - used);
+                    int take = Math.Min(free, n.Needed);
+                    will += take;
+                    missing += n.Needed - take;
+                    preview.Add(take == n.Needed ? $"✓  {n.Needed} × {n.Text}"
+                        : take == 0 ? $"✗  {n.Text}: need {n.Needed} — none free"
+                        : $"◐  {n.Text}: need {n.Needed} — {take} free, {n.Needed - take} missing");
+                }
+                else
+                {
+                    will += n.Needed;
+                    preview.Add($"+  {n.Needed} × {n.Text}");
+                }
+            }
+            string header = useOwned
+                ? $"Use copies you own for {_deck.Name}: {will} to claim" + (missing > 0 ? $", {missing} missing" : "")
+                : $"Add {_deck.Name}'s cards to your collection: {will} new copies as {AddLanguage} · {AddCondition}";
+            string note = useOwned
+                ? "Same printing and finish only — English first, then the worst condition first. Missing copies stay unclaimed."
+                : "Every copy the deck still needs goes into your collection as a new copy, claimed for this deck.";
+            if (will == 0) { ShowStatus($"{header} — nothing to claim.", true); return; }
+            if (!ListPreviewDialog.Ask(Window.GetWindow(this), header, note, preview, useOwned ? "Claim them" : "Add them"))
+                return;
+            RunClaims(useOwned, needs);
+        }
+
+        private void RunClaims(bool useOwned, List<ClaimLine> needs)
+        {
+            string lang = AddLanguage, cond = AddCondition;
+            Edit(useOwned ? "Used copies you own" : "Added to your collection", () => needs.Select(n =>
+            {
+                if (useOwned)
+                    return FromEdit(CollectionEditService.ClaimOwned(n.Table, _deck!, n.ScryfallId, n.Finish, n.Needed, n.Name));
+                var pool = PoolFor(n.ScryfallId, n.Table == CollectionEditService.TokensTable);
+                return pool == null
+                    ? DeckEditResult.Refused($"{n.Text}: not in the card pool.")
+                    : FromEdit(CollectionEditService.AddAndClaim(n.Table, _deck!, pool, n.Finish, n.Needed, lang, cond));
+            }).ToList(), needs.Select(n => (n.Table, n.ScryfallId)));
+        }
+
+        /// <summary>The selected collection row: claim its free copies for what the deck still needs of it.</summary>
+        private void UseThisRow()
+        {
+            if (_deck == null) { ShowStatus("Pick a deck first.", true); return; }
+            if (_current == null || !IsCollectionRow(_current))
+            {
+                ShowStatus("Select a row in the collection table first.", true);
+                return;
+            }
+            var row = _current;
+            string table = TableOfRow(row), sid = Str(row, "ScryfallId"), fin = RowFinish(row);
+            var need = Needs().FirstOrDefault(n => n.Table == table && n.Finish == fin &&
+                                                   string.Equals(n.ScryfallId, sid, StringComparison.OrdinalIgnoreCase));
+            if (need == null || need.Needed == 0)
+            {
+                ShowStatus(need == null
+                    ? $"{CardText(row)} ({CardFinish.Display(fin)}) isn't in {_deck.Name}."
+                    : $"{CardText(row)} ({CardFinish.Display(fin)}): every copy the deck lists is already claimed.", true);
+                return;
+            }
+            int n = Math.Min(need.Needed, FreeOf(row));
+            if (n <= 0) { ShowStatus($"{CardText(row)} ({RowText(row)}): no free copies in this row.", true); return; }
+            var key = RowKeyOf(row);
+            Edit("Used this row", () => new List<DeckEditResult>
+            {
+                FromEdit(CollectionEditService.ClaimRow(table, _deck!, key, n, Str(row, "Name"))),
+            }, new[] { (table, sid) });
+        }
+
+        /// <summary>The selected deck lines: free their claimed copies (the cards stay in the deck).</summary>
+        private void FreeCopies()
+        {
+            if (_deck == null) { ShowStatus("Pick a deck first.", true); return; }
+            var lines = SelectedDeckLines();
+            var claimed = Needs(lines).Where(n => n.Claimed > 0).ToList();
+            if (claimed.Count == 0) { ShowStatus("None of the selected cards have claimed copies.", false); return; }
+            Edit("Freed copies", () => claimed.Select(n =>
+                FromEdit(CollectionEditService.Release(_deck!, n.Table, n.ScryfallId, n.Finish, n.Claimed, n.Name))).ToList(),
+                claimed.Select(n => (n.Table, n.ScryfallId)));
+        }
+
+        /// <summary>
+        /// Tear down: every copy the deck claims goes back to Available, and the
+        /// deck file moves to "Deleted Decks" (kept, so it can be recovered).
+        /// </summary>
+        private void BtnTearDown_Click(object sender, RoutedEventArgs e)
+        {
+            if (_deck == null || _deckPath == null) return;
+            int claimed = _deck.Cards.Sum(c => c.ClaimedCount);
+            string what = claimed > 0
+                ? $"The {claimed} claimed {(claimed == 1 ? "copy goes" : "copies go")} back to Available in your collection, and the deck is deleted."
+                : "The deck is deleted (none of its copies are claimed from your collection).";
+            if (!Confirm($"Tear down \"{_deck.Name}\"?\n\n{what}\n\nThe deck file is moved to the \"Deleted Decks\" folder, " +
+                         "so it can be recovered by hand. This can't be undone here.", "Tear down deck"))
+                return;
+
+            string name = _deck.Name, path = _deckPath;
+            int freed = CollectionEditService.ReleaseAll(_deck.DeckId);
+            if (freed < 0)
+            {
+                // The claims couldn't be freed: keep the deck, so its copies aren't left "used" by nothing.
+                ShowStatus($"Could not free {name}'s claimed copies in the collection — the deck was NOT deleted. Try again.", true);
+                return;
+            }
+            string moved;
+            try
+            {
+                string dir = Path.Combine(AppFolderService.RootFolder, "Deleted Decks");
+                Directory.CreateDirectory(dir);
+                string target = Path.Combine(dir, Path.GetFileName(path));
+                string stem = Path.GetFileNameWithoutExtension(path);
+                for (int i = 2; File.Exists(target); i++) target = Path.Combine(dir, $"{stem} ({i}).deck");
+                File.Move(path, target);
+                moved = target;
+            }
+            catch (Exception ex)
+            {
+                ShowStatus($"Freed {freed} copies, but could not move the deck file: {ex.Message}", true);
+                FillDecks(null);
+                return;
+            }
+            _undo.Remove(path);
+            FillDecks(null);
+            ReloadSource();
+            ShowStatus($"Tore down \"{name}\": {freed} {(freed == 1 ? "copy" : "copies")} back to Available; " +
+                       $"the deck file is in {Path.GetDirectoryName(moved)}.", false);
+        }
+
+        private void BtnUseOwned_Click(object sender, RoutedEventArgs e) => ClaimLines(useOwned: true);
+        private void BtnAddNew_Click(object sender, RoutedEventArgs e) => ClaimLines(useOwned: false);
+        private void BtnUseRow_Click(object sender, RoutedEventArgs e) => UseThisRow();
+        private void BtnFreeCopies_Click(object sender, RoutedEventArgs e) => FreeCopies();
+        private void BtnWholeOwned_Click(object sender, RoutedEventArgs e) => WholeDeck(useOwned: true);
+        private void BtnWholeNew_Click(object sender, RoutedEventArgs e) => WholeDeck(useOwned: false);
+
+        /// <summary>A tile's +: add (or, in Deck → Collection, claim).</summary>
+        private void TileAdd(PoolPage t, ModifierKeys keys)
+        {
+            if (_mode == DeckEditMode.DeckToCollection)
+            {
+                if (t == _deckT) ClaimLines(useOwned: true);
+                else UseThisRow();
+                return;
+            }
+            DoAdd(FinishFromKeys(keys), t);
+        }
+
+        /// <summary>A tile's −: remove (or, in Deck → Collection, free the deck card's claimed copies).</summary>
+        private void TileRemove(PoolPage t, ModifierKeys keys)
+        {
+            if (_mode == DeckEditMode.DeckToCollection)
+            {
+                if (t == _deckT) FreeCopies();
+                else ShowStatus("To free copies, use − on the deck's card (or Free Copies).", false);
+                return;
+            }
+            DoRemove(FinishFromKeys(keys), t);
         }
 
         // ── Remove ──────────────────────────────────────────────────────
@@ -695,7 +1295,9 @@ namespace BreakersOfE.Views.Pages
         {
             if (row is DeckCard line) return line;
             var lines = LinesOf(Str(row, "ScryfallId"));
-            var order = new[] { AddSection, DeckCardCategory.Mainboard, DeckCardCategory.Sideboard, DeckCardCategory.Commander };
+            var order = IsToken(row)
+                ? new[] { DeckCardCategory.Tokens }
+                : new[] { AddSection, DeckCardCategory.Mainboard, DeckCardCategory.Sideboard, DeckCardCategory.Commander };
             foreach (var sec in order)
             {
                 var hit = lines.FirstOrDefault(l => DeckEditService.SectionOf(l) == sec &&
@@ -757,7 +1359,7 @@ namespace BreakersOfE.Views.Pages
         private void MakeLeader()
         {
             if (_deck == null) return;
-            if (Targets(_bottom).OfType<DeckCard>().FirstOrDefault() is not { } line)
+            if (Targets(_deckT).OfType<DeckCard>().FirstOrDefault() is not { } line)
             {
                 ShowStatus("Select a card in the deck table first.", true);
                 return;
@@ -775,8 +1377,10 @@ namespace BreakersOfE.Views.Pages
         private void MoveLines(DeckCardCategory to, string what)
         {
             if (_deck == null) return;
-            var keys = Targets(_bottom).OfType<DeckCard>().Select(DeckLineKey.Of).Distinct().ToList();
-            if (keys.Count == 0) { ShowStatus("Select a card in the deck table first.", true); return; }
+            // Tokens stay in the deck's Tokens part.
+            var keys = Targets(_deckT).OfType<DeckCard>().Where(l => !l.IsTokenLine)
+                                       .Select(DeckLineKey.Of).Distinct().ToList();
+            if (keys.Count == 0) { ShowStatus("Select a card (not a token) in the deck table first.", true); return; }
             Edit(what, () => keys.Select(k => DeckEditService.MoveLine(_deck!, k, to)).ToList());
         }
 
@@ -813,26 +1417,26 @@ namespace BreakersOfE.Views.Pages
         /// <summary>Right-click → Set count: the editor over that cell, or at the mouse.</summary>
         private void SetCountOfSelected(string finish)
         {
-            if (Targets(_bottom).OfType<DeckCard>().FirstOrDefault() is not { } line)
+            if (Targets(_deckT).OfType<DeckCard>().FirstOrDefault() is not { } line)
             {
                 ShowStatus("Select a card in the deck table first.", true);
                 return;
             }
             string header = finish switch { CardFinish.Foil => "Foil", CardFinish.Etched => "Etched", _ => "Non-Foil" };
             // After the right-click menu has closed, or it would close the editor at once.
-            Dispatcher.BeginInvoke(new Action(() => EditCountInPlace(line, _bottom.CellFor(line, header), finish)),
+            Dispatcher.BeginInvoke(new Action(() => EditCountInPlace(line, _deckT.CellFor(line, header), finish)),
                 System.Windows.Threading.DispatcherPriority.Background);
         }
 
         // ── Undo ────────────────────────────────────────────────────────
-        private List<(string Before, string After, string Text)> UndoStack =>
+        private List<UndoStep> UndoStack =>
             _deckPath != null && _undo.TryGetValue(_deckPath, out var s) ? s : new();
 
-        private void PushUndo(string path, string before, string after, string text)
+        private void PushUndo(string path, UndoStep step)
         {
-            if (before == after) return;
+            if (step.Before == step.After && step.Claims == null) return;
             if (!_undo.TryGetValue(path, out var stack)) _undo[path] = stack = new();
-            stack.Add((before, after, text));
+            stack.Add(step);
             if (stack.Count > UndoSteps) stack.RemoveAt(0);
             UpdateUndo();
         }
@@ -841,7 +1445,8 @@ namespace BreakersOfE.Views.Pages
         {
             var stack = UndoStack;
             if (_deckPath == null || stack.Count == 0) { ShowStatus("Nothing to undo.", false); return; }
-            var (before, after, text) = stack[^1];
+            var step = stack[^1];
+            var (before, after, text) = (step.Before, step.After, step.Text);
             stack.RemoveAt(stack.Count - 1);
 
             // Only when the file is still as this page left it (it can't apply otherwise).
@@ -852,6 +1457,18 @@ namespace BreakersOfE.Views.Pages
                 ShowStatus("Can't undo: the deck file was changed outside this page since.", true);
                 return;
             }
+            // The collection first (claims and rows); refused when they changed since.
+            if (step.Claims != null)
+            {
+                var r = CollectionEditService.RestoreClaims(step.Claims, text);
+                if (r.Warning)
+                {
+                    stack.Clear();
+                    UpdateUndo();
+                    ShowStatus(r.Message, true);
+                    return;
+                }
+            }
             try
             {
                 string tmp = _deckPath + ".saving";
@@ -860,13 +1477,14 @@ namespace BreakersOfE.Views.Pages
             }
             catch (Exception ex)
             {
-                stack.Add((before, after, text));        // nothing was undone: keep the step
+                stack.Add(step with { Claims = null });  // the deck wasn't undone (its claims were)
                 UpdateUndo();
                 ShowStatus($"Could not undo: {ex.Message}", true);
                 return;
             }
             // Deck Settings may have changed the name, type or format: refresh the list too.
             FillDecks(_deckPath);
+            if (step.Claims != null) ReloadSource();
             UpdateUndo();
             ShowStatus($"Undone: {text}", false);
         }
@@ -910,7 +1528,11 @@ namespace BreakersOfE.Views.Pages
         // ══════════════════════════════════════════════════════════════════
         private sealed record MenuEntry(MenuItem Item, string Header, Func<bool> Enabled, bool ShowsQty);
         private readonly List<MenuEntry> _menuEntries = new();
-        private MenuItem? _undoTop, _undoBottom, _addLeaderItem, _makeLeaderItem, _unLeaderItem,
+        private MenuItem? _addTokensItem, _addTokensItem2;
+        private readonly ContextMenu _claimSrcMenu = new();
+        private readonly ContextMenu _claimDeckMenu = new();
+        private readonly List<MenuItem> _undoItems = new();
+        private MenuItem? _undoSrc, _undoDeck, _addLeaderItem, _makeLeaderItem, _unLeaderItem,
                           _toSideItem, _toMainItem;
 
         private void BuildMenus()
@@ -924,28 +1546,28 @@ namespace BreakersOfE.Views.Pages
                 return mi;
             }
 
-            // Top: the card pool.
-            Item(_topMenu, "Add Non-Foil", "Enter", () => DoAdd(CardFinish.NonFoil, _top), () => BtnAddNonFoil.IsEnabled, true);
-            Item(_topMenu, "Add Foil", "Shift+Enter", () => DoAdd(CardFinish.Foil, _top), () => BtnAddFoil.IsEnabled, true);
-            Item(_topMenu, "Add Etched", "Ctrl+Enter", () => DoAdd(CardFinish.Etched, _top), () => BtnAddEtched.IsEnabled, true);
-            _addLeaderItem = Item(_topMenu, "Add as Commander", "", () => DoAdd(null, _top, DeckCardCategory.Commander));
-            _topMenu.Items.Add(new Separator());
-            Item(_topMenu, "Remove Non-Foil", "", () => DoRemove(CardFinish.NonFoil, _top), () => BtnRemoveNonFoil.IsEnabled, true);
-            Item(_topMenu, "Remove Foil", "", () => DoRemove(CardFinish.Foil, _top), () => BtnRemoveFoil.IsEnabled, true);
-            Item(_topMenu, "Remove Etched", "", () => DoRemove(CardFinish.Etched, _top), () => BtnRemoveEtched.IsEnabled, true);
-            Item(_topMenu, "Remove Card (every copy)", "", () => RemoveLines(_top), () => BtnRemoveLine.IsEnabled);
-            _topMenu.Items.Add(new Separator());
-            _undoTop = Item(_topMenu, "Undo", "Ctrl+Z", DoUndo, () => UndoStack.Count > 0);
+            // The source table: the card pool, or your collection.
+            Item(_srcMenu, "Add Non-Foil", "Enter", () => DoAdd(CardFinish.NonFoil, _src), () => BtnAddNonFoil.IsEnabled, true);
+            Item(_srcMenu, "Add Foil", "Shift+Enter", () => DoAdd(CardFinish.Foil, _src), () => BtnAddFoil.IsEnabled, true);
+            Item(_srcMenu, "Add Etched", "Ctrl+Enter", () => DoAdd(CardFinish.Etched, _src), () => BtnAddEtched.IsEnabled, true);
+            _addLeaderItem = Item(_srcMenu, "Add as Commander", "", () => DoAdd(null, _src, DeckCardCategory.Commander));
+            _srcMenu.Items.Add(new Separator());
+            Item(_srcMenu, "Remove Non-Foil", "", () => DoRemove(CardFinish.NonFoil, _src), () => BtnRemoveNonFoil.IsEnabled, true);
+            Item(_srcMenu, "Remove Foil", "", () => DoRemove(CardFinish.Foil, _src), () => BtnRemoveFoil.IsEnabled, true);
+            Item(_srcMenu, "Remove Etched", "", () => DoRemove(CardFinish.Etched, _src), () => BtnRemoveEtched.IsEnabled, true);
+            Item(_srcMenu, "Remove Card (every copy)", "", () => RemoveLines(_src), () => BtnRemoveLine.IsEnabled);
+            _srcMenu.Items.Add(new Separator());
+            _undoSrc = Item(_srcMenu, "Undo", "Ctrl+Z", DoUndo, () => UndoStack.Count > 0);
 
-            // Bottom: the deck.
-            Item(_bottomMenu, "Add Non-Foil", "", () => DoAdd(CardFinish.NonFoil, _bottom), () => BtnAddNonFoil.IsEnabled, true);
-            Item(_bottomMenu, "Add Foil", "", () => DoAdd(CardFinish.Foil, _bottom), () => BtnAddFoil.IsEnabled, true);
-            Item(_bottomMenu, "Add Etched", "", () => DoAdd(CardFinish.Etched, _bottom), () => BtnAddEtched.IsEnabled, true);
-            _bottomMenu.Items.Add(new Separator());
-            Item(_bottomMenu, "Remove Non-Foil", "", () => DoRemove(CardFinish.NonFoil, _bottom), () => BtnRemoveNonFoil.IsEnabled, true);
-            Item(_bottomMenu, "Remove Foil", "", () => DoRemove(CardFinish.Foil, _bottom), () => BtnRemoveFoil.IsEnabled, true);
-            Item(_bottomMenu, "Remove Etched", "", () => DoRemove(CardFinish.Etched, _bottom), () => BtnRemoveEtched.IsEnabled, true);
-            Item(_bottomMenu, "Remove Card (every copy)", "Shift+Delete", () => RemoveLines(_bottom), () => BtnRemoveLine.IsEnabled);
+            // The deck table.
+            Item(_deckMenu, "Add Non-Foil", "", () => DoAdd(CardFinish.NonFoil, _deckT), () => BtnAddNonFoil.IsEnabled, true);
+            Item(_deckMenu, "Add Foil", "", () => DoAdd(CardFinish.Foil, _deckT), () => BtnAddFoil.IsEnabled, true);
+            Item(_deckMenu, "Add Etched", "", () => DoAdd(CardFinish.Etched, _deckT), () => BtnAddEtched.IsEnabled, true);
+            _deckMenu.Items.Add(new Separator());
+            Item(_deckMenu, "Remove Non-Foil", "", () => DoRemove(CardFinish.NonFoil, _deckT), () => BtnRemoveNonFoil.IsEnabled, true);
+            Item(_deckMenu, "Remove Foil", "", () => DoRemove(CardFinish.Foil, _deckT), () => BtnRemoveFoil.IsEnabled, true);
+            Item(_deckMenu, "Remove Etched", "", () => DoRemove(CardFinish.Etched, _deckT), () => BtnRemoveEtched.IsEnabled, true);
+            Item(_deckMenu, "Remove Card (every copy)", "Shift+Delete", () => RemoveLines(_deckT), () => BtnRemoveLine.IsEnabled);
 
             var setCount = new MenuItem { Header = "Set count" };
             foreach (var f in new[] { CardFinish.NonFoil, CardFinish.Foil, CardFinish.Etched })
@@ -955,23 +1577,45 @@ namespace BreakersOfE.Views.Pages
                 mi.Click += (_, _) => SetCountOfSelected(fin);
                 setCount.Items.Add(mi);
             }
-            _bottomMenu.Items.Add(setCount);
-            _bottomMenu.Items.Add(new Separator());
+            _deckMenu.Items.Add(setCount);
+            _deckMenu.Items.Add(new Separator());
 
-            _makeLeaderItem = Item(_bottomMenu, "Set as Commander", "", MakeLeader);
-            _unLeaderItem = Item(_bottomMenu, "Move out of the command zone", "",
+            _addTokensItem = Item(_deckMenu, "Add its tokens…", "", () => SuggestTokens(selectedOnly: true));
+            _deckMenu.Items.Add(new Separator());
+            _makeLeaderItem = Item(_deckMenu, "Set as Commander", "", MakeLeader);
+            _unLeaderItem = Item(_deckMenu, "Move out of the command zone", "",
                 () => MoveLines(DeckCardCategory.Mainboard, "Moved to the main deck"));
-            _toSideItem = Item(_bottomMenu, "Move to Sideboard", "",
+            _toSideItem = Item(_deckMenu, "Move to Sideboard", "",
                 () => MoveLines(DeckCardCategory.Sideboard, "Moved to the sideboard"));
-            _toMainItem = Item(_bottomMenu, "Move to Main Deck", "",
+            _toMainItem = Item(_deckMenu, "Move to Main Deck", "",
                 () => MoveLines(DeckCardCategory.Mainboard, "Moved to the main deck"));
-            _bottomMenu.Items.Add(new Separator());
-            _undoBottom = Item(_bottomMenu, "Undo", "Ctrl+Z", DoUndo, () => UndoStack.Count > 0);
+            _deckMenu.Items.Add(new Separator());
+            _undoDeck = Item(_deckMenu, "Undo", "Ctrl+Z", DoUndo, () => UndoStack.Count > 0);
 
-            _topMenu.Opened += (_, _) => MenuOpened(_top);
-            _bottomMenu.Opened += (_, _) => MenuOpened(_bottom);
-            _top.SetRowContextMenu(_topMenu);
-            _bottom.SetRowContextMenu(_bottomMenu);
+            // Deck → Collection: the deck's own menu and the collection's.
+            Item(_claimDeckMenu, "Use Copies I Own", "Enter", () => ClaimLines(useOwned: true), () => BtnUseOwned.IsEnabled);
+            Item(_claimDeckMenu, "Add as New Copies", "", () => ClaimLines(useOwned: false), () => BtnAddNew.IsEnabled);
+            Item(_claimDeckMenu, "Free Claimed Copies", "Delete", FreeCopies, () => BtnFreeCopies.IsEnabled);
+            _claimDeckMenu.Items.Add(new Separator());
+            _addTokensItem2 = Item(_claimDeckMenu, "Add its tokens…", "", () => SuggestTokens(selectedOnly: true));
+            _claimDeckMenu.Items.Add(new Separator());
+            _undoItems.Add(Item(_claimDeckMenu, "Undo", "Ctrl+Z", DoUndo, () => UndoStack.Count > 0));
+            Item(_claimSrcMenu, "Use This Row for the Deck", "Enter", UseThisRow, () => BtnUseRow.IsEnabled);
+            _claimSrcMenu.Items.Add(new Separator());
+            _undoItems.Add(Item(_claimSrcMenu, "Undo", "Ctrl+Z", DoUndo, () => UndoStack.Count > 0));
+
+            _srcMenu.Opened += (_, _) => MenuOpened(_src);
+            _deckMenu.Opened += (_, _) => MenuOpened(_deckT);
+            _claimSrcMenu.Opened += (_, _) => MenuOpened(_src);
+            _claimDeckMenu.Opened += (_, _) => MenuOpened(_deckT);
+        }
+
+        /// <summary>Each table's right-click menu for the mode.</summary>
+        private void SetMenus()
+        {
+            bool claim = _mode == DeckEditMode.DeckToCollection;
+            _src.SetRowContextMenu(claim ? _claimSrcMenu : _srcMenu);
+            _deckT.SetRowContextMenu(claim ? _claimDeckMenu : _deckMenu);
         }
 
         /// <summary>The menu acts on its own table: sync the current card, then items follow the buttons and the format.</summary>
@@ -990,16 +1634,17 @@ namespace BreakersOfE.Views.Pages
 
             var stack = UndoStack;
             string undoText = stack.Count > 0 ? $"Undo: {Shorten(stack[^1].Text)}" : "Undo";
-            if (_undoTop != null) _undoTop.Header = undoText;
-            if (_undoBottom != null) _undoBottom.Header = undoText;
+            if (_undoSrc != null) _undoSrc.Header = undoText;
+            if (_undoDeck != null) _undoDeck.Header = undoText;
+            foreach (var u in _undoItems) u.Header = undoText;
 
             // Command zone and sideboard items only where the format has them.
             var rule = Rule;
             var leaderVis = _deck != null && rule.HasLeader ? Visibility.Visible : Visibility.Collapsed;
             string leaderName = DeckRulesService.LeaderName(rule);
-            _addLeaderItem!.Visibility = leaderVis;
+            _addLeaderItem!.Visibility = PoolBox.SelectedIndex == 1 ? Visibility.Collapsed : leaderVis;   // not for tokens
             _addLeaderItem.Header = $"Add as {leaderName}";
-            var lines = Targets(_bottom).OfType<DeckCard>().ToList();
+            var lines = Targets(_deckT).OfType<DeckCard>().ToList();
             bool anyLeader = lines.Any(l => DeckEditService.SectionOf(l) == DeckCardCategory.Commander);
             bool anySide = lines.Any(l => l.Category == DeckCardCategory.Sideboard);
             bool anyMain = lines.Any(l => DeckEditService.SectionOf(l) == DeckCardCategory.Mainboard);
@@ -1007,7 +1652,9 @@ namespace BreakersOfE.Views.Pages
 
             _makeLeaderItem!.Header = $"Set as {leaderName}";
             _makeLeaderItem.Visibility = leaderVis;
-            _makeLeaderItem.IsEnabled = lines.Count == 1 && !anyLeader;
+            _makeLeaderItem.IsEnabled = lines.Count == 1 && !anyLeader && !lines[0].IsTokenLine;
+            _addTokensItem!.IsEnabled = _addTokensItem2!.IsEnabled = lines.Any(l => !l.IsTokenLine);
+            _addTokensItem.Visibility = _addTokensItem2.Visibility = FromCollection ? Visibility.Visible : Visibility.Collapsed;
             _unLeaderItem!.Visibility = anyLeader ? Visibility.Visible : Visibility.Collapsed;
             _toSideItem!.Visibility = hasSide ? Visibility.Visible : Visibility.Collapsed;
             _toSideItem.IsEnabled = anyMain || anyLeader;
@@ -1025,31 +1672,60 @@ namespace BreakersOfE.Views.Pages
         // ══════════════════════════════════════════════════════════════════
         // KEYS
         // ══════════════════════════════════════════════════════════════════
-        private void Top_GridPreviewKeyDown(object sender, KeyEventArgs e)
+        private void Src_GridPreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key != Key.Enter && e.Key != Key.Return) return;
-            _active = _top;
-            if (_top.SelectedCard is { } card) SetCurrent(card);
+            _active = _src;
+            if (_src.SelectedCard is { } card) SetCurrent(card);
+            if (_mode == DeckEditMode.DeckToCollection)
+            {
+                UseThisRow();              // Deck → Collection: Enter uses the selected collection row
+                e.Handled = true;
+                return;
+            }
             var mods = Keyboard.Modifiers;
-            if (mods.HasFlag(ModifierKeys.Control)) DoAdd(CardFinish.Etched, _top);
-            else if (mods.HasFlag(ModifierKeys.Shift)) DoAdd(CardFinish.Foil, _top);
-            else DoAdd(null, _top);
+            if (mods.HasFlag(ModifierKeys.Control)) DoAdd(CardFinish.Etched, _src);
+            else if (mods.HasFlag(ModifierKeys.Shift)) DoAdd(CardFinish.Foil, _src);
+            else DoAdd(null, _src);
             e.Handled = true;           // don't let Enter move to the next row
         }
 
-        private void Bottom_GridPreviewKeyDown(object sender, KeyEventArgs e)
+        private void Deck_GridPreviewKeyDown(object sender, KeyEventArgs e)
         {
+            if (_mode == DeckEditMode.DeckToCollection)
+            {
+                // Deck → Collection: Enter claims copies you own, Delete frees the claimed ones.
+                if (e.Key is Key.Enter or Key.Return) { _active = _deckT; ClaimLines(useOwned: true); e.Handled = true; }
+                else if (e.Key == Key.Delete) { _active = _deckT; FreeCopies(); e.Handled = true; }
+                return;
+            }
             if (e.Key != Key.Delete) return;
-            _active = _bottom;
-            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) RemoveLines(_bottom);
-            else DoRemove(null, _bottom);
+            _active = _deckT;
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) RemoveLines(_deckT);
+            else DoRemove(null, _deckT);
             e.Handled = true;
+        }
+
+        private Window? _keysWindow;
+
+        private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (!IsLoaded || !IsVisible || e.Handled) return;
+            // Another window in front (a dialog) keeps its own keys.
+            if (sender is Window w && !w.IsActive) return;
+            Page_PreviewKeyDown(sender, e);
+        }
+
+        private void Page_Unloaded(object sender, RoutedEventArgs e)
+        {
+            if (_keysWindow != null) _keysWindow.PreviewKeyDown -= Window_PreviewKeyDown;
+            _keysWindow = null;
         }
 
         private void Page_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (Keyboard.Modifiers != ModifierKeys.Control) return;
-            if (e.Key == Key.Q)
+            if (e.Key == Key.Q && _mode != DeckEditMode.DeckToCollection)
             {
                 QtyBox.Focus();
                 e.Handled = true;
@@ -1072,7 +1748,7 @@ namespace BreakersOfE.Views.Pages
         {
             if (e.Key == Key.Enter || e.Key == Key.Return)
             {
-                DoAdd(null);
+                if (_mode != DeckEditMode.DeckToCollection) DoAdd(null);
                 e.Handled = true;
             }
         }
@@ -1112,6 +1788,16 @@ namespace BreakersOfE.Views.Pages
         // virtualization defeated → freeze. Same fix as PoolPage.
         private void Page_Loaded(object sender, RoutedEventArgs e)
         {
+            // Ctrl+Z / Ctrl+Q from anywhere in the window while this page is on
+            // screen: after a change the table is re-read and the row that had
+            // the keyboard focus is gone, so focus falls back to the window —
+            // outside this page — and the first press never reached it.
+            if (Window.GetWindow(this) is { } win && !ReferenceEquals(win, _keysWindow))
+            {
+                if (_keysWindow != null) _keysWindow.PreviewKeyDown -= Window_PreviewKeyDown;
+                _keysWindow = win;
+                win.PreviewKeyDown += Window_PreviewKeyDown;
+            }
             RestoreSplitters();
             DependencyObject current = this;
             while (current != null)

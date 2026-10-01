@@ -43,6 +43,7 @@ namespace BreakersOfE.Views.Pages
             ["Total"] = nameof(CollectionTotalsRow.Total),
             ["Owned"] = nameof(CollectionTotalsRow.Owned),
             ["Missing"] = nameof(CollectionTotalsRow.Missing),
+            ["Claimed"] = nameof(CollectionTotalsRow.Claimed),
             ["Wanted"] = nameof(CollectionTotalsRow.Wanted),
             ["Other Decks"] = nameof(CollectionTotalsRow.OtherDecks),
             ["Asking"] = nameof(CollectionTotalsRow.Asking),
@@ -136,7 +137,9 @@ namespace BreakersOfE.Views.Pages
 
             if (_currentTag == DeckTableTag)
             {
-                var cards = _vm.Items.OfType<Models.DeckCard>().ToList();
+                // Tokens (the deck's Tokens part) aren't part of the deck: counted apart.
+                var shown = _vm.Items.OfType<Models.DeckCard>().ToList();
+                var cards = shown.Where(c => !c.IsTokenLine).ToList();
                 int missing = cards.Sum(c => c.CollectionMissing);
                 // Cost to finish: missing copies at the card's price (non-foil, else foil).
                 decimal missingCost = cards.Sum(c => c.CollectionMissing * (c.PriceUsd ?? c.FoilCopyPrice ?? 0m));
@@ -149,10 +152,10 @@ namespace BreakersOfE.Views.Pages
                 {
                     new CollectionTotalsRow
                     {
-                        Label = missing == 0
-                            ? $"Totals ({cards.Count:N0} lines) · buildable from collection"
-                            : $"Totals ({cards.Count:N0} lines) · {missing:N0} missing",
+                        // Just the count: Missing, Claimed and the tokens have their own columns / line.
+                        Label = $"Totals ({cards.Count:N0} lines)",
                         Owned = cards.Sum(c => c.CollectionOwned).ToString("N0"),
+                        Claimed = $"{cards.Sum(c => c.ClaimedCount):N0} of {cards.Sum(c => c.TotalQuantity):N0}",
                         Missing = missing == 0 ? "0" : $"{missing:N0} (${missingCost:N2})",
                         Wanted = Count(cards.Sum(c => c.WantedCount)),
                         OtherDecks = $"{cards.Count(c => c.OtherDecksCount > 0):N0} shared",
@@ -260,6 +263,7 @@ namespace BreakersOfE.Views.Pages
         public string Owned { get; init; } = "";
         public string OtherDecks { get; init; } = "";
         public string Missing { get; init; } = "";
+        public string Claimed { get; init; } = "";
         public string Wanted { get; init; } = "";
         public string Asking { get; init; } = "";
         public string Offer { get; init; } = "";

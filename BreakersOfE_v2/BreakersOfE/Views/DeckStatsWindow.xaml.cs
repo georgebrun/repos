@@ -44,8 +44,9 @@ namespace BreakersOfE.Views
             _isCommander = deck.DeckType == DeckType.Commander;
             _rule = DeckFormats.For(deck, constructedFormat);
             _hasLeader = _rule.HasLeader;
-            _side = deck.Cards.Where(c => c.Category == DeckCardCategory.Sideboard).ToList();
-            _main = deck.Cards.Where(c => c.Category != DeckCardCategory.Sideboard).ToList();
+            // Tokens (the deck's Tokens part) aren't part of the deck's statistics.
+            _side = deck.PlayCards.Where(c => c.Category == DeckCardCategory.Sideboard).ToList();
+            _main = deck.PlayCards.Where(c => c.Category != DeckCardCategory.Sideboard).ToList();
             // A commander is marked either way: the IsCommander flag or the Commander category.
             _commanders = deck.Cards.Where(IsCommanderCard).ToList();
 
@@ -533,71 +534,37 @@ namespace BreakersOfE.Views
 
             // Game Changers
             checks.Add(gc == 0
-                ? new CheckResult
-                {
-                    Title = "Game Changers",
-                    IsOk = true,
-                    Status = "None",
-                    Summary = "No Game Changers — fits Brackets 1–2."
-                }
-                : new CheckResult
-                {
-                    Title = "Game Changers",
-                    Status = gc <= 3 ? "Bracket 3+" : "Bracket 4+",
-                    Level = gc <= 3 ? "banned" : "not_legal",
-                    Summary = gc <= 3
+                ? new CheckResult { Title = "Game Changers", IsOk = true, Status = "None",
+                                    Summary = "No Game Changers — fits Brackets 1–2." }
+                : new CheckResult { Title = "Game Changers", Status = gc <= 3 ? "Bracket 3+" : "Bracket 4+",
+                                    Level = gc <= 3 ? "banned" : "not_legal",
+                                    Summary = gc <= 3
                                         ? $"{gc} Game Changer(s) — Bracket 3 allows up to 3."
                                         : $"{gc} Game Changers — more than 3 means Bracket 4 or higher.",
-                    Details = gameChangers.Select(Line).ToList()
-                });
+                                    Details = gameChangers.Select(Line).ToList() });
 
             // Mass land denial (possible)
             checks.Add(landDenial.Count == 0
-                ? new CheckResult
-                {
-                    Title = "Mass land denial",
-                    IsOk = true,
-                    Status = "None found",
-                    Summary = "No cards that look like mass land denial."
-                }
-                : new CheckResult
-                {
-                    Title = "Mass land denial",
-                    Status = "Check",
-                    Level = "banned",
-                    Summary = $"{landDenial.Count} card(s) might be mass land denial (Bracket 4+ if they are). Check them:",
-                    Details = landDenial.Select(Line).ToList()
-                });
+                ? new CheckResult { Title = "Mass land denial", IsOk = true, Status = "None found",
+                                    Summary = "No cards that look like mass land denial." }
+                : new CheckResult { Title = "Mass land denial", Status = "Check", Level = "banned",
+                                    Summary = $"{landDenial.Count} card(s) might be mass land denial (Bracket 4+ if they are). Check them:",
+                                    Details = landDenial.Select(Line).ToList() });
 
             // Extra turns
             checks.Add(extraTurns.Count == 0
-                ? new CheckResult
-                {
-                    Title = "Extra turns",
-                    IsOk = true,
-                    Status = "None",
-                    Summary = "No extra-turn cards."
-                }
-                : new CheckResult
-                {
-                    Title = "Extra turns",
-                    Status = extraTurns.Count <= 2 ? "OK" : "Bracket 3+",
-                    IsOk = extraTurns.Count <= 2,
-                    Level = extraTurns.Count <= 2 ? "legal" : "banned",
-                    Summary = extraTurns.Count <= 2
+                ? new CheckResult { Title = "Extra turns", IsOk = true, Status = "None",
+                                    Summary = "No extra-turn cards." }
+                : new CheckResult { Title = "Extra turns", Status = extraTurns.Count <= 2 ? "OK" : "Bracket 3+",
+                                    IsOk = extraTurns.Count <= 2, Level = extraTurns.Count <= 2 ? "legal" : "banned",
+                                    Summary = extraTurns.Count <= 2
                                         ? $"{extraTurns.Count} extra-turn card(s) — a couple is fine in Bracket 2 as long as they don't chain."
                                         : $"{extraTurns.Count} extra-turn cards — enough to chain; Bracket 3 or higher.",
-                    Details = extraTurns.Select(Line).ToList()
-                });
+                                    Details = extraTurns.Select(Line).ToList() });
 
             // Combos: not checked yet
-            checks.Add(new CheckResult
-            {
-                Title = "Two-card combos",
-                Status = "Not checked",
-                Level = "",
-                Summary = "Not checked yet — planned for the deck builder. Brackets 1–3 expect no early two-card infinite combos."
-            });
+            checks.Add(new CheckResult { Title = "Two-card combos", Status = "Not checked", Level = "",
+                                         Summary = "Not checked yet — planned for the deck builder. Brackets 1–3 expect no early two-card infinite combos." });
 
             BracketChecks.ItemsSource = checks;
 
@@ -649,10 +616,7 @@ namespace BreakersOfE.Views
                 .Where(c => !(byFormatShown && c.Title == "Legality"))
                 .Select(c => new CheckResult
                 {
-                    Title = c.Title,
-                    Summary = c.Summary,
-                    IsOk = c.IsOk,
-                    Details = c.Details,
+                    Title = c.Title, Summary = c.Summary, IsOk = c.IsOk, Details = c.Details,
                 })
                 .ToList();
 
@@ -690,24 +654,15 @@ namespace BreakersOfE.Views
             if (c.IsLand) return "Land";
             return c.ColorDisplay switch
             {
-                "W" => "White",
-                "U" => "Blue",
-                "B" => "Black",
-                "R" => "Red",
-                "G" => "Green",
-                "M" => "Multicolor",
-                _ => "Colorless",
+                "W" => "White", "U" => "Blue", "B" => "Black", "R" => "Red", "G" => "Green",
+                "M" => "Multicolor", _ => "Colorless",
             };
         }
 
         private static string RarityBucket(string? rarity) => (rarity ?? "").ToLowerInvariant() switch
         {
-            "common" => "Common",
-            "uncommon" => "Uncommon",
-            "rare" => "Rare",
-            "mythic" => "Mythic",
-            "special" => "Special",
-            _ => "Other",
+            "common" => "Common", "uncommon" => "Uncommon", "rare" => "Rare",
+            "mythic" => "Mythic", "special" => "Special", _ => "Other",
         };
 
         private static string TypeBucket(string? typeLine)

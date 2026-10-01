@@ -73,6 +73,13 @@ namespace BreakersOfE.Models
         /// <summary>On the Commander Game Changers list (Scryfall's game_changer flag).</summary>
         public bool IsGameChanger { get; set; }
 
+        /// <summary>
+        /// The tokens this card makes, as Scryfall links them ("all_parts",
+        /// component "token"): token Scryfall IDs, space-separated. Empty when
+        /// none are linked (often older sets). Filled by a Full Database Update.
+        /// </summary>
+        public string TokenIds { get; set; } = string.Empty;
+
         // ── Online play (MTGO / Arena) ───────────────────────────────────
         // Stored ONLY in the online pool (OnlineCards, OnlineDbContext). The
         // paper pool (PoolCards) ignores these, so paper stays exactly as it was.

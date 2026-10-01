@@ -60,7 +60,7 @@ namespace BreakersOfE.Views.Pages
 
                     // Color identity: the commander's (command-zone formats), else the main deck's.
                     var rule = Models.DeckFormats.For(deck.DeckType);
-                    var main = deck.Cards.Where(c => c.Category != Models.DeckCardCategory.Sideboard).ToList();
+                    var main = deck.PlayCards.Where(c => c.Category != Models.DeckCardCategory.Sideboard).ToList();
                     var commanders = main.Where(c => c.IsCommander || c.Category == Models.DeckCardCategory.Commander).ToList();
                     var identitySource = rule.HasLeader && commanders.Count > 0
                         ? commanders : main;
@@ -80,7 +80,7 @@ namespace BreakersOfE.Views.Pages
                         CommanderName = string.Join(" & ", commanders.Select(c => c.Name)),
                         Folder = folder == "." ? "" : folder,
                         IdentitySymbols = symbols,
-                        CardCount = deck.Cards.Sum(c => c.TotalQuantity),
+                        CardCount = deck.PlayCards.Sum(c => c.TotalQuantity),
                         TotalValue = deck.Cards.Sum(c => c.RowValue),
                     });
                 }

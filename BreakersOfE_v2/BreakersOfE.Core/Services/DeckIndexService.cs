@@ -163,6 +163,7 @@ namespace BreakersOfE.Services
                         };
                         foreach (var c in deck.Cards)
                         {
+                            if (c.IsTokenLine) continue;          // tokens aren't part of the deck
                             string key = CardKey(c.Name);
                             if (key.Length == 0) continue;
                             entry.Copies[key] = entry.Copies.GetValueOrDefault(key) + c.TotalQuantity;

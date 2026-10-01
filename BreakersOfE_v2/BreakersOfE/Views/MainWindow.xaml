@@ -335,6 +335,15 @@
                                                Tag="EditDeck:Pool"
                                                TargetPageType="{x:Type pages:EditDeckPage}"
                                                Icon="{ui:SymbolIcon ArrowRight24}" />
+                        <ui:NavigationViewItem Content="Collection → Deck"
+                                               Tag="EditDeck:Collection"
+                                               TargetPageType="{x:Type pages:EditDeckPage}"
+                                               Icon="{ui:SymbolIcon ArrowRight24}" />
+                        <ui:NavigationViewItem Content="Deck → Collection"
+                                               Tag="EditDeck:DeckToCollection"
+                                               TargetPageTag="editdeck-d2c"
+                                               TargetPageType="{x:Type pages:EditDeckPage}"
+                                               Icon="{ui:SymbolIcon ArrowLeft24}" />
                     </ui:NavigationViewItem.MenuItems>
                 </ui:NavigationViewItem>
 

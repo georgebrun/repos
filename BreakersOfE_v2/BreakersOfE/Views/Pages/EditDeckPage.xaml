@@ -4,11 +4,13 @@
       xmlns:ctl="clr-namespace:BreakersOfE.Views.Controls"
       ScrollViewer.VerticalScrollBarVisibility="Disabled"
       Loaded="Page_Loaded"
+      Unloaded="Page_Unloaded"
       PreviewKeyDown="Page_PreviewKeyDown">
 
-    <!-- Edit → Decks → Pool → Deck: the card pool on top, the deck below
-         (same tables as View, embedded), the card detail panel on the left
-         for whichever card was selected last. Every change is saved at once. -->
+    <!-- Edit → Decks: Pool → Deck and Collection → Deck (the source on top,
+         the deck below) and Deck → Collection (the deck on top, the collection
+         below). Same tables as View, embedded; the card detail panel on the
+         left for whichever card was selected last. Every change is saved at once. -->
     <Grid Margin="16">
         <Grid.ColumnDefinitions>
             <ColumnDefinition x:Name="DetailColumn" Width="240" MinWidth="180" MaxWidth="480"/>
@@ -38,14 +40,14 @@
         <Grid Grid.Column="2">
             <Grid.RowDefinitions>
                 <RowDefinition x:Name="TopRow" Height="*" MinHeight="140"/>
-                <!-- pool -->
+                <!-- source (Deck → Collection: the deck) -->
                 <RowDefinition Height="Auto"/>
                 <!-- splitter -->
                 <RowDefinition x:Name="BottomRow" Height="*" MinHeight="200"/>
-                <!-- buttons + deck -->
+                <!-- buttons + deck (Deck → Collection: the collection) -->
             </Grid.RowDefinitions>
 
-            <!-- ═══ TOP: card pool ═══ -->
+            <!-- ═══ TOP: the source (card pool or collection); Deck → Collection: the deck ═══ -->
             <Frame Grid.Row="0" x:Name="TopFrame" NavigationUIVisibility="Hidden"
                    JournalOwnership="OwnsJournal" Focusable="False"/>
 
@@ -66,7 +68,7 @@
             </GridSplitter>
 
             <DockPanel Grid.Row="2">
-                <!-- ═══ DECK + BUTTONS (Pool → Deck) ═══ -->
+                <!-- ═══ DECK + BUTTONS ═══ -->
                 <Border DockPanel.Dock="Top" Background="#15808080" CornerRadius="8"
                     Padding="12,6" Margin="0,0,0,8">
                     <StackPanel>
@@ -82,19 +84,34 @@
                                 Click="BtnNewDeck_Click" ToolTip="Start a new deck: name, type and format"/>
                             <Button x:Name="BtnDeckSettings" Content="Deck Settings…" Padding="10,4" Margin="0,0,6,0"
                                 Click="BtnDeckSettings_Click" ToolTip="Rename the deck, or change its type or format"/>
-                            <Button x:Name="BtnCloseDeck" Content="Close Deck" Padding="10,4" Margin="0,0,18,0"
+                            <Button x:Name="BtnCloseDeck" Content="Close Deck" Padding="10,4" Margin="0,0,6,0"
                                 Click="BtnCloseDeck_Click"
                                 ToolTip="Close the deck (it's already saved). With no deck open, nothing can be added or removed."/>
+                            <Button x:Name="BtnTearDown" Content="Tear Down…" Padding="10,4" Margin="0,0,18,0"
+                                Click="BtnTearDown_Click"
+                                ToolTip="Every copy the deck claims goes back to Available in your collection, and the deck is deleted (after asking)"/>
 
                             <TextBlock x:Name="AddToLabel" Text="Add to" VerticalAlignment="Center" Margin="0,0,6,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                            <ComboBox x:Name="AddToBox" Width="140" VerticalAlignment="Center"
+                            <ComboBox x:Name="AddToBox" Width="140" Margin="0,0,18,0" VerticalAlignment="Center"
                                   SelectionChanged="AddToBox_SelectionChanged"
-                                  ToolTip="Where cards added from the pool go"/>
+                                  ToolTip="Where cards added from the pool go (tokens always go to the deck's Tokens part)"/>
+
+                            <TextBlock x:Name="PoolLabel" Text="Pool" VerticalAlignment="Center" Margin="0,0,6,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <ComboBox x:Name="PoolBox" Width="110" Margin="0,0,6,0" VerticalAlignment="Center"
+                                  SelectionChanged="PoolBox_SelectionChanged"
+                                  ToolTip="Cards or tokens (tokens go to the deck's Tokens part)"/>
+                            <Button x:Name="BtnSuggestTokens" Content="Suggested Tokens…" Padding="10,4" Margin="0,0,18,0"
+                                Click="BtnSuggestTokens_Click"
+                                ToolTip="The tokens this deck's cards make (as Scryfall links them) — tick the ones to add; the ones you own are claimed"/>
+
+                            <Button x:Name="BtnUndo" Content="Undo" Padding="10,4"
+                                Click="BtnUndo_Click" ToolTip="Nothing to undo (Ctrl+Z)"/>
                         </WrapPanel>
 
-                        <!-- What to do -->
-                        <WrapPanel VerticalAlignment="Center">
+                        <!-- Pool → Deck, Collection → Deck: add and remove -->
+                        <WrapPanel x:Name="EditBar" VerticalAlignment="Center">
                             <TextBlock Text="Add/Remove Qty" VerticalAlignment="Center" Margin="0,0,6,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                             <TextBox x:Name="QtyBox" Text="1" Width="56" Margin="0,0,14,0"
@@ -117,11 +134,38 @@
                                 Click="BtnRemoveFoil_Click" ToolTip="Remove Qty foil copies from the deck"/>
                             <Button x:Name="BtnRemoveEtched" Content="Remove Etched" Padding="10,4" Margin="0,0,6,0"
                                 Click="BtnRemoveEtched_Click" ToolTip="Remove Qty etched copies from the deck"/>
-                            <Button x:Name="BtnRemoveLine" Content="Remove Card" Padding="10,4" Margin="0,0,18,0"
+                            <Button x:Name="BtnRemoveLine" Content="Remove Card" Padding="10,4"
                                 Click="BtnRemoveLine_Click" ToolTip="Take the selected card(s) out of the deck — every copy (Shift+Delete)"/>
+                        </WrapPanel>
 
-                            <Button x:Name="BtnUndo" Content="Undo" Padding="10,4"
-                                Click="BtnUndo_Click" ToolTip="Nothing to undo (Ctrl+Z)"/>
+                        <!-- Deck → Collection: claim copies you own, or add new ones -->
+                        <WrapPanel x:Name="ClaimBar" VerticalAlignment="Center" Visibility="Collapsed">
+                            <Button x:Name="BtnUseOwned" Content="Use Copies I Own" Padding="10,4" Margin="0,0,6,0"
+                                Click="BtnUseOwned_Click"
+                                ToolTip="The selected deck cards: claim free copies you own — same printing and finish, English first, worst condition first (Enter)"/>
+                            <Button x:Name="BtnAddNew" Content="Add as New Copies" Padding="10,4" Margin="0,0,6,0"
+                                Click="BtnAddNew_Click"
+                                ToolTip="The selected deck cards: add what they still need to your collection as new copies (Language · Condition below), claimed for the deck"/>
+                            <Button x:Name="BtnUseRow" Content="Use This Row" Padding="10,4" Margin="0,0,6,0"
+                                Click="BtnUseRow_Click"
+                                ToolTip="The selected collection row: claim its free copies for what the deck still needs of that card"/>
+                            <Button x:Name="BtnFreeCopies" Content="Free Copies" Padding="10,4" Margin="0,0,18,0"
+                                Click="BtnFreeCopies_Click"
+                                ToolTip="The selected deck cards: their claimed copies go back to Available (the cards stay in the deck) (Delete)"/>
+
+                            <TextBlock Text="New copies as" VerticalAlignment="Center" Margin="0,0,6,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <ComboBox x:Name="LanguageBox" Width="150" Margin="0,0,6,0" VerticalAlignment="Center"
+                                  ToolTip="Language of new copies added to your collection"/>
+                            <ComboBox x:Name="ConditionBox" Width="170" Margin="0,0,18,0" VerticalAlignment="Center"
+                                  ToolTip="Condition of new copies added to your collection"/>
+
+                            <Button x:Name="BtnWholeOwned" Content="Whole Deck: Use Copies I Own…" Padding="10,4" Margin="0,0,6,0"
+                                Click="BtnWholeOwned_Click"
+                                ToolTip="Preview, then claim free copies you own for everything the deck still needs"/>
+                            <Button x:Name="BtnWholeNew" Content="Whole Deck: Add as New…" Padding="10,4"
+                                Click="BtnWholeNew_Click"
+                                ToolTip="Preview, then add everything the deck still needs to your collection as new copies (a sealed precon)"/>
                         </WrapPanel>
                         <!-- The card the buttons act on, and how many the deck has of it -->
                         <TextBlock x:Name="ModeText" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
@@ -132,7 +176,7 @@
                     </StackPanel>
                 </Border>
 
-                <!-- ═══ BOTTOM: the deck ═══ -->
+                <!-- ═══ BOTTOM: the deck; Deck → Collection: the collection ═══ -->
                 <Frame x:Name="BottomFrame" NavigationUIVisibility="Hidden"
                    JournalOwnership="OwnsJournal" Focusable="False"/>
             </DockPanel>

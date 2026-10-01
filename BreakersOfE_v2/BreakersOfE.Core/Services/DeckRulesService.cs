@@ -33,8 +33,9 @@ namespace BreakersOfE.Services
         public static List<DeckRuleCheck> Check(Deck deck, DeckFormatRule rule)
         {
             var checks = new List<DeckRuleCheck>();
-            var side = deck.Cards.Where(c => c.Category == DeckCardCategory.Sideboard).ToList();
-            var main = deck.Cards.Where(c => c.Category != DeckCardCategory.Sideboard).ToList();
+            var all = deck.PlayCards;                 // tokens aren't part of the deck
+            var side = all.Where(c => c.Category == DeckCardCategory.Sideboard).ToList();
+            var main = all.Where(c => c.Category != DeckCardCategory.Sideboard).ToList();
             var leaders = main.Where(IsLeaderCard).ToList();
 
             // ── Leader (command zone) ──────────────────────────────────
@@ -59,7 +60,7 @@ namespace BreakersOfE.Services
             {
                 // Singleton formats have no sideboard: count the deck. 60-card
                 // Constructed counts main deck and sideboard together.
-                var counted = rule.SideboardMax == null ? main : deck.Cards;
+                var counted = rule.SideboardMax == null ? main : all;
                 // Seven Dwarves / Nazgûl: "up to seven / nine" of that card.
                 // By card NAME (front face), whatever the set or printing.
                 var over = counted.Where(CopyLimited)
@@ -143,9 +144,10 @@ namespace BreakersOfE.Services
         private static DeckRuleCheck Legality(Deck deck, DeckFormatRule rule, string title)
         {
             string key = rule.LegalityKey ?? "";
-            var main = deck.Cards.Where(c => c.Category != DeckCardCategory.Sideboard).ToList();
+            var all = deck.PlayCards;                 // tokens aren't part of the deck
+            var main = all.Where(c => c.Category != DeckCardCategory.Sideboard).ToList();
             var leaders = main.Where(IsLeaderCard).ToList();
-            var cards = rule.SideboardMax == null ? main : deck.Cards;
+            var cards = rule.SideboardMax == null ? main : all;
             var bad = cards
                 .Select(c => (card: c, status: c.Legality[key].Status))
                 .Where(x => !StatusAllowed(rule, x.card, x.status, leaders))
@@ -208,20 +210,22 @@ namespace BreakersOfE.Services
                                                DeckCardCategory section, int adding)
         {
             var warnings = new List<string>();
-            if (adding <= 0) return warnings;
+            // Tokens are play aids, not part of the deck: no rules apply.
+            if (adding <= 0 || section == DeckCardCategory.Tokens) return warnings;
+            var all = deck.PlayCards;
 
             bool toSide = section == DeckCardCategory.Sideboard;
             bool asLeader = section == DeckCardCategory.Commander;
             // Formats without a sideboard: sideboard cards aren't part of the deck.
             bool counts = !toSide || rule.SideboardMax != null || rule.Type == DeckType.Limited;
-            var main = deck.Cards.Where(c => c.Category != DeckCardCategory.Sideboard).ToList();
+            var main = all.Where(c => c.Category != DeckCardCategory.Sideboard).ToList();
             string name = card.Name;
             string key = DeckIndexService.CardKey(name);
 
             // ── Copies, by name ─────────────────────────────────────────
             if (counts && rule.CopyLimit > 0 && CopyLimited(card))
             {
-                var counted = rule.SideboardMax == null ? main : deck.Cards;
+                var counted = rule.SideboardMax == null ? main : all;
                 var same = counted.Where(c => string.Equals(DeckIndexService.CardKey(c.Name), key,
                                                             StringComparison.OrdinalIgnoreCase)).ToList();
                 int have = Qty(same);
@@ -292,7 +296,7 @@ namespace BreakersOfE.Services
             }
             if (toSide && rule.SideboardMax is int max)
             {
-                int sb = Qty(deck.Cards.Where(c => c.Category == DeckCardCategory.Sideboard));
+                int sb = Qty(all.Where(c => c.Category == DeckCardCategory.Sideboard));
                 if (sb + adding > max)
                     warnings.Add($"The sideboard would have {sb + adding} cards — maximum {max}.");
             }

@@ -4,6 +4,7 @@
       xmlns:ctl="clr-namespace:BreakersOfE.Views.Controls"
       ScrollViewer.VerticalScrollBarVisibility="Disabled"
       Loaded="Page_Loaded"
+      Unloaded="Page_Unloaded"
       PreviewKeyDown="Page_PreviewKeyDown">
 
     <!-- Edit → Pool → Collection: the pool table on top, the matching

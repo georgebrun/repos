@@ -62,6 +62,7 @@ namespace BreakersOfE.Views.Pages
             ["Total"] = "TotalQuantity",
             ["Owned"] = "OwnedTotal",           // Pool + Deck: copies of this printing you own
             ["Free"] = "CollectionFree",
+            ["Claimed"] = "ClaimedCount",        // copies this deck claims from the collection
             ["Missing"] = "CollectionMissing",
             ["Wanted"] = "WantedCount",
             ["Other Decks"] = "OtherDecksCount",   // cards shared between decks
@@ -119,6 +120,7 @@ namespace BreakersOfE.Views.Pages
             var MP = TableKind.MtgoPool; var AP = TableKind.ArenaPool;
             var MC = TableKind.MtgoCollection; var AC = TableKind.ArenaCollection;
             var map = new Dictionary<string, TableKind[]>();
+            map["Decks"] = cs;                        // ▸ "Used in" (decks claiming the copies)
             foreach (var h in new[] { "Used", "Available", "Language", "Storage" })
                 map[h] = cs;
             map["Fav"] = new[] { C, S, MC, AC };
@@ -139,7 +141,7 @@ namespace BreakersOfE.Views.Pages
             map["Offer"] = new[] { W };
             foreach (var h in new[] { "USD", "Foil $", "Etched $" })
                 map[h] = pd;
-            foreach (var h in new[] { "SB", "Non-Foil", "Foil", "Etched", "Total", "Free", "Missing", "Wanted", "Other Decks" })
+            foreach (var h in new[] { "SB", "Non-Foil", "Foil", "Etched", "Total", "Claimed", "Free", "Missing", "Wanted", "Other Decks" })
                 map[h] = d;
             map["Owned"] = new[] { TableKind.Pool, D, MP, AP };
             return map;
@@ -230,6 +232,9 @@ namespace BreakersOfE.Views.Pages
 
             // Filters panel + Sort list (grid and gallery).
             InitFilterPanel();
+
+            // Collection rows: the "Used in" table under a row, and the Used tooltip.
+            InitUsedIn();
         }
 
         private string _currentTag = "";
@@ -311,6 +316,7 @@ namespace BreakersOfE.Views.Pages
             SaveColumnLayoutNow();
             ApplyColumnLayout(tag);
             FilterPanelView.CancelPending();     // a filter still waiting for typing belongs to the old table
+            _usedInOpen.Clear();                 // "Used in" tables open belong to the old rows
 
             _currentTag = tag;
             ResetSearch();
@@ -356,7 +362,11 @@ namespace BreakersOfE.Views.Pages
 
             // Edit page: re-select the row an edit just touched.
             ApplyPendingSelection();
+            ItemsReloaded?.Invoke();
         }
+
+        /// <summary>Edit pages: the rows were (re)loaded and any re-selection is done.</summary>
+        public event Action? ItemsReloaded;
 
         // ── Visual tree helpers ─────────────────────────────────────────
         private static T? FindVisualChild<T>(DependencyObject root)

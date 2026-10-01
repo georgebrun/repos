@@ -187,6 +187,12 @@ namespace BreakersOfE.Views.Pages
         private static bool IsCommander(Models.DeckCard c) =>
             c.IsCommander || c.Category == Models.DeckCardCategory.Commander;
 
+        /// <summary>Deck part order: command zone, main deck, sideboard, tokens.</summary>
+        private static int PartRank(Models.DeckCard c) =>
+            IsCommander(c) ? 0
+            : c.IsTokenLine ? 3
+            : c.Category == Models.DeckCardCategory.Sideboard ? 2 : 1;
+
         public PoolSortComparer(string primaryProp, bool ascending,
             bool editionChronological = true)
         {
@@ -199,11 +205,12 @@ namespace BreakersOfE.Views.Pages
         {
             if (x == null || y == null) return 0;
 
-            // Decks: the commander always stays at the top, whatever the sort
-            // (grid and gallery — the gallery follows the grid's order).
+            // Decks: grouped by part, whatever the sort — the commander on top,
+            // then the main deck, the sideboard, and the tokens last (grid and
+            // gallery — the gallery follows the grid's order).
             if (x is Models.DeckCard dx && y is Models.DeckCard dy)
             {
-                int cx = IsCommander(dx) ? 0 : 1, cy = IsCommander(dy) ? 0 : 1;
+                int cx = PartRank(dx), cy = PartRank(dy);
                 if (cx != cy) return cx.CompareTo(cy);
             }
 

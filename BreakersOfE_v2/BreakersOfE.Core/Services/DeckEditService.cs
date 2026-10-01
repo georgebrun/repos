@@ -46,6 +46,7 @@ namespace BreakersOfE.Services
         {
             DeckCardCategory.Commander => "command zone",
             DeckCardCategory.Sideboard => "sideboard",
+            DeckCardCategory.Tokens => "tokens",
             _ => "main deck",
         };
 
@@ -88,6 +89,7 @@ namespace BreakersOfE.Services
                 CopyExtras(card, line);
                 line.Category = section;
                 line.IsCommander = section == DeckCardCategory.Commander;
+                line.IsToken = section == DeckCardCategory.Tokens;
                 deck.Cards.Add(line);
             }
             line.SetCount(finish, line.CountOf(finish) + qty);

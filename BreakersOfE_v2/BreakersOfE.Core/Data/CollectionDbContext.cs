@@ -371,6 +371,11 @@ namespace BreakersOfE.Data
             // Per-deck entered counts (added later in v1).
             AddColumnIfMissing("DeckUsages", "EnteredNonFoil", "INTEGER NOT NULL DEFAULT 0");
             AddColumnIfMissing("DeckUsages", "EnteredFoil", "INTEGER NOT NULL DEFAULT 0");
+            // v2 claims: etched copies, and the exact collection row claimed.
+            AddColumnIfMissing("DeckUsages", "EnteredEtched", "INTEGER NOT NULL DEFAULT 0");
+            AddColumnIfMissing("DeckUsages", "CollectionTable", "TEXT NOT NULL DEFAULT ''");
+            AddColumnIfMissing("DeckUsages", "Language", "TEXT NOT NULL DEFAULT ''");
+            AddColumnIfMissing("DeckUsages", "Condition", "TEXT NOT NULL DEFAULT ''");
 
             // ── From v1 Phase 2: per-finish columns ─────────────────────────
             // Finish = "nonfoil"/"foil"/"etched" (default nonfoil, so rows are

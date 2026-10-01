@@ -39,6 +39,7 @@ namespace BreakersOfE.Data
             base.OnModelCreating(modelBuilder);
             var e = modelBuilder.Entity<PoolCard>();
             e.ToTable("OnlineCards");
+            e.Ignore(c => c.TokenIds);        // token links: paper pool only (for now)
             e.HasIndex(c => c.ScryfallId).IsUnique();
             e.HasIndex(c => c.Name);
             e.HasIndex(c => c.IsOnMtgo);

@@ -330,7 +330,9 @@ namespace BreakersOfE.Views.Pages
                 {
                     result = new EditResult
                     {
-                        Changed = result.Changed, Warning = true, Touched = result.Touched,
+                        Changed = result.Changed,
+                        Warning = true,
+                        Touched = result.Touched,
                         Message = result.Message + "  (This change can't be undone.)",
                     };
                 }
@@ -970,6 +972,22 @@ namespace BreakersOfE.Views.Pages
             e.Handled = true;
         }
 
+        private Window? _keysWindow;
+
+        private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (!IsLoaded || !IsVisible || e.Handled) return;
+            // Another window in front (a dialog) keeps its own keys.
+            if (sender is Window w && !w.IsActive) return;
+            Page_PreviewKeyDown(sender, e);
+        }
+
+        private void Page_Unloaded(object sender, RoutedEventArgs e)
+        {
+            if (_keysWindow != null) _keysWindow.PreviewKeyDown -= Window_PreviewKeyDown;
+            _keysWindow = null;
+        }
+
         private void Page_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (Keyboard.Modifiers != ModifierKeys.Control) return;
@@ -1066,6 +1084,16 @@ namespace BreakersOfE.Views.Pages
         // virtualization defeated → freeze. Same fix as PoolPage.
         private void Page_Loaded(object sender, RoutedEventArgs e)
         {
+            // Ctrl+Z / Ctrl+Q from anywhere in the window while this page is on
+            // screen: after a change the tables are re-read and the row that had
+            // the keyboard focus is gone, so focus falls back to the window —
+            // outside this page — and the first press never reached it.
+            if (Window.GetWindow(this) is { } win && !ReferenceEquals(win, _keysWindow))
+            {
+                if (_keysWindow != null) _keysWindow.PreviewKeyDown -= Window_PreviewKeyDown;
+                _keysWindow = win;
+                win.PreviewKeyDown += Window_PreviewKeyDown;
+            }
             RestoreSplitters();
             DependencyObject current = this;
             while (current != null)

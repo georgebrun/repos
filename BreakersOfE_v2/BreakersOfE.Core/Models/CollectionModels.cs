@@ -1152,6 +1152,18 @@ namespace BreakersOfE.Models
         /// </summary>
         public int EnteredNonFoil { get; set; } = 0;
         public int EnteredFoil { get; set; } = 0;
+        /// <summary>v2: etched copies claimed (older rows: 0).</summary>
+        public int EnteredEtched { get; set; } = 0;
+
+        // ── v2 claims: the EXACT collection row the copies come from ─────
+        // One usage row = one deck × one collection row (printing + language
+        // + condition, in one collection table), with the claimed copies per
+        // finish above. Older v1 rows have these empty: they count as the
+        // main collection, English, Near Mint.
+        /// <summary>"Collection" (cards) or "CollTokens" (tokens); empty = "Collection".</summary>
+        public string CollectionTable { get; set; } = string.Empty;
+        public string Language { get; set; } = string.Empty;
+        public string Condition { get; set; } = string.Empty;
 
         /// <summary>Mainboard / Commander / Sideboard.</summary>
         public string Category { get; set; } = string.Empty;

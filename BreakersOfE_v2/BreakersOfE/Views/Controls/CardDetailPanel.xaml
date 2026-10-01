@@ -95,6 +95,11 @@
             <TextBlock x:Name="DetailPrices" Style="{StaticResource DetailValue}"
                        FontSize="12"/>
 
+            <!-- Your decks with this card (any printing), from the deck files -->
+            <TextBlock Text="IN DECKS" Style="{StaticResource DetailLabel}"/>
+            <TextBlock x:Name="DetailInDecks" Style="{StaticResource DetailValue}"
+                       FontSize="12" TextWrapping="Wrap"/>
+
         </StackPanel>
     </ScrollViewer>
 </UserControl>

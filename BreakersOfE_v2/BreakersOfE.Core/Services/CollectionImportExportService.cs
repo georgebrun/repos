@@ -852,7 +852,7 @@ namespace BreakersOfE.Services
         {
             using var sw = new StreamWriter(filePath, false, Encoding.UTF8);
             sw.WriteLine("Count,Tradelist Count,Name,Edition,Condition,Language,Foil,Tags,Collector Number,Alter,Proxy,Purchase Price");
-            foreach (var c in deck.Cards.OrderBy(c => c.Name))
+            foreach (var c in deck.PlayCards.OrderBy(c => c.Name))
             {
                 // A deck card is foil if IsFoil is set OR it has foil quantity.
                 int nonFoil = c.IsFoil ? 0 : Math.Max(c.Quantity, 0);
@@ -873,7 +873,7 @@ namespace BreakersOfE.Services
         {
             using var sw = new StreamWriter(filePath, false, Encoding.UTF8);
             sw.WriteLine("Quantity,Name,Set,Card Number,Condition,Printing");
-            foreach (var c in deck.Cards.OrderBy(c => c.Name))
+            foreach (var c in deck.PlayCards.OrderBy(c => c.Name))
             {
                 int nonFoil = c.IsFoil ? 0 : Math.Max(c.Quantity, 0);
                 int foilQty = c.IsFoil
@@ -892,7 +892,7 @@ namespace BreakersOfE.Services
         {
             using var sw = new StreamWriter(filePath, false, Encoding.UTF8);
             sw.WriteLine("Name,Set code,Collector number,Foil,Quantity,Scryfall ID,Condition,Language,Purchase price");
-            foreach (var c in deck.Cards.OrderBy(c => c.Name))
+            foreach (var c in deck.PlayCards.OrderBy(c => c.Name))
             {
                 int nonFoil = c.IsFoil ? 0 : Math.Max(c.Quantity, 0);
                 int foilQty = c.IsFoil
@@ -911,7 +911,7 @@ namespace BreakersOfE.Services
         {
             using var sw = new StreamWriter(filePath, false, Encoding.UTF8);
             sw.WriteLine("Quantity,Name,Finish,Condition,Language,Purchase Price,Tags,Edition Code,Scryfall Id,Collector Number");
-            foreach (var c in deck.Cards.OrderBy(c => c.Name))
+            foreach (var c in deck.PlayCards.OrderBy(c => c.Name))
             {
                 int nonFoil = c.IsFoil ? 0 : Math.Max(c.Quantity, 0);
                 int foilQty = c.IsFoil
@@ -930,7 +930,7 @@ namespace BreakersOfE.Services
         {
             using var sw = new StreamWriter(filePath, false, Encoding.UTF8);
             sw.WriteLine("Count,Tradelist Count,Name,Edition,Card Number,Condition,Language,Foil,Signed,Artist Proof,Altered Art,Misprint,Promo,Textless,My Price");
-            foreach (var c in deck.Cards.OrderBy(c => c.Name))
+            foreach (var c in deck.PlayCards.OrderBy(c => c.Name))
             {
                 int nonFoil = c.IsFoil ? 0 : Math.Max(c.Quantity, 0);
                 int foilQty = c.IsFoil
@@ -949,7 +949,7 @@ namespace BreakersOfE.Services
         {
             using var sw = new StreamWriter(filePath, false, Encoding.UTF8);
             sw.WriteLine("Folder Name,Quantity,Trade Quantity,Card Name,Set Code,Set Name,Collector Number,Printing,Condition,Language");
-            foreach (var c in deck.Cards.OrderBy(c => c.Name))
+            foreach (var c in deck.PlayCards.OrderBy(c => c.Name))
             {
                 int nonFoil = c.IsFoil ? 0 : Math.Max(c.Quantity, 0);
                 int foilQty = c.IsFoil
@@ -977,7 +977,8 @@ namespace BreakersOfE.Services
                 .OrderBy(c => c.Name).ToList();
             var mainboard = deck.Cards
                 .Where(c => !c.IsCommander &&
-                    c.Category != DeckCardCategory.Sideboard)
+                    c.Category != DeckCardCategory.Sideboard &&
+                    c.Category != DeckCardCategory.Tokens)        // tokens aren't part of the deck list
                 .OrderBy(c => c.Name).ToList();
 
             if (commanders.Count > 0)

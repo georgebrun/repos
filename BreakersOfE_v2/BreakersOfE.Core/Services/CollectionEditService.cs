@@ -84,7 +84,7 @@ namespace BreakersOfE.Services
     /// • <see cref="Snapshot"/> / <see cref="Restore"/> give the page its Undo.
     /// Works for the main collection and the six special collections.
     /// </summary>
-    public static class CollectionEditService
+    public static partial class CollectionEditService
     {
         // ── Table pairs ─────────────────────────────────────────────────
         /// <summary>Pool table tag → its collection table tag.</summary>
@@ -665,6 +665,14 @@ namespace BreakersOfE.Services
             return true;
         }
 
+        /// <summary>Would <see cref="Restore"/> apply (the printings are still exactly as the edit left them)?</summary>
+        internal static bool CanRestore(EditSnapshot snap)
+        {
+            using var db = new CollectionDbContext();
+            string keyName = db.Model.FindEntityType(EntryType(snap.CollTag))!.FindPrimaryKey()!.Properties[0].Name;
+            return snap.After != null && SameRows(Capture(snap.CollTag, snap.Sids), snap.After, keyName);
+        }
+
         /// <summary>
         /// Put the printings back exactly as the snapshot had them: rows made
         /// since are deleted, changed or deleted rows get their old values and
@@ -684,6 +692,27 @@ namespace BreakersOfE.Services
                 // them — never overwrite a change made since (an import, a deck).
                 if (snap.After == null || !SameRows(Capture(snap.CollTag, snap.Sids), snap.After, keyName))
                     return Fail($"Can't undo \"{description}\": those cards have changed since.");
+
+                var touched = RestoreInto(db, snap);
+                db.SaveChanges();
+                return new EditResult { Changed = 1, Message = $"Undone: {description}", Touched = touched };
+            }
+            catch (Exception ex)
+            {
+                return Fail($"Could not undo: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Put the snapshot's rows back on <paramref name="db"/> (not saved — the
+        /// caller saves, so it can be part of a bigger change). Returns their keys.
+        /// </summary>
+        internal static List<RowKey> RestoreInto(CollectionDbContext db, EditSnapshot snap)
+        {
+            {
+                var type = EntryType(snap.CollTag);
+                var entityType = db.Model.FindEntityType(type)!;
+                string keyName = entityType.FindPrimaryKey()!.Properties[0].Name;
 
                 var current = snap.Sids.SelectMany(s => Rows(db, snap.CollTag, s)).ToList();
                 var byId = current.ToDictionary(r => r.Id);
@@ -716,12 +745,7 @@ namespace BreakersOfE.Services
                     var row = new Row(entity);
                     touched.Add(KeyOf(row, EtchedOnlyPrinting(snap.CollTag, row.ScryfallId, etchedCache)));
                 }
-                db.SaveChanges();
-                return new EditResult { Changed = 1, Message = $"Undone: {description}", Touched = touched };
-            }
-            catch (Exception ex)
-            {
-                return Fail($"Could not undo: {ex.Message}");
+                return touched;
             }
         }
 
@@ -779,7 +803,11 @@ namespace BreakersOfE.Services
             public string Storage { get => P("StorageLocation")?.GetValue(Entity) as string ?? ""; set => P("StorageLocation")?.SetValue(Entity, value); }
             public bool IsFavorite { get => P("IsFavorite")?.GetValue(Entity) is bool b && b; set => P("IsFavorite")?.SetValue(Entity, value); }
             public int Quantity { get => P("Quantity")?.GetValue(Entity) is int q ? q : 0; set => P("Quantity")?.SetValue(Entity, value); }
-            public int UsedCount => P("UsedCount")?.GetValue(Entity) is int u ? u : 0;
+            public int UsedCount
+            {
+                get => P("UsedCount")?.GetValue(Entity) is int u ? u : 0;
+                set => P("UsedCount")?.SetValue(Entity, value);          // only CollectionEditService.Claims sets it
+            }
             public decimal? Price { get => P("Price")?.GetValue(Entity) as decimal?; set => P("Price")?.SetValue(Entity, value); }
             public DateTime DateAdded { set => P("DateAdded")?.SetValue(Entity, value); }
             public DateTime DateModified { set => P("DateModified")?.SetValue(Entity, value); }
@@ -938,7 +966,7 @@ namespace BreakersOfE.Services
             if (collTag != "Collection") return "in use";
             try
             {
-                var names = db.DeckUsages.Where(u => u.ScryfallId == sid && (u.EnteredNonFoil + u.EnteredFoil) > 0)
+                var names = db.DeckUsages.Where(u => u.ScryfallId == sid && (u.EnteredNonFoil + u.EnteredFoil + u.EnteredEtched) > 0)
                     .Select(u => u.DeckName).Distinct().ToList();
                 return names.Count == 0 ? "used by decks" : "used by " + string.Join(", ", names);
             }

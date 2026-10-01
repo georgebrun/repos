@@ -88,6 +88,19 @@ namespace BreakersOfE.Views.Controls
             DetailPrices.Text = string.Join("\n",
                 new[] { usd, foilP, etchedP, tixP }.Where(s => !string.IsNullOrEmpty(s)));
 
+            // Your decks with this card, any printing (the deck files, cached).
+            try
+            {
+                var uses = Services.DeckIndexService.DecksUsing(Get("Name"));
+                DetailInDecks.Text = uses.Count == 0
+                    ? "Not in any of your decks"
+                    : string.Join("\n", uses.Select(u => u.Text));
+            }
+            catch
+            {
+                DetailInDecks.Text = "";
+            }
+
             // Mana cost symbols
             DetailManaCost.Items.Clear();
             string manaCost = Get("ManaCost");
@@ -205,6 +218,7 @@ namespace BreakersOfE.Views.Controls
             DetailArtist.Text = "";
             DetailFinishes.Text = "";
             DetailPrices.Text = "";
+            DetailInDecks.Text = "";
             DetailManaCost.Items.Clear();
             BtnShowBackFace.Visibility = Visibility.Collapsed;
         }

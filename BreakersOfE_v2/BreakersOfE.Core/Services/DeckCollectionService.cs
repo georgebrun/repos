@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using BreakersOfE.Data;
@@ -28,6 +28,7 @@ namespace BreakersOfE.Services
                 c.CollectionFree = 0;
                 c.CollectionMissing = c.TotalQuantity;
                 c.WantedCount = 0;
+                c.ClaimedCount = 0;
             }
             if (deck.Cards.Count == 0) return;
 
@@ -52,11 +53,20 @@ namespace BreakersOfE.Services
                 ownedById = owned.GroupBy(e => e.ScryfallId, StringComparer.OrdinalIgnoreCase)
                                  .ToDictionary(g => g.Key, g => g.Sum(e => e.Quantity), StringComparer.OrdinalIgnoreCase);
 
+                // The deck's tokens: owned from the token collection (same printing rule).
+                var tokenIds = deck.Cards.Where(c => c.IsTokenLine && !string.IsNullOrEmpty(c.ScryfallId))
+                    .Select(c => c.ScryfallId).Distinct().ToList();
+                if (tokenIds.Count > 0)
+                    foreach (var t in db.TokenCollectionEntries
+                                 .Where(e => e.Quantity > 0 && tokenIds.Contains(e.ScryfallId))
+                                 .Select(e => new { e.ScryfallId, e.Quantity }).ToList())
+                        ownedById[t.ScryfallId] = ownedById.GetValueOrDefault(t.ScryfallId) + t.Quantity;
+
                 var ids = ownedById.Keys.ToList();
                 string thisDeck = deck.DeckId ?? string.Empty;
                 usedElsewhereById = db.DeckUsages
                     .Where(u => ids.Contains(u.ScryfallId) && u.DeckId != thisDeck)
-                    .Select(u => new { u.ScryfallId, Used = u.EnteredNonFoil + u.EnteredFoil })
+                    .Select(u => new { u.ScryfallId, Used = u.EnteredNonFoil + u.EnteredFoil + u.EnteredEtched })
                     .ToList()
                     .GroupBy(u => u.ScryfallId, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(g => g.Key, g => g.Sum(u => u.Used), StringComparer.OrdinalIgnoreCase);
@@ -74,6 +84,33 @@ namespace BreakersOfE.Services
                 // No collection (or unreadable): everything counts as missing.
                 System.Diagnostics.Debug.WriteLine($"Deck vs collection: {ex.Message}");
                 return;
+            }
+
+            // Copies claimed from the collection for THIS deck (Edit → Decks), per printing.
+            Dictionary<string, int> claimedHere;
+            try
+            {
+                using var cdb = new CollectionDbContext();
+                string id = deck.DeckId ?? string.Empty;
+                claimedHere = id.Length == 0 ? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                    : cdb.DeckUsages.Where(u => u.DeckId == id)
+                         .Select(u => new { u.ScryfallId, N = u.EnteredNonFoil + u.EnteredFoil + u.EnteredEtched })
+                         .ToList()
+                         .GroupBy(u => u.ScryfallId, StringComparer.OrdinalIgnoreCase)
+                         .ToDictionary(g => g.Key, g => g.Sum(u => u.N), StringComparer.OrdinalIgnoreCase);
+            }
+            catch { claimedHere = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase); }
+
+            // Shared out over the lines of that printing (command zone, main, sideboard, tokens).
+            foreach (var group in deck.Cards.GroupBy(c => c.ScryfallId ?? "", StringComparer.OrdinalIgnoreCase))
+            {
+                int left = claimedHere.GetValueOrDefault(group.Key);
+                foreach (var line in group.OrderBy(c => c.Category))
+                {
+                    int take = Math.Min(line.TotalQuantity, left);
+                    line.ClaimedCount = take;
+                    left -= take;
+                }
             }
 
             int FreeOf(string sid) =>
