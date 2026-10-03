@@ -195,9 +195,6 @@ namespace BreakersOfE.Views.Pages
             return null;
         }
 
-        /// <summary>How many rows are loaded (all, not just the filtered ones).</summary>
-        public int LoadedCount => _vm.AllRows.Count;
-
         /// <summary>Every loaded row (not just the filtered ones) that matches.</summary>
         public List<object> FindAllLoaded(Func<object, bool> match)
         {
@@ -267,9 +264,6 @@ namespace BreakersOfE.Views.Pages
                 _embeddedGallery = Services.GridLayoutService.GetEditGallery(LayoutKey(DeckTableTag)) ?? d;
             SetViewMode(SwitchMode);
         }
-
-        /// <summary>Put keyboard focus on the grid.</summary>
-        public void FocusGrid() => PoolGrid.Focus();
 
         // ── Reload after an edit, then re-select the edited rows ───────
         private Func<object, bool>? _pendingSelect;

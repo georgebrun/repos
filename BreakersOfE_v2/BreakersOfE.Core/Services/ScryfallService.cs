@@ -80,11 +80,6 @@ namespace BreakersOfE.Services
         public bool ColorCountMatchesTotal { get; set; }
         public bool RarityCountMatchesTotal { get; set; }
 
-        public int TotalImported =>
-            PoolCardsImported + TokenCardsImported +
-            PlanarCardsImported + SchemeCardsImported +
-            VanguardCardsImported + ArtSeriesCardsImported +
-            ConspiracyCardsImported;
     }
 
     // ════════════════════════════════════════════════════════════════════════

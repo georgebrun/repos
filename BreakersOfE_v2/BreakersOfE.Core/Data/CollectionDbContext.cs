@@ -348,6 +348,9 @@ namespace BreakersOfE.Data
                 AddColumnIfMissing("TradeBinderEntries", col, def);
                 AddColumnIfMissing("WantListEntries", col, def);
             }
+            // v2 Trade Binder: binder copies come from one exact collection row
+            // (finish × language × condition). '' = English (v1 binders had no language).
+            AddColumnIfMissing("TradeBinderEntries", "Language", "TEXT NOT NULL DEFAULT ''");
 
             // ── From v1 Phase 1: DeckUsage — which decks use each card ──────
             // Usage lives ONLY in the collection DB, never on deck files.

@@ -153,7 +153,10 @@ namespace BreakersOfE.ViewModels
                             using (var cdb = new CollectionDbContext())
                                 rows = cdb.TradeBinderEntries.AsNoTracking()
                                           .OrderBy(c => c.Name).ThenBy(c => c.SetCode)
-                                          .ToList().Cast<object>().ToList();
+                                          .ToList()
+                                          // v1 binder rows have no language: English
+                                          .Select(c => { c.Language = Models.CardLanguage.Normalize(c.Language); return c; })
+                                          .Cast<object>().ToList();
                             label = "trade binder rows"; break;
                         case "WantList":
                             using (var cdb = new CollectionDbContext())
@@ -220,7 +223,7 @@ namespace BreakersOfE.ViewModels
                         IsEmpty = true;
                         EmptyMessage = IsOnlineCollectionTag(tag)
                             ? "Nothing here yet.\n\nAdd cards with Edit → Online → Collection." :
-                            tag.StartsWith("Coll") || tag is "TradeBinder" or "WantList"
+                            tag.StartsWith("Coll") || tag is Services.CollectionEditService.BinderTable or Services.CollectionEditService.WantTable
                             ? "Nothing here yet." :
                             "No cards in this pool yet.\n\n" +
                             "Use \"Update Database\" (bottom-left) to download " +
@@ -253,7 +256,7 @@ namespace BreakersOfE.ViewModels
 
         /// <summary>Card Pool pages (not the collection tables).</summary>
         private static bool IsPoolTag(string tag) =>
-            !(tag == "Collection" || tag.StartsWith("Coll") || tag is "TradeBinder" or "WantList"
+            !(tag.StartsWith("Coll") || tag is Services.CollectionEditService.BinderTable or Services.CollectionEditService.WantTable
               || IsOnlineCollectionTag(tag));
 
         /// <summary>The MTGO or Arena collection table.</summary>

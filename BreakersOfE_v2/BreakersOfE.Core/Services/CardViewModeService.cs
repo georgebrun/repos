@@ -6,7 +6,7 @@ namespace BreakersOfE.Services
 
     /// <summary>
     /// The Grid / Gallery switch above the left navigation. App-wide: every
-    /// page that can show cards both ways (pool now, collection later) reads
+    /// page that can show cards both ways (pools, collections, decks) reads
     /// <see cref="Mode"/> when it opens and listens for <see cref="ModeChanged"/>.
     /// </summary>
     public static class CardViewModeService

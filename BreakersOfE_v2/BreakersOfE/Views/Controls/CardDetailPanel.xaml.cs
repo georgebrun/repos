@@ -10,7 +10,7 @@ namespace BreakersOfE.Views.Controls
 {
     /// <summary>
     /// The left-side card detail panel, shared by every page that shows cards
-    /// (grid, gallery, and later the collection pages). The host page calls
+    /// (the View tables, grid and gallery, and the Edit pages). The host page calls
     /// <see cref="ShowCard"/> when its selection changes; the panel raises
     /// <see cref="ImageDoubleClicked"/> so the host can open the detail window.
     /// Works for any card type (PoolCard, TokenCard, …) via reflection.

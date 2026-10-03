@@ -177,7 +177,6 @@ namespace BreakersOfE.Models
         public int FoilQuantity { get; set; } = 0;
         /// <summary>Etched copies (0 in deck files written before v2 deck editing).</summary>
         public int EtchedQuantity { get; set; } = 0;
-        public string FoilBadge => FoilQuantity > 0 ? "★" : string.Empty;
         public DeckCardCategory Category { get; set; } =
             DeckCardCategory.Mainboard;
         public bool IsCommander { get; set; } = false;
@@ -214,16 +213,6 @@ namespace BreakersOfE.Models
             "mythic" => "M",
             "special" => "S",
             _ => "?"
-        };
-
-        [JsonIgnore]
-        public string CategoryDisplay => Category switch
-        {
-            DeckCardCategory.Commander => "Commander",
-            DeckCardCategory.Mainboard => "Mainboard",
-            DeckCardCategory.Sideboard => "Sideboard",
-            DeckCardCategory.Tokens => "Tokens",
-            _ => "Mainboard"
         };
 
         [JsonIgnore]
@@ -285,24 +274,6 @@ namespace BreakersOfE.Models
         }
 
         [JsonIgnore]
-        public string ValueDisplay =>
-            PriceUsd.HasValue
-                ? $"${PriceUsd.Value * Quantity:F2}"
-                : "—";
-
-        [JsonIgnore]
-        public string FoilValueDisplay =>
-            FoilCopyPrice.HasValue
-                ? $"${FoilCopyPrice.Value * FoilQuantity:F2}"
-                : "—";
-
-        [JsonIgnore]
-        public decimal ValueSort => PriceUsd.HasValue ? PriceUsd.Value * Quantity : 0m;
-
-        [JsonIgnore]
-        public decimal FoilValueSort => PriceUsdFoil.HasValue ? PriceUsdFoil.Value * FoilQuantity : 0m;
-
-        [JsonIgnore]
         public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
 
         // ── Color display ─────────────────────────────────────────────────────
@@ -350,21 +321,6 @@ namespace BreakersOfE.Models
         public bool IsBattle =>
             TypeLine.Contains("Battle",
                 StringComparison.OrdinalIgnoreCase);
-
-        [JsonIgnore]
-        public bool IsInstant =>
-            TypeLine.Contains("Instant",
-                StringComparison.OrdinalIgnoreCase);
-
-        [JsonIgnore]
-        public bool IsSorcery =>
-            TypeLine.Contains("Sorcery",
-                StringComparison.OrdinalIgnoreCase);
-
-        [JsonIgnore]
-        public bool IsPermanent =>
-            IsCreature || IsArtifact || IsEnchantment
-            || IsPlaneswalker || IsLand || IsBattle;
 
         [JsonIgnore]
         public bool IsBasicLand =>
@@ -432,21 +388,9 @@ namespace BreakersOfE.Models
         public List<DeckCard> Cards { get; set; } = new();
 
         // ── Computed properties ───────────────────────────────────────────────
-        [JsonIgnore]
-        public string FileType => "Breakers of E Deck";
-
-        [JsonIgnore]
-        public string FileName =>
-            string.IsNullOrEmpty(FilePath)
-                ? "(not saved)"
-                : FilePath;
 
         [JsonIgnore]
         public bool IsModified { get; set; } = false;
-
-        [JsonIgnore]
-        public string TabTitle =>
-            IsModified ? $"{Name} *" : Name;
 
         // ── Card groupings ────────────────────────────────────────────────────
         [JsonIgnore]
@@ -474,9 +418,6 @@ namespace BreakersOfE.Models
         public int SideboardCount =>
             SideboardCards.Sum(c => c.TotalQuantity);
 
-        [JsonIgnore]
-        public int TotalCount => MainboardCount + SideboardCount;
-
         /// <summary>Deck lines that are part of the deck (not the Tokens part).</summary>
         [JsonIgnore]
         public List<DeckCard> PlayCards => Cards.Where(c => !c.IsTokenLine).ToList();
@@ -492,20 +433,6 @@ namespace BreakersOfE.Models
             PlayCards.Where(c => c.IsCreature &&
                 c.Category != DeckCardCategory.Sideboard)
                 .Sum(c => c.TotalQuantity);
-
-        [JsonIgnore]
-        public int SpellCount =>
-            MainboardCount - LandCount - CreatureCount;
-
-        [JsonIgnore]
-        public int FoilCount =>
-            PlayCards.Where(c => c.Category != DeckCardCategory.Sideboard)
-                .Sum(c => c.FoilQuantity + c.EtchedQuantity);
-
-        [JsonIgnore]
-        public int NonFoilCount =>
-            PlayCards.Where(c => c.Category != DeckCardCategory.Sideboard)
-                .Sum(c => c.Quantity);
 
         // ── Color identity ────────────────────────────────────────────────────
         [JsonIgnore]
@@ -529,134 +456,8 @@ namespace BreakersOfE.Models
             }
         }
 
-        // ── Average CMC ───────────────────────────────────────────────────────
-        [JsonIgnore]
-        public double AverageCmc
-        {
-            get
-            {
-                var nonLands = PlayCards
-                    .Where(c => !c.IsLand &&
-                        c.Category != DeckCardCategory.Sideboard)
-                    .ToList();
-                if (nonLands.Count == 0) return 0;
-
-                double total = nonLands.Sum(c => c.ManaValue * c.TotalQuantity);
-                int count = nonLands.Sum(c => c.TotalQuantity);
-                return count > 0
-                    ? Math.Round(total / count, 2) : 0;
-            }
-        }
-
-        // ── Calculated power level (1-10) ─────────────────────────────────────
-        [JsonIgnore]
-        public int CalculatedPowerLevel
-        {
-            get
-            {
-                var cards = PlayCards;
-                if (cards.Count == 0) return 1;
-
-                double score = 5.0; // start at middle
-
-                // Average CMC — lower = more powerful
-                if (AverageCmc <= 1.5) score += 2;
-                else if (AverageCmc <= 2.5) score += 1;
-                else if (AverageCmc >= 4.0) score -= 1;
-                else if (AverageCmc >= 5.0) score -= 2;
-
-                // Average card price
-                var priced = cards
-                    .Where(c => c.PriceUsd.HasValue).ToList();
-                if (priced.Count > 0)
-                {
-                    double avgPrice = (double)priced
-                        .Average(c => c.PriceUsd!.Value);
-                    if (avgPrice >= 20) score += 2;
-                    else if (avgPrice >= 10) score += 1;
-                    else if (avgPrice <= 1) score -= 1;
-                }
-
-                // Expensive cards ratio
-                int expensiveCount = cards
-                    .Count(c => c.PriceUsd >= 10);
-                double ratio = cards.Count > 0
-                    ? (double)expensiveCount / cards.Count : 0;
-                if (ratio >= 0.3) score += 1;
-
-                return Math.Max(1, Math.Min(10, (int)Math.Round(score)));
-            }
-        }
-
-        [JsonIgnore]
-        public int DisplayPowerLevel =>
-            UserPowerLevel.HasValue && !UseCalculatedPower
-                ? UserPowerLevel.Value
-                : CalculatedPowerLevel;
-
         // ── Collection value ──────────────────────────────────────────────────
         [JsonIgnore]
         public decimal TotalValue => Cards.Sum(c => c.RowValue);
-
-        [JsonIgnore]
-        public string TotalValueDisplay =>
-            $"${TotalValue:F2}";
-
-        // ── Aggression (0-100, higher = more aggressive) ──────────────────────
-        [JsonIgnore]
-        public int AggressionScore
-        {
-            get
-            {
-                // Based on average CMC of non-land cards
-                // Lower CMC = higher aggression
-                double cmc = AverageCmc;
-                if (cmc <= 1.5) return 90;
-                if (cmc <= 2.0) return 75;
-                if (cmc <= 2.5) return 60;
-                if (cmc <= 3.0) return 50;
-                if (cmc <= 3.5) return 40;
-                if (cmc <= 4.0) return 30;
-                if (cmc <= 4.5) return 20;
-                return 10;
-            }
-        }
-
-        [JsonIgnore]
-        public string AggressionLabel =>
-            AggressionScore switch
-            {
-                >= 85 => "Very Aggressive",
-                >= 65 => "Aggressive",
-                >= 45 => "Balanced",
-                >= 25 => "Defensive",
-                _ => "Very Defensive"
-            };
-    }
-
-    // ── Validation result ─────────────────────────────────────────────────────
-    public class DeckValidationResult
-    {
-        public bool IsValid { get; set; } = true;
-        public List<string> Errors { get; set; } = new();
-        public List<string> Warnings { get; set; } = new();
-
-        public void AddError(string msg)
-        {
-            Errors.Add(msg);
-            IsValid = false;
-        }
-
-        public void AddWarning(string msg) =>
-            Warnings.Add(msg);
-    }
-
-    // ── Mana curve suggestion ─────────────────────────────────────────────────
-    public class ManaCurveSuggestion
-    {
-        public string Icon { get; set; } = "💡";
-        public string Message { get; set; } = string.Empty;
-        public bool IsGood { get; set; } = false;
-        public bool IsWarn { get; set; } = false;
     }
 }

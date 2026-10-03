@@ -46,9 +46,13 @@ namespace BreakersOfE.Services
     public sealed class ClaimSnapshot
     {
         internal string DeckId = "";
+        /// <summary>Only these printings' claims (the Trade Binder: just the cards an edit touched); null = all.</summary>
+        internal HashSet<string>? Sids;
         internal List<DeckUsage> Claims = new();
         internal List<DeckUsage>? ClaimsAfter;
         internal List<EditSnapshot> Rows = new();
+        /// <summary>The printings (Scryfall ids) whose collection rows it covers.</summary>
+        public IReadOnlyCollection<string> Printings => Rows.SelectMany(r => r.Printings).Distinct().ToList();
     }
 
     /// <summary>
@@ -627,6 +631,12 @@ namespace BreakersOfE.Services
                 {
                     int copies = g.Sum(u => ClaimOf(u, key.Finish, eo));
                     if (copies <= 0) continue;
+                    if (g.Key == TradeBinderId)
+                    {
+                        // Not a deck: no file to open.
+                        list.Add(new RowUse { DeckId = g.Key, DeckName = TradeBinderName, Part = "For trade", Copies = copies });
+                        continue;
+                    }
                     string name = g.First().DeckName, type = g.First().DeckType, part = "", path = "";
                     if (decks.TryGetValue(g.Key, out var d))
                     {
@@ -657,8 +667,11 @@ namespace BreakersOfE.Services
         // ══════════════════════════════════════════════════════════════════
         // UNDO (claims + the collection rows they touch)
         // ══════════════════════════════════════════════════════════════════
-        private static List<DeckUsage> ClaimsOf(CollectionDbContext db, string deckId) =>
-            db.DeckUsages.AsNoTracking().Where(u => u.DeckId == deckId).ToList();
+        private static List<DeckUsage> ClaimsOf(CollectionDbContext db, string deckId, HashSet<string>? sids = null)
+        {
+            var all = db.DeckUsages.AsNoTracking().Where(u => u.DeckId == deckId).ToList();
+            return sids == null ? all : all.Where(u => sids.Contains(u.ScryfallId)).ToList();
+        }
 
         /// <summary>
         /// The deck's claims and the rows of every printing they (or
@@ -691,7 +704,7 @@ namespace BreakersOfE.Services
             try
             {
                 using var db = new CollectionDbContext();
-                snap.ClaimsAfter = ClaimsOf(db, snap.DeckId);
+                snap.ClaimsAfter = ClaimsOf(db, snap.DeckId, snap.Sids);
             }
             catch { snap.ClaimsAfter = null; }
         }
@@ -716,18 +729,25 @@ namespace BreakersOfE.Services
         /// all or nothing. Refused when any of them changed since the edit.
         /// Claims come back with their own ids, so older Undo steps still match.
         /// </summary>
-        public static EditResult RestoreClaims(ClaimSnapshot snap, string description)
+        public static EditResult RestoreClaims(ClaimSnapshot snap, string description,
+                                               IReadOnlyList<EditSnapshot>? extra = null)
         {
+            extra ??= Array.Empty<EditSnapshot>();
             try
             {
                 // Check everything first, so nothing is half put back.
                 using (var check = new CollectionDbContext())
                 {
-                    if (snap.ClaimsAfter == null || !SameClaims(ClaimsOf(check, snap.DeckId), snap.ClaimsAfter))
-                        return Fail($"Can't undo \"{description}\": the deck's collection copies changed since.");
+                    if (snap.ClaimsAfter == null || !SameClaims(ClaimsOf(check, snap.DeckId, snap.Sids), snap.ClaimsAfter))
+                        return Fail(snap.DeckId == TradeBinderId
+                            ? $"Can't undo \"{description}\": the Trade Binder's copies of those cards changed since."
+                            : $"Can't undo \"{description}\": the deck's collection copies changed since.");
                 }
                 if (snap.Rows.Any(r => !CanRestore(r)))
                     return Fail($"Can't undo \"{description}\": those cards have changed in the collection since.");
+                // Other tables in the same step (the Want List): checked too, restored in the same save.
+                if (extra.Any(r => !CanRestore(r)))
+                    return Fail($"Can't undo \"{description}\": those cards have changed on the Want List since.");
 
                 EnsureBackup();
                 using var db = new CollectionDbContext();
@@ -736,8 +756,10 @@ namespace BreakersOfE.Services
                 // context's save runs a WAL checkpoint, which can't run inside
                 // one and made SQLite retry for 30 seconds per save (a freeze).
                 foreach (var rows in snap.Rows) RestoreInto(db, rows);
+                foreach (var rows in extra) RestoreInto(db, rows);
                 // The deck's claims as they were: same ids, same values; newer ones removed.
-                var current = db.DeckUsages.Where(u => u.DeckId == snap.DeckId).ToList();
+                var current = db.DeckUsages.Where(u => u.DeckId == snap.DeckId).ToList()
+                    .Where(u => snap.Sids == null || snap.Sids.Contains(u.ScryfallId)).ToList();
                 var byId = current.ToDictionary(u => u.DeckUsageId);
                 var keep = new HashSet<int>(snap.Claims.Select(u => u.DeckUsageId));
                 foreach (var u in current.Where(u => !keep.Contains(u.DeckUsageId)))

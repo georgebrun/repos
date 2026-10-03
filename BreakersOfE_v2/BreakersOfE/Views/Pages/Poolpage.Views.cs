@@ -92,11 +92,11 @@ namespace BreakersOfE.Views.Pages
             BtnEditionOrder.Visibility = mode == PoolViewMode.Grid ? Visibility.Visible : Visibility.Collapsed;
             BtnColumns.Visibility = mode == PoolViewMode.Grid ? Visibility.Visible : Visibility.Collapsed;
             BtnSetCompletion.Visibility = mode == PoolViewMode.Sets ? Visibility.Visible : Visibility.Collapsed;
-            BtnStatistics.Visibility = cardView && (_currentTag == "Collection" || _currentTag == DeckTableTag)
+            BtnStatistics.Visibility = cardView && (_currentTag == Services.CollectionEditService.CardsTable || _currentTag == DeckTableTag)
                 ? Visibility.Visible : Visibility.Collapsed;
             DeckRulesPanel.Visibility = cardView && _currentTag == DeckTableTag && _openDeck != null
                 ? Visibility.Visible : Visibility.Collapsed;
-            BtnLegality.Visibility = mode == PoolViewMode.Grid && _currentTag == "Collection"
+            BtnLegality.Visibility = mode == PoolViewMode.Grid && _currentTag == Services.CollectionEditService.CardsTable
                 ? Visibility.Visible : Visibility.Collapsed;
             bool showTotals = mode == PoolViewMode.Grid &&
                               (IsCollectionKind(KindOf(_currentTag)) || _currentTag == DeckTableTag);

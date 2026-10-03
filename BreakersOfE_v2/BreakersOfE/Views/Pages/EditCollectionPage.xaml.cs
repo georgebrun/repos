@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using BreakersOfE.Models;
 using BreakersOfE.Services;
+using static BreakersOfE.Views.Pages.EditPageKit;
 using BreakersOfE.Views.Dialogs;
 
 namespace BreakersOfE.Views.Pages
@@ -58,6 +59,7 @@ namespace BreakersOfE.Views.Pages
         public EditCollectionPage()
         {
             InitializeComponent();
+            new WindowKeyHook(this, Page_PreviewKeyDown);   // Ctrl+Z / Ctrl+Q from anywhere in the window
 
             // Pool on top starts as card pictures (+ / − on each), the collection
             // below as a grid; each has its own Grid / Gallery button, remembered.
@@ -225,12 +227,16 @@ namespace BreakersOfE.Views.Pages
 
             // Several rows: every button is on (rows that can't take the
             // action are skipped and reported).
-            BtnAddNonFoil.IsEnabled = many || nf;
-            BtnAddFoil.IsEnabled = many || f;
-            BtnAddEtched.IsEnabled = many || e;
-            BtnRemoveNonFoil.IsEnabled = many || _counts.NonFoil > 0;
-            BtnRemoveFoil.IsEnabled = many || _counts.Foil > 0;
-            BtnRemoveEtched.IsEnabled = many || _counts.Etched > 0;
+            // One collection row: only its own finish (a row is one finish).
+            // Several rows: each adds / removes its own finish (the confirm lists them).
+            string? rowFin = !many && _current != null && IsCollectionRow(_current) ? FinishOf(_current) : null;
+            bool Own(string fin) => rowFin == null || rowFin == fin;
+            BtnAddNonFoil.IsEnabled = many ? SomeSelectedComesIn(CardFinish.NonFoil) : nf && Own(CardFinish.NonFoil);
+            BtnAddFoil.IsEnabled = many ? SomeSelectedComesIn(CardFinish.Foil) : f && Own(CardFinish.Foil);
+            BtnAddEtched.IsEnabled = many ? SomeSelectedComesIn(CardFinish.Etched) : e && Own(CardFinish.Etched);
+            BtnRemoveNonFoil.IsEnabled = many || (_counts.NonFoil > 0 && Own(CardFinish.NonFoil));
+            BtnRemoveFoil.IsEnabled = many || (_counts.Foil > 0 && Own(CardFinish.Foil));
+            BtnRemoveEtched.IsEnabled = many || (_counts.Etched > 0 && Own(CardFinish.Etched));
             BtnRemoveAll.IsEnabled = many || _counts.Total > 0;
 
             if (_current == null)
@@ -242,6 +248,25 @@ namespace BreakersOfE.Views.Pages
             else
                 ModeText.Text = $"{CardText(_current)}  ·  you own {OwnedText()}" +
                                 (IsOnline ? "" : $"  ·  adds go in as {AddsAs()}");
+        }
+
+        /// <summary>
+        /// Several rows selected: can an Add button of this finish do anything?
+        /// Collection rows add their own finish (always fine); pool cards only
+        /// if the printing comes in that finish.
+        /// </summary>
+        private bool SomeSelectedComesIn(string finish)
+        {
+            var rows = _active?.SelectedCards ?? new List<object>();
+            if (rows.Count > MaxRows) return true;            // refused later with a message
+            return rows.Any(r => IsCollectionRow(r) || ComesIn(r, finish));
+        }
+
+        /// <summary>Does this pool printing come in this finish (this table's game)?</summary>
+        private bool ComesIn(object pool, string finish)
+        {
+            var (nf, f, e) = CollectionEditService.FinishesOf(CollTag, pool);
+            return CollectionEditService.FinishExists(finish, nf, f, e);
         }
 
         /// <summary>"English · Near Mint" — or the selected collection row's own.</summary>
@@ -273,16 +298,7 @@ namespace BreakersOfE.Views.Pages
         // ══════════════════════════════════════════════════════════════════
         // ACTIONS — every gesture ends up here
         // ══════════════════════════════════════════════════════════════════
-        private int Qty
-        {
-            get
-            {
-                int q = int.TryParse(QtyBox.Text, out var n) ? n : 1;
-                q = Math.Clamp(q, 1, 999);
-                QtyBox.Text = q.ToString();
-                return q;
-            }
-        }
+        private int Qty => EditPageKit.ReadQty(QtyBox);
 
         /// <summary>At most this many rows per action (Ctrl+A on the pool would be 100,000).</summary>
         private const int MaxRows = 1000;
@@ -302,12 +318,7 @@ namespace BreakersOfE.Views.Pages
             return fits ? new List<object> { _current } : new List<object>();
         }
 
-        private bool TooMany(List<object> rows)
-        {
-            if (rows.Count <= MaxRows) return false;
-            ShowStatus($"{rows.Count:N0} rows are selected — select {MaxRows:N0} or fewer for one change.", true);
-            return true;
-        }
+        private bool TooMany(List<object> rows) => EditPageKit.TooMany(rows.Count, MaxRows, ShowStatus);
 
         /// <summary>
         /// Snapshot (for Undo) → do the work → one status line → refresh.
@@ -340,29 +351,7 @@ namespace BreakersOfE.Views.Pages
             AfterEdit(result, printings);
         }
 
-        private static EditResult Combine(string what, List<EditResult> results)
-        {
-            if (results.Count == 1) return results[0];
-            int done = results.Count(r => r.Changed > 0);
-            var problems = results.Where(r => r.Warning).ToList();       // refused or partly done
-            int unchanged = results.Count(r => r.Changed <= 0 && !r.Warning);  // nothing to do
-            string msg = $"{what}: {done} of {results.Count} rows changed";
-            if (unchanged > 0) msg += $", {unchanged} already that way";
-            msg += problems.Count > 0
-                ? $"; {problems.Count} skipped or partly done — e.g. {problems[0].Message}"
-                : ".";
-            return new EditResult
-            {
-                Changed = results.Sum(r => r.Changed),
-                Message = msg,
-                Warning = problems.Count > 0,
-                Touched = results.SelectMany(r => r.Touched).ToList(),
-            };
-        }
-
-        private bool Confirm(string text, string title) =>
-            System.Windows.MessageBox.Show(Window.GetWindow(this), text, title,
-                MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK;
+        private bool Confirm(string text, string title) => EditPageKit.Confirm(this, text, title);
 
         // ── Add ─────────────────────────────────────────────────────────
         /// <summary>
@@ -382,19 +371,40 @@ namespace BreakersOfE.Views.Pages
             // the same collection row (same printing, finish, language,
             // condition) add once, not twice.
             var plan = new List<(RowKey Key, object? Pool, string Name)>();
+            var cannot = new List<string>();                // pool cards that don't come in the finish
             foreach (var row in rows)
             {
                 bool fromCollection = IsCollectionRow(row);
                 var pool = fromCollection ? CollectionEditService.FindPoolCard(CollTag, Str(row, "ScryfallId")) : row;
-                string fin = finish ?? (fromCollection ? FinishOf(row) : DefaultFinish(pool));
+                // A collection row adds its own finish; a pool card the button's (or its default).
+                string fin = fromCollection ? FinishOf(row) : finish ?? DefaultFinish(pool);
+                if (!fromCollection && !ComesIn(row, fin))
+                {
+                    cannot.Add(CardText(row));
+                    continue;
+                }
                 var key = RowKey.Of(Str(row, "ScryfallId"), fin,
                                     fromCollection ? Str(row, "Language") : AddLanguage,
                                     fromCollection ? Str(row, "Condition") : AddCondition);
                 if (!plan.Any(p => p.Key == key)) plan.Add((key, pool, Str(row, "Name")));
             }
 
-            if (plan.Count > 1 &&
-                !Confirm($"Add {qty} {finishText}{(qty == 1 ? "copy" : "copies")} to each of {plan.Count} rows?",
+            string skipped = cannot.Count == 0 ? ""
+                : $"{cannot.Count} of the selected cards {(cannot.Count == 1 ? "doesn't" : "don't")} come in " +
+                  $"{(finish == null ? "any finish" : CardFinish.Display(finish))} and {(cannot.Count == 1 ? "is" : "are")} skipped: " +
+                  string.Join(", ", cannot.Take(5)) + (cannot.Count > 5 ? $" and {cannot.Count - 5} more" : "") + ".";
+            if (plan.Count == 0)
+            {
+                ShowStatus(skipped.Length > 0 ? skipped : "Nothing to add.", true);
+                return;
+            }
+            bool ownFinish = rows.Any(IsCollectionRow);
+            if (ownFinish) finishText = "";
+            if ((plan.Count > 1 || cannot.Count > 0) &&
+                !Confirm((ownFinish
+                            ? OwnFinishQuestion("Add", qty, plan.Select(p => p.Key.Finish).ToList(), "to")
+                            : $"Add {qty} {finishText}{(qty == 1 ? "copy" : "copies")} to each of {plan.Count} {(plan.Count == 1 ? "card" : "cards")}?") +
+                         (skipped.Length > 0 ? "\n\n" + skipped : ""),
                          "Add to several rows"))
                 return;
 
@@ -403,6 +413,7 @@ namespace BreakersOfE.Views.Pages
                     ? new EditResult { Message = $"{p.Name}: not in the card pool.", Warning = true }
                     : CollectionEditService.Add(CollTag, p.Pool, p.Key.Finish, qty, p.Key.Language, p.Key.Condition))
                 .ToList());
+            if (skipped.Length > 0) ShowStatus(ActionText.Text + "  " + skipped, true);
         }
 
         /// <summary>Default finish for Enter: non-foil, else foil, else etched.</summary>
@@ -433,23 +444,27 @@ namespace BreakersOfE.Views.Pages
             foreach (var row in rows)
             {
                 bool fromCollection = IsCollectionRow(row);
-                var key = RowKey.Of(Str(row, "ScryfallId"), finish,
+                // A collection row removes from itself (its own finish); a pool card the button's finish.
+                var key = RowKey.Of(Str(row, "ScryfallId"), fromCollection ? FinishOf(row) : finish,
                                     fromCollection ? Str(row, "Language") : AddLanguage,
                                     fromCollection ? Str(row, "Condition") : AddCondition);
                 if (!plan.Any(p => p.Key == key)) plan.Add((key, row, fromCollection));
             }
 
+            bool ownFinish = plan.Any(p => p.FromCollection);
             if (plan.Count > 1 &&
-                !Confirm($"Remove {qty} {CardFinish.Display(finish)} {(qty == 1 ? "copy" : "copies")} from each of " +
-                         $"{plan.Count} rows?\n\nCopies used by decks or the Trade Binder are kept.",
+                !Confirm((ownFinish
+                            ? OwnFinishQuestion("Remove", qty, plan.Select(p => p.Key.Finish).ToList(), "from")
+                            : $"Remove {qty} {CardFinish.Display(finish)} {(qty == 1 ? "copy" : "copies")} from each of {plan.Count} rows?") +
+                         "\n\nCopies used by decks or the Trade Binder are kept.",
                          "Remove from several rows"))
                 return;
 
             // From a collection row: exactly that language and condition. From
             // the pool: the bar's, or the finish's only row if that one doesn't exist.
-            Run($"Removed {qty} {CardFinish.Display(finish)}", plan.Select(p => p.Key.ScryfallId), () =>
+            Run(ownFinish ? $"Removed {qty}" : $"Removed {qty} {CardFinish.Display(finish)}", plan.Select(p => p.Key.ScryfallId), () =>
                 plan.Select(p => CollectionEditService.Remove(CollTag, p.Key.ScryfallId, Str(p.Row, "Name"),
-                    finish, qty, EtchedOnly(p.Row, p.FromCollection ? null : p.Row),
+                    p.Key.Finish, qty, EtchedOnly(p.Row, p.FromCollection ? null : p.Row),
                     p.Key.Language, p.Key.Condition, allowFallback: !p.FromCollection)).ToList());
         }
 
@@ -620,14 +635,7 @@ namespace BreakersOfE.Views.Pages
             RefreshCounts();
         }
 
-        private void ShowStatus(string text, bool warning)
-        {
-            ActionText.Text = text;
-            // ISA-101: color only for something that needs attention.
-            ActionText.Foreground = warning
-                ? new SolidColorBrush(Color.FromRgb(0xE8, 0xA3, 0x17))
-                : (Brush)FindResource("TextFillColorSecondaryBrush");
-        }
+        private void ShowStatus(string text, bool warning) => EditPageKit.ShowStatus(ActionText, text, warning);
 
         // ── Buttons ─────────────────────────────────────────────────────
         private void BtnAddNonFoil_Click(object sender, RoutedEventArgs e) => DoAdd(CardFinish.NonFoil);
@@ -642,9 +650,7 @@ namespace BreakersOfE.Views.Pages
         // ══════════════════════════════════════════════════════════════════
         // RIGHT-CLICK MENUS (same actions as the buttons, plus row changes)
         // ══════════════════════════════════════════════════════════════════
-        /// <summary>A menu item and when it is on; Qty items show "×Qty".</summary>
-        private sealed record MenuEntry(MenuItem Item, string Header, Func<bool> Enabled, bool ShowsQty);
-        private readonly List<MenuEntry> _menuEntries = new();
+        private readonly List<EditMenuEntry> _menuEntries = new();
         private MenuItem? _favoriteItem;
         private MenuItem? _undoTop, _undoBottom;
         private MenuItem? _finishMenu, _languageMenu, _conditionMenu;
@@ -656,7 +662,7 @@ namespace BreakersOfE.Views.Pages
                 var mi = new MenuItem { Header = header, InputGestureText = keys };
                 mi.Click += (_, _) => act();
                 menu.Items.Add(mi);
-                _menuEntries.Add(new MenuEntry(mi, header, enabled ?? (() => true), qty));
+                _menuEntries.Add(new EditMenuEntry(mi, header, enabled ?? (() => true), qty));
                 return mi;
             }
 
@@ -767,8 +773,6 @@ namespace BreakersOfE.Views.Pages
                 mi.IsChecked = row != null && CardCondition.Normalize(Str(row, "Condition")) == (string)mi.Tag;
         }
 
-        private static string Shorten(string s) => s.Length <= 60 ? s : s[..57] + "…";
-
         /// <summary>A list of values at a cell (double-click Language / Condition / Finish).</summary>
         private static void ShowChoices(UIElement target, IEnumerable<string> options, string current, Action<string> pick)
         {
@@ -804,77 +808,6 @@ namespace BreakersOfE.Views.Pages
         // ══════════════════════════════════════════════════════════════════
         // IN-PLACE EDITORS (double-click Qty / Notes / Storage)
         // ══════════════════════════════════════════════════════════════════
-        /// <summary>
-        /// A white box with dark text and a blue edge over a cell (same look on
-        /// every row color). Enter or clicking away saves, Esc cancels. With no
-        /// cell (the Notes or Storage column is hidden) it opens at the mouse.
-        /// </summary>
-        internal static void ShowCellEditor(DataGridCell? cell, string text, double minWidth,
-                                           TextAlignment align, bool digitsOnly, string tip, Action<string> save)
-        {
-            // The plain WPF text box style on purpose: the app's Fluent style
-            // repaints the background when focused, which made the text hard to see.
-            var accent = new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4));
-            accent.Freeze();
-            var box = new TextBox
-            {
-                Style = new Style(typeof(TextBox)),
-                Text = text,
-                MinWidth = Math.Max(minWidth, cell?.ActualWidth ?? 0),
-                MinHeight = 0,
-                Height = Math.Max(30, cell?.ActualHeight ?? 0),      // room for the text, never cut off
-                Padding = new Thickness(4, 0, 4, 0),
-                Background = Brushes.White,
-                Foreground = Brushes.Black,
-                CaretBrush = Brushes.Black,
-                BorderBrush = accent,
-                BorderThickness = new Thickness(2),
-                SelectionBrush = accent,
-                SelectionOpacity = 0.35,
-                FontWeight = FontWeights.SemiBold,
-                FontSize = 14,
-                TextAlignment = align,
-                VerticalContentAlignment = VerticalAlignment.Center,
-                ToolTip = tip,
-            };
-            var popup = new Popup
-            {
-                PlacementTarget = cell,
-                Placement = cell != null ? PlacementMode.Relative : PlacementMode.MousePoint,
-                StaysOpen = false,
-                AllowsTransparency = true,
-                Child = box,
-            };
-
-            bool done = false;
-            void Commit(bool keep)
-            {
-                if (done) return;
-                done = true;
-                popup.IsOpen = false;
-                if (keep) save(box.Text);
-            }
-
-            if (digitsOnly)
-                box.PreviewTextInput += (_, e) =>
-                {
-                    foreach (char c in e.Text)
-                        if (!char.IsDigit(c)) { e.Handled = true; return; }
-                };
-            box.PreviewKeyDown += (_, e) =>
-            {
-                if (e.Key == Key.Enter || e.Key == Key.Return) { Commit(true); e.Handled = true; }
-                else if (e.Key == Key.Escape) { Commit(false); e.Handled = true; }
-            };
-            popup.Closed += (_, _) => Commit(true);          // clicking away saves
-            popup.Opened += (_, _) =>
-            {
-                box.Focus();
-                Keyboard.Focus(box);
-                box.SelectAll();
-            };
-            popup.IsOpen = true;
-        }
 
         /// <summary>Right-click → Set quantity… (grid or gallery): the Qty editor over the cell, or at the mouse.</summary>
         private void SetQuantityOfSelected()
@@ -914,7 +847,7 @@ namespace BreakersOfE.Views.Pages
             int current = Int(row, "Quantity");
             int id = CollectionEditService.RowId(row);
             bool etchedOnly = EtchedOnly(row, null);
-            ShowCellEditor(cell, current.ToString(), 48, TextAlignment.Center, digitsOnly: true,
+            EditPageKit.ShowCellEditor(cell, current.ToString(), 48, TextAlignment.Center, digitsOnly: true,
                 "New quantity — Enter to save, Esc to cancel", text =>
                 {
                     if (!int.TryParse(text, out int n) || n < 0)
@@ -936,7 +869,7 @@ namespace BreakersOfE.Views.Pages
             string current = Str(row, storage ? "StorageLocation" : "Notes");
             int id = CollectionEditService.RowId(row);
             bool etchedOnly = EtchedOnly(row, null);
-            ShowCellEditor(cell, current, storage ? 200 : 280, TextAlignment.Left, digitsOnly: false,
+            EditPageKit.ShowCellEditor(cell, current, storage ? 200 : 280, TextAlignment.Left, digitsOnly: false,
                 (storage ? "Where these cards are kept" : "Notes for this row") + " — Enter to save, Esc to cancel", text =>
                 {
                     if (text.Trim() == current.Trim()) return;
@@ -972,22 +905,6 @@ namespace BreakersOfE.Views.Pages
             e.Handled = true;
         }
 
-        private Window? _keysWindow;
-
-        private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
-        {
-            if (!IsLoaded || !IsVisible || e.Handled) return;
-            // Another window in front (a dialog) keeps its own keys.
-            if (sender is Window w && !w.IsActive) return;
-            Page_PreviewKeyDown(sender, e);
-        }
-
-        private void Page_Unloaded(object sender, RoutedEventArgs e)
-        {
-            if (_keysWindow != null) _keysWindow.PreviewKeyDown -= Window_PreviewKeyDown;
-            _keysWindow = null;
-        }
-
         private void Page_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (Keyboard.Modifiers != ModifierKeys.Control) return;
@@ -996,19 +913,15 @@ namespace BreakersOfE.Views.Pages
                 QtyBox.Focus();
                 e.Handled = true;
             }
-            else if (e.Key == Key.Z && Keyboard.FocusedElement is not TextBox)
+            else if (e.Key == Key.Z && (Keyboard.FocusedElement is not TextBox || ReferenceEquals(Keyboard.FocusedElement, QtyBox)))
             {
-                DoUndo();                  // a text box keeps its own Ctrl+Z
+                DoUndo();                  // a text box keeps its own Ctrl+Z (not the Qty box: undoing a number is no use)
                 e.Handled = true;
             }
         }
 
         // ── Qty box: digits only; Enter adds the default finish ──────────
-        private void QtyBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
-        {
-            foreach (char c in e.Text)
-                if (!char.IsDigit(c)) { e.Handled = true; return; }
-        }
+        private void QtyBox_PreviewTextInput(object sender, TextCompositionEventArgs e) => EditPageKit.DigitsOnly(e);
 
         private void QtyBox_PreviewKeyDown(object sender, KeyEventArgs e)
         {
@@ -1023,14 +936,6 @@ namespace BreakersOfE.Views.Pages
             QtyBox.SelectAll();
 
         // ── Helpers ─────────────────────────────────────────────────────
-        private static string Str(object o, string prop) =>
-            o.GetType().GetProperty(prop)?.GetValue(o) as string ?? "";
-
-        private static bool Bool(object o, string prop) =>
-            o.GetType().GetProperty(prop)?.GetValue(o) is bool b && b;
-
-        private static int Int(object o, string prop) =>
-            o.GetType().GetProperty(prop)?.GetValue(o) is int i ? i : 0;
 
         /// <summary>A collection row's finish as shown (v1 foil of an etched-only printing = etched).</summary>
         private static string FinishOf(object row) =>
@@ -1060,52 +965,18 @@ namespace BreakersOfE.Views.Pages
             $"{Str(card, "Name")} ({Str(card, "SetCode").ToUpperInvariant()} #{Str(card, "CollectorNumber")})";
 
         // ── Splitters: sizes are remembered (all Edit pages share them) ──
-        private void TableSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
-        {
-            double total = TopRow.ActualHeight + BottomRow.ActualHeight;
-            if (total > 0) Services.GridLayoutService.SetNumber("Edit:TopShare", TopRow.ActualHeight / total);
-        }
+        private void TableSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e) =>
+            EditPageKit.SaveTopShare(TopRow, BottomRow);
 
         private void DetailSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e) =>
-            Services.GridLayoutService.SetNumber("Edit:DetailWidth", DetailColumn.ActualWidth);
-
-        private void RestoreSplitters()
-        {
-            if (Services.GridLayoutService.GetNumber("Edit:TopShare") is double share && share > 0.05 && share < 0.95)
-            {
-                TopRow.Height = new GridLength(share, GridUnitType.Star);
-                BottomRow.Height = new GridLength(1 - share, GridUnitType.Star);
-            }
-            if (Services.GridLayoutService.GetNumber("Edit:DetailWidth") is double w && w >= DetailColumn.MinWidth)
-                DetailColumn.Width = new GridLength(Math.Min(w, DetailColumn.MaxWidth));
-        }
+            EditPageKit.SaveDetailWidth(DetailColumn);
 
         // NavigationView wraps pages in a ScrollViewer → infinite height →
         // virtualization defeated → freeze. Same fix as PoolPage.
         private void Page_Loaded(object sender, RoutedEventArgs e)
         {
-            // Ctrl+Z / Ctrl+Q from anywhere in the window while this page is on
-            // screen: after a change the tables are re-read and the row that had
-            // the keyboard focus is gone, so focus falls back to the window —
-            // outside this page — and the first press never reached it.
-            if (Window.GetWindow(this) is { } win && !ReferenceEquals(win, _keysWindow))
-            {
-                if (_keysWindow != null) _keysWindow.PreviewKeyDown -= Window_PreviewKeyDown;
-                _keysWindow = win;
-                win.PreviewKeyDown += Window_PreviewKeyDown;
-            }
-            RestoreSplitters();
-            DependencyObject current = this;
-            while (current != null)
-            {
-                current = VisualTreeHelper.GetParent(current);
-                if (current is ScrollViewer sv)
-                {
-                    sv.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
-                    sv.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
-                    break;
-                }
-            }
+            EditPageKit.RestoreSplitters(TopRow, BottomRow, DetailColumn);
+            EditPageKit.DisableHostScroll(this);
         }
     }
 }

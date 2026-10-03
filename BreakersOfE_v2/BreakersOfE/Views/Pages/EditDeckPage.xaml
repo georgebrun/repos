@@ -4,7 +4,6 @@
       xmlns:ctl="clr-namespace:BreakersOfE.Views.Controls"
       ScrollViewer.VerticalScrollBarVisibility="Disabled"
       Loaded="Page_Loaded"
-      Unloaded="Page_Unloaded"
       PreviewKeyDown="Page_PreviewKeyDown">
 
     <!-- Edit → Decks: Pool → Deck and Collection → Deck (the source on top,
@@ -163,9 +162,12 @@
                             <Button x:Name="BtnWholeOwned" Content="Whole Deck: Use Copies I Own…" Padding="10,4" Margin="0,0,6,0"
                                 Click="BtnWholeOwned_Click"
                                 ToolTip="Preview, then claim free copies you own for everything the deck still needs"/>
-                            <Button x:Name="BtnWholeNew" Content="Whole Deck: Add as New…" Padding="10,4"
+                            <Button x:Name="BtnWholeNew" Content="Whole Deck: Add as New…" Padding="10,4" Margin="0,0,6,0"
                                 Click="BtnWholeNew_Click"
                                 ToolTip="Preview, then add everything the deck still needs to your collection as new copies (a sealed precon)"/>
+                            <Button x:Name="BtnFindMissing" Content="Find Missing…" Padding="10,4"
+                                Click="BtnFindMissing_Click"
+                                ToolTip="What the deck still needs: other printings you own of those cards (you choose — never automatic), and the rest to the Want List, with prices"/>
                         </WrapPanel>
                         <!-- The card the buttons act on, and how many the deck has of it -->
                         <TextBlock x:Name="ModeText" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"

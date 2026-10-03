@@ -1,4 +1,4 @@
-<Page x:Class="BreakersOfE.Views.Pages.EditCollectionPage"
+﻿<Page x:Class="BreakersOfE.Views.Pages.EditWantListPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ctl="clr-namespace:BreakersOfE.Views.Controls"
@@ -6,9 +6,9 @@
       Loaded="Page_Loaded"
       PreviewKeyDown="Page_PreviewKeyDown">
 
-    <!-- Edit → Pool → Collection: the pool table on top, the matching
-         collection table below (same tables as View, embedded), the card
-         detail panel on the left for whichever card was selected last. -->
+    <!-- Edit → Lists → Pool → Want List: the card pool on top, the Want List
+         below (same tables as View, embedded), the card detail panel on the
+         left for whichever card was selected last. -->
     <Grid Margin="16">
         <Grid.ColumnDefinitions>
             <ColumnDefinition x:Name="DetailColumn" Width="240" MinWidth="180" MaxWidth="480"/>
@@ -42,10 +42,10 @@
                 <RowDefinition Height="Auto"/>
                 <!-- splitter -->
                 <RowDefinition x:Name="BottomRow" Height="*" MinHeight="200"/>
-                <!-- buttons + collection -->
+                <!-- buttons + want list -->
             </Grid.RowDefinitions>
 
-            <!-- ═══ TOP: pool table ═══ -->
+            <!-- ═══ TOP: card pool ═══ -->
             <Frame Grid.Row="0" x:Name="TopFrame" NavigationUIVisibility="Hidden"
                    JournalOwnership="OwnsJournal" Focusable="False"/>
 
@@ -66,55 +66,45 @@
             </GridSplitter>
 
             <DockPanel Grid.Row="2">
-                <!-- ═══ MODE BUTTONS (Pool → Collection) ═══
-                 Act on the card selected last, in either table. Qty applies to
-                 every Add and Remove button (and the keys / right-click). -->
+                <!-- ═══ BUTTONS (Pool → Want List) ═══
+                 Act on the rows selected last, in either table. Qty applies to
+                 every button (and the keys / right-click). -->
                 <Border DockPanel.Dock="Top" Background="#15808080" CornerRadius="8"
                     Padding="12,6" Margin="0,0,0,8">
                     <StackPanel>
                         <WrapPanel VerticalAlignment="Center">
-                            <TextBlock Text="Add/Remove Qty" VerticalAlignment="Center" Margin="0,0,6,0"
+                            <TextBlock Text="Qty" VerticalAlignment="Center" Margin="0,0,6,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                             <TextBox x:Name="QtyBox" Text="1" Width="56" Margin="0,0,14,0"
                                  VerticalAlignment="Center" TextAlignment="Center"
                                  PreviewTextInput="QtyBox_PreviewTextInput"
                                  PreviewKeyDown="QtyBox_PreviewKeyDown"
                                  GotKeyboardFocus="QtyBox_GotKeyboardFocus"
-                                 ToolTip="How many to add or remove (Ctrl+Q). Enter adds the default finish. To set an exact quantity, double-click a Qty cell in the collection table."/>
-
-                            <!-- Language and condition for cards added from the pool table.
-                             Adding from a collection row keeps that row's own. -->
-                            <TextBlock x:Name="LanguageLabel" Text="Language" VerticalAlignment="Center" Margin="0,0,6,0"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                            <ComboBox x:Name="LanguageBox" Width="170" Margin="0,0,14,0" VerticalAlignment="Center"
-                                  SelectionChanged="Defaults_SelectionChanged"
-                                  ToolTip="Language of cards added from the pool table. Adding to a selected collection row keeps that row's language."/>
-                            <TextBlock x:Name="ConditionLabel" Text="Condition" VerticalAlignment="Center" Margin="0,0,6,0"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                            <ComboBox x:Name="ConditionBox" Width="180" Margin="0,0,14,0" VerticalAlignment="Center"
-                                  SelectionChanged="Defaults_SelectionChanged"
-                                  ToolTip="Condition of cards added from the pool table. Adding to a selected collection row keeps that row's condition."/>
+                                 ToolTip="How many copies each button adds, removes or moves (Ctrl+Q). Enter adds the default finish."/>
 
                             <Button x:Name="BtnAddNonFoil" Content="Add Non-Foil" Padding="10,4" Margin="0,0,6,0"
-                                Click="BtnAddNonFoil_Click" ToolTip="Add Qty non-foil copies (Enter)"/>
+                                Click="BtnAddNonFoil_Click" ToolTip="Put Qty non-foil copies on the Want List (Enter)"/>
                             <Button x:Name="BtnAddFoil" Content="Add Foil" Padding="10,4" Margin="0,0,6,0"
-                                Click="BtnAddFoil_Click" ToolTip="Add Qty foil copies (Shift+Enter)"/>
-                            <Button x:Name="BtnAddEtched" Content="Add Etched" Padding="10,4" Margin="0,0,18,0"
-                                Click="BtnAddEtched_Click" ToolTip="Add Qty etched copies (Ctrl+Enter)"/>
+                                Click="BtnAddFoil_Click" ToolTip="Put Qty foil copies on the Want List (Shift+Enter)"/>
+                            <Button x:Name="BtnAddEtched" Content="Add Etched" Padding="10,4" Margin="0,0,6,0"
+                                Click="BtnAddEtched_Click" ToolTip="Put Qty etched copies on the Want List (Ctrl+Enter)"/>
+                            <Button x:Name="BtnRemove" Content="Remove" Padding="10,4" Margin="0,0,18,0"
+                                Click="BtnRemove_Click" ToolTip="Take Qty copies off the Want List (Delete)"/>
 
-                            <Button x:Name="BtnRemoveNonFoil" Content="Remove Non-Foil" Padding="10,4" Margin="0,0,6,0"
-                                Click="BtnRemoveNonFoil_Click" ToolTip="Remove Qty non-foil copies (copies used in decks stay)"/>
-                            <Button x:Name="BtnRemoveFoil" Content="Remove Foil" Padding="10,4" Margin="0,0,6,0"
-                                Click="BtnRemoveFoil_Click" ToolTip="Remove Qty foil copies (copies used in decks stay)"/>
-                            <Button x:Name="BtnRemoveEtched" Content="Remove Etched" Padding="10,4" Margin="0,0,6,0"
-                                Click="BtnRemoveEtched_Click" ToolTip="Remove Qty etched copies (copies used in decks stay)"/>
-                            <Button x:Name="BtnRemoveAll" Content="Remove All" Padding="10,4" Margin="0,0,18,0"
-                                Click="BtnRemoveAll_Click" ToolTip="Remove every unused copy of this printing: all finishes, languages and conditions"/>
+                            <Button x:Name="BtnGotIt" Content="Got It" Padding="10,4" Margin="0,0,6,0"
+                                Click="BtnGotIt_Click"
+                                ToolTip="You got Qty copies: they go into your collection (with the language and condition picked here) and come off the Want List"/>
+                            <TextBlock Text="as" VerticalAlignment="Center" Margin="0,0,6,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <ComboBox x:Name="LanguageBox" SelectionChanged="Defaults_SelectionChanged" Width="170" Margin="0,0,6,0" VerticalAlignment="Center"
+                                  ToolTip="Language of the copies you got"/>
+                            <ComboBox x:Name="ConditionBox" SelectionChanged="Defaults_SelectionChanged" Width="180" Margin="0,0,18,0" VerticalAlignment="Center"
+                                  ToolTip="Condition of the copies you got"/>
 
                             <Button x:Name="BtnUndo" Content="Undo" Padding="10,4"
                                 Click="BtnUndo_Click" ToolTip="Nothing to undo (Ctrl+Z)"/>
                         </WrapPanel>
-                        <!-- The card the buttons act on, and what you own of it -->
+                        <!-- The card the buttons act on -->
                         <TextBlock x:Name="ModeText" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                         <!-- What the last action did (amber when something was refused) -->
@@ -123,7 +113,7 @@
                     </StackPanel>
                 </Border>
 
-                <!-- ═══ BOTTOM: collection table ═══ -->
+                <!-- ═══ BOTTOM: Want List ═══ -->
                 <Frame x:Name="BottomFrame" NavigationUIVisibility="Hidden"
                    JournalOwnership="OwnsJournal" Focusable="False"/>
             </DockPanel>

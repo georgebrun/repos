@@ -68,6 +68,7 @@ namespace BreakersOfE.Views.Pages
             ["Other Decks"] = "OtherDecksCount",   // cards shared between decks
             // Trade Binder / Want List
             ["Asking"] = "AskingPriceDisplay",
+            ["Trade Value"] = "TradeValueDisplay",
             ["Offer"] = "OfferPriceDisplay",
         };
 
@@ -121,8 +122,9 @@ namespace BreakersOfE.Views.Pages
             var MC = TableKind.MtgoCollection; var AC = TableKind.ArenaCollection;
             var map = new Dictionary<string, TableKind[]>();
             map["Decks"] = cs;                        // ▸ "Used in" (decks claiming the copies)
-            foreach (var h in new[] { "Used", "Available", "Language", "Storage" })
+            foreach (var h in new[] { "Used", "Available", "Storage" })
                 map[h] = cs;
+            map["Language"] = csb;                    // binder copies keep their row's language
             map["Fav"] = new[] { C, S, MC, AC };
             // Online collections: Qty / Notes / Added like the others; Price and
             // Value (in tickets) on MTGO only — Arena has no prices.
@@ -138,6 +140,7 @@ namespace BreakersOfE.Views.Pages
             map["Tix"] = new[] { MP };
             map["Finish"] = new[] { TableKind.Pool, C, S, B, W, D, MC };
             map["Asking"] = new[] { B };
+            map["Trade Value"] = new[] { B };
             map["Offer"] = new[] { W };
             foreach (var h in new[] { "USD", "Foil $", "Etched $" })
                 map[h] = pd;

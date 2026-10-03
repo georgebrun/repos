@@ -1,108 +1,103 @@
 # Breakers of E v2
 
-A Magic: The Gathering collection manager, deck builder, and tabletop simulator for Windows.
+A Magic: The Gathering collection manager and deck builder for Windows.
 
-**Complete overhaul** — rebuilt from the ground up with modern architecture and UI.
-
----
-
-## Download
-
-👉 **[Download the latest installer](../../releases/latest)**
-
-> Windows will show a security warning on first launch — click **More info → Run anyway**. This is normal for unsigned software.
-
-> Looking for v1? See the [BreakersOfE](https://github.com/YOURUSERNAME/BreakersOfE) repository.
+**Complete overhaul** — rebuilt from the ground up with a modern architecture and UI.
 
 ---
 
-## What's New in v2
+## Status
 
-- **Modern UI** — Windows 11 Fluent design with Wpf.Ui controls
-- **10+ Themes** — Dark, Light, Windows XP Classic, 7 MTG color themes, and unlimited custom themes
-- **Three-Project Architecture** — shared Core library, WPF app, and background Agent (zero duplicate code)
-- **Live Deck Pricing** — prices always current from pool database, no manual update needed
-- **Reactive Filtering** — inline filter panel with instant results, no popup windows
-- **Background Agent** — system tray app for automatic price updates, backups, and notifications
-- **Synergy Search** — find cards that work together by keyword and oracle text
-- **Deck Builder Assistant** — category slot filling, staple suggestions, precon upgrade paths
-- **Deck Comparison** — side-by-side analysis of two decks
-- **Multi-Deck Tabs** — edit multiple decks simultaneously
-- **Drag-and-Drop** — drag cards from collection to deck
-- **Playtest Overhaul** — semi-automatic tabletop with Jitsi webcam integration
-- **Card Condition Tracking** — NM, LP, MP, HP, DMG with adjusted pricing
-- **Price History & Alerts** — track value trends, get notified on spikes
-- **Automatic Backups** — scheduled database and deck file backups
-- **Scryfall Schema Validation** — detects API changes before they break imports
-- **Local Image Caching** — tiered caching for faster display and offline browsing
+> 🚧 **v2 is not released yet — there is no installer.** It's in active development; see
+> [Development Status](#development-status) below for what works today.
+>
+> The current, stable version is **v1**, in the `BreakersOfE_v1` folder of this repository.
 
 ---
 
-## Features
+## What works today
 
-### Collection Management
-- Browse all ~100,000+ Magic cards from Scryfall
-- Track your collection with quantities, foil status, condition, language, storage location, and personal prices
-- Import from ManaBox, Archidekt, Moxfield, TCGPlayer, Deckbox, Dragon Shield, CSV, and JSON
-- Export to all major formats
-- Collection insights dashboard with value tracking and statistics
+### Card pool (Scryfall)
 
-### Deck Builder
-- Build Standard and Commander decks with multi-tab support
-- AI-assisted deckbuilding with synergy suggestions
-- Pool → Deck or Collection → Deck mode
-- Full deck statistics: mana curve, color pie, legality, card value, budget tracking
-- Foil card support, commander designation, sideboard
-- Deck comparison tool
-- Drag-and-drop card management
-- Auto-save drafts
+- All ~100,000+ Magic cards from Scryfall, loaded into memory for instant browsing
+- Separate pools for Tokens, Planes, Schemes, Vanguards, Art Series and Conspiracies
+- **Online pools** — MTGO and MTG Arena cards in their own tables (MTGO prices in tix)
+- Full Database Update and price-only updates, with a summary of what changed
+- Finishes from Scryfall's `finishes` data: **Non-Foil, Foil and Etched** as real finishes, each with its own price
+- Token links — which tokens each card makes
+- Card images cached locally by Scryfall ID
 
-### Trade Binder & Want List
-- Visual card binder — just like a real physical binder
-- Track cards you want to trade away and cards you're looking for
-- Trade helper with value differential calculator
+### Browsing and filtering
 
-### Tabletop Simulator
-- Play Magic against yourself or friends via Jitsi webcam
-- Full Commander support: command zone, commander tax, commander damage tracking
-- Life totals, poison counters, phases, the stack, tokens, and more
-- Modern mechanics: Monarch, Initiative, Energy, The Ring
-- Playtest stats tracking (hand quality, mana curve hit rate)
-- Save and restore game state
+- **Grid and Gallery views** of every table, with a remembered choice per table
+- Column filters on every column (funnel headers), multi-level sort, saved column layouts and zoom
+- **Filters panel** — colors, rarity, type, legality, finish, artist, set, deck, list, rules text, and price / mana value / power / toughness / owned ranges
+- Search that jumps to matches (it never hides rows)
+- Set browser and set completion checklist
+- Card detail panel and pop-up window with prices, legality by format, rulings and the decks that use the card
 
-### Background Agent
-- System tray app runs quietly in the background
-- Automatic daily price updates from Scryfall
-- Automatic weekly database and deck file backups
-- Price spike/drop notifications
-- Card image pre-caching for your collection
-- Scryfall API health monitoring
+### Collection
 
-### Tools
-- Synergy Search — find cards that complement each other
-- Keyword Search — find cards by ability keywords with color and legality filters
-- Keyword Dictionary — full MTG rules glossary (~200 keywords) with hover tooltips
-- Advanced Filter — reactive inline filtering with instant results
-- Card images cached locally for fast display and offline use
+- One collection (`collection.db`), with a row for each printing × finish × language × condition
+- Tracks quantity, **condition** (Near Mint … Damaged), **language**, notes, storage location, favorites and price
+- Separate collections for tokens, planes, schemes, vanguards, art series and conspiracies, plus **MTGO** and **Arena** collections
+- Owned counts shown live in the card pools
+- **Edit → Pool → Collection** — add or remove by finish with a Qty box, buttons, keys, right-click menus or gallery **+ / −** tiles; change finish, language or condition; edit notes and storage; multi-select; **Undo**
+- Copies used by decks can't be removed by accident
+- Automatic backup of the collection before the first change each session
+
+### Decks
+
+- Deck browser grouped by type, with statistics (mana curve, colors, value, Commander brackets)
+- **Every format, with its real rules:**
+  - Constructed (Standard, Pioneer, Modern, Legacy, Vintage, Pauper, …)
+  - Commander, Brawl, Standard Brawl, Pauper Commander, Duel Commander, Oathbreaker
+  - Limited
+- Live rules check: deck size, copy limits by card name across all printings, sideboard, color identity, legality, and partner / Background / Oathbreaker pairing; plus legality by format
+- **Edit → Decks:**
+  - **Pool → Deck** — build from the full card pool
+  - **Collection → Deck** — build from cards you own; the copies are claimed for the deck
+  - **Deck → Collection** — claim copies you already own for an existing deck, or add a new precon's cards to your collection, card by card or the whole deck at once
+- "Add anyway?" warnings for rule problems (never a block)
+- Command zone, main deck, sideboard and **tokens**, kept apart; tokens never count toward the deck
+- **Suggested Tokens** — the tokens a deck's cards make, offering your own printing when you own one
+- Autosave on every change, Undo, and Tear Down (frees the deck's copies and moves the file aside)
+- **"Used in"** — every collection row shows which decks hold its copies
 
 ---
 
-## Getting Started
+## Coming next
 
-1. **Install** — run the installer and follow the wizard
-2. **Download the card database** — go to **Update Database** in the sidebar after launch
-3. **Add your collection** — navigate to **Collection** and start adding cards, or import via the menu
-4. **Build a deck** — navigate to **Decks** or **Deck Builder** and create a new deck
-5. **Customize** — go to **Settings** and pick your theme
+In order:
+
+1. **Trade Binder & Want List editing** — including Traded/Sold, Got It, and Missing → Want List from a deck
+2. **Import / Export** — ManaBox, Archidekt, Moxfield, TCGPlayer, Deckbox, Dragon Shield, CSV; MTGO and Arena deck formats
+3. **Keyword Dictionary** — MTG keyword glossary
+4. **Themes**
+5. **Settings** — default language and condition, and more
+6. **Help** — deck types and their rules, and how-tos
+7. **v1 → v2** — v2 replaces the v1 install and takes over the BreakersOfE documents folder
+
+Later: the background Agent (scheduled price updates and backups), synergy search and deck-building help, and the tabletop playtest.
+
+---
+
+## Building from source
+
+1. Open `BreakersOfE_v2/BreakersOfE_v2.sln` in **Visual Studio 2022**
+2. Set **BreakersOfE** as the startup project, then build and run
+3. **Download the card database** — click **Update Database** at the bottom of the sidebar
+4. **Add your collection** — **Edit → Pool → Collection**
+5. **Build a deck** — **Edit → Decks** (from the pool, or from your collection)
 
 ---
 
 ## System Requirements
 
 - Windows 10 or later (x64)
-- Internet connection required for first-time card database download
+- Internet connection for the card database download and updates
 - ~500 MB disk space for card images (downloaded on demand, cached locally)
-- .NET 8 Runtime (bundled with installer)
+- To build: Visual Studio 2022 with the .NET 8 SDK (.NET desktop development workload)
 
 ---
 
@@ -112,27 +107,31 @@ A Magic: The Gathering collection manager, deck builder, and tabletop simulator 
 BreakersOfE_v2.sln
 ├── BreakersOfE.Core     — Shared class library (Models, Data, Services)
 ├── BreakersOfE          — WPF application (Views, ViewModels, Themes)
-└── BreakersOfE.Agent    — Background system tray app (Workers)
+└── BreakersOfE.Agent    — Background system tray app (planned)
 ```
 
 ---
 
 ## Development Status
 
-🚧 **In active development** — building phase by phase.
+🚧 **In active development.**
 
-| Phase | Status | Description |
-|-------|--------|-------------|
-| 1 | ✅ Complete | UI shell, navigation, theme switching |
-| 2 | ⬜ Planned | Database services, Scryfall import |
-| 3 | ⬜ Planned | Collection browsing with reactive filtering |
-| 4 | ⬜ Planned | Dashboard and insights |
-| 5 | ⬜ Planned | Deck editor with live pricing |
-| 6 | ⬜ Planned | Import/export, trade binder, want list |
-| 7 | ⬜ Planned | Background agent |
-| 8 | ⬜ Planned | Synergy search, deck builder assistant |
-| 9 | ⬜ Planned | Tabletop playtest + multiplayer |
-| 10 | ⬜ Planned | Polish and ship |
+| Area                                                     | Status         |
+| -------------------------------------------------------- | -------------- |
+| UI shell and navigation (View / Edit sections)           | ✅ Done        |
+| Card database and Scryfall import (incl. online, etched) | ✅ Done        |
+| Browsing: grid, gallery, filters, sort, sets             | ✅ Done        |
+| Collection viewing, statistics and editing               | ✅ Done        |
+| Deck viewing, formats, rules check and statistics        | ✅ Done        |
+| Deck editing (pool, collection, claims, tokens)          | ✅ Done        |
+| Trade Binder & Want List editing                         | 🔨 Next        |
+| Import / Export                                          | ⬜ Planned     |
+| Keyword Dictionary                                       | ⬜ Planned     |
+| Themes                                                   | ⬜ Planned     |
+| Settings                                                 | ⬜ Planned     |
+| Help                                                     | ⬜ Planned     |
+| v1 → v2 move                                             | ⬜ Planned     |
+| Background Agent, synergy tools, tabletop                | ⬜ Later       |
 
 ---
 

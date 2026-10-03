@@ -47,6 +47,7 @@ namespace BreakersOfE.Views.Pages
             ["Wanted"] = nameof(CollectionTotalsRow.Wanted),
             ["Other Decks"] = nameof(CollectionTotalsRow.OtherDecks),
             ["Asking"] = nameof(CollectionTotalsRow.Asking),
+            ["Trade Value"] = nameof(CollectionTotalsRow.TradeValue),
             ["Offer"] = nameof(CollectionTotalsRow.Offer),
         };
 
@@ -203,8 +204,12 @@ namespace BreakersOfE.Views.Pages
                         TableKind.ArenaCollection => "",
                         _ => $"${value:N2}",
                     },
-                    // Asking / offer prices are per copy.
-                    Asking = Money(rows.Sum(r => Dec(r, "AskingPrice") * Int(r, "Quantity"))),
+                    // Asking / offer / trade value are per copy. Trade Binder:
+                    // no asking price = the market price.
+                    Asking = kind == TableKind.TradeBinder
+                        ? Money(rows.Sum(r => ((Val(r, "AskingPrice") as decimal?) ?? (Val(r, "Price") as decimal?) ?? 0m) * Int(r, "Quantity")))
+                        : Money(rows.Sum(r => Dec(r, "AskingPrice") * Int(r, "Quantity"))),
+                    TradeValue = Money(rows.Sum(r => Dec(r, "TradeValue") * Int(r, "Quantity"))),
                     Offer = Money(rows.Sum(r => Dec(r, "OfferPrice") * Int(r, "Quantity"))),
                 }
             };
@@ -239,7 +244,7 @@ namespace BreakersOfE.Views.Pages
                     new DeckStatsWindow(_openDeck, Window.GetWindow(this), _checkAsFormat).Show();
                 return;
             }
-            if (_currentTag != "Collection") return;
+            if (_currentTag != Services.CollectionEditService.CardsTable) return;
             var rows = _vm.Items.OfType<Models.CollectionEntry>().ToList();
             new CollectionStatsWindow(rows, _vm.Filters.HasActiveFilters, _vm.AllRows.Count,
                                       Window.GetWindow(this)).Show();
@@ -266,6 +271,7 @@ namespace BreakersOfE.Views.Pages
         public string Claimed { get; init; } = "";
         public string Wanted { get; init; } = "";
         public string Asking { get; init; } = "";
+        public string TradeValue { get; init; } = "";
         public string Offer { get; init; } = "";
     }
 }

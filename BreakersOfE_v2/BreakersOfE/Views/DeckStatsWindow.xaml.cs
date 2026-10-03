@@ -490,8 +490,6 @@ namespace BreakersOfE.Views
         // (rules text). Gives the MINIMUM bracket the cards allow; intent
         // (1 vs 2, 4 vs 5) and two-card combos aren't judged.
         // ══════════════════════════════════════════════════════════════════
-        private static readonly string[] BracketNames =
-            { "", "Exhibition", "Core", "Upgraded", "Optimized", "cEDH" };
 
         private static readonly Regex ExtraTurnRx =
             new(@"\bextra turns?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);

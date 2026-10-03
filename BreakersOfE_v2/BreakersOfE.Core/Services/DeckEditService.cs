@@ -32,7 +32,7 @@ namespace BreakersOfE.Services
     /// Edit → Decks: every change to a deck's card list, in memory. The page
     /// saves the deck afterwards (autosave) and keeps the file as it was
     /// before for Undo. Deck files stay pure card lists — nothing here
-    /// touches the collection (that's Collection → Deck, later).
+    /// touches the collection (claims are CollectionEditService's job).
     ///
     /// Counts are per finish (Non-Foil, Foil, Etched) on each line.
     /// </summary>

@@ -95,11 +95,13 @@ namespace BreakersOfE.Models
         [NotMapped] public bool IsFoil => IsFoilAvailable;       // finishes the printing exists in
         [NotMapped] public bool IsNonFoil => IsNonFoilAvailable;
 
-        [NotMapped] public string PowerToughness =>
+        [NotMapped]
+        public string PowerToughness =>
             !string.IsNullOrWhiteSpace(Power) && !string.IsNullOrWhiteSpace(Toughness)
                 ? $"{Power}/{Toughness}" : string.Empty;
 
-        [NotMapped] public double CollectorNumberSort
+        [NotMapped]
+        public double CollectorNumberSort
         {
             get
             {
@@ -110,15 +112,23 @@ namespace BreakersOfE.Models
             }
         }
 
-        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped]
+        public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C", "uncommon" => "U", "rare" => "R",
-            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
+            "common" => "C",
+            "uncommon" => "U",
+            "rare" => "R",
+            "mythic" => "M",
+            "special" => "S",
+            "bonus" => "B",
+            _ => "?"
         };
 
-        [NotMapped] public string PriceUsdDisplay =>
+        [NotMapped]
+        public string PriceUsdDisplay =>
             PriceUsd.HasValue ? $"${PriceUsd.Value:F2}" : "—";
-        [NotMapped] public string PriceUsdFoilDisplay =>
+        [NotMapped]
+        public string PriceUsdFoilDisplay =>
             PriceUsdFoil.HasValue ? $"${PriceUsdFoil.Value:F2}" : "—";
 
         // ── Per-finish collection columns (each row is ONE finish) ─────────
@@ -138,32 +148,39 @@ namespace BreakersOfE.Models
         [NotMapped] public int AvailableCount => Math.Max(0, Quantity - UsedCount);
 
         /// <summary>This finish's price (not the non-foil USD column).</summary>
-        [NotMapped] public string PriceDisplay =>
+        [NotMapped]
+        public string PriceDisplay =>
             Price.HasValue ? $"${Price.Value:F2}" : "—";
 
         /// <summary>This finish's price × this row's quantity.</summary>
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
-        [NotMapped] public string RowValueDisplay =>
+        [NotMapped]
+        public string RowValueDisplay =>
             Price.HasValue ? $"${RowValue:F2}" : "—";
 
         // ── Legality columns: {Binding Legality[commander].Text} etc. ────────
         private LegalityAccessor? _legality;
-        [NotMapped] public LegalityAccessor Legality =>
+        [NotMapped]
+        public LegalityAccessor Legality =>
             _legality ??= new LegalityAccessor(() => LegalitiesJson);
 
         // ── Remaining v1 collection columns ─────────────────────────────────
-        [NotMapped] public string BuyAtDisplay =>
+        [NotMapped]
+        public string BuyAtDisplay =>
             BuyAt.HasValue ? $"${BuyAt.Value:F2}" : string.Empty;
-        [NotMapped] public string SellAtDisplay =>
+        [NotMapped]
+        public string SellAtDisplay =>
             SellAt.HasValue ? $"${SellAt.Value:F2}" : string.Empty;
-        [NotMapped] public string SellAtValueDisplay =>
+        [NotMapped]
+        public string SellAtValueDisplay =>
             SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
 
         /// <summary>Date added as yyyy-MM-dd so it sorts and filters in date order.</summary>
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
 
         /// <summary>W/U/B/R/G for one color, M for multicolor, N for colorless (as v1).</summary>
-        [NotMapped] public string ColorDisplay
+        [NotMapped]
+        public string ColorDisplay
         {
             get
             {
@@ -178,10 +195,12 @@ namespace BreakersOfE.Models
         [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
 
         // Collection tint (blue family), foil rows marked like the pool.
-        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground(
                 ColorIdentity, TypeLine, Finish != CardFinish.NonFoil);
-        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
                 Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
@@ -246,7 +265,7 @@ namespace BreakersOfE.Models
         public string PrintType { get; set; } = "Unknown";
         public string BuyStatus { get; set; } = "Unassigned";
         public string SellStatus { get; set; } = "Unassigned";
-    
+
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
         [NotMapped] public int RowIndex { get; set; }
@@ -263,12 +282,19 @@ namespace BreakersOfE.Models
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
-        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped]
+        public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C", "uncommon" => "U", "rare" => "R",
-            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
+            "common" => "C",
+            "uncommon" => "U",
+            "rare" => "R",
+            "mythic" => "M",
+            "special" => "S",
+            "bonus" => "B",
+            _ => "?"
         };
-        [NotMapped] public double CollectorNumberSort
+        [NotMapped]
+        public double CollectorNumberSort
         {
             get
             {
@@ -280,13 +306,15 @@ namespace BreakersOfE.Models
         }
         [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
         [NotMapped] public int AvailableCount => Math.Max(0, Quantity - UsedCount);
-        [NotMapped] public string PowerToughness =>
+        [NotMapped]
+        public string PowerToughness =>
             !string.IsNullOrWhiteSpace(Power) && !string.IsNullOrWhiteSpace(Toughness)
                 ? $"{Power}/{Toughness}" : string.Empty;
         [NotMapped] public string BuyAtDisplay => BuyAt.HasValue ? $"${BuyAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtDisplay => SellAt.HasValue ? $"${SellAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtValueDisplay => SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
-        [NotMapped] public string ColorDisplay
+        [NotMapped]
+        public string ColorDisplay
         {
             get
             {
@@ -296,9 +324,11 @@ namespace BreakersOfE.Models
                 return distinct[0].ToString();
             }
         }
-        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground(ColorIdentity, TypeLine, Finish != CardFinish.NonFoil);
-        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
                 Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
@@ -359,7 +389,7 @@ namespace BreakersOfE.Models
         public string PrintType { get; set; } = "Unknown";
         public string BuyStatus { get; set; } = "Unassigned";
         public string SellStatus { get; set; } = "Unassigned";
-    
+
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
         [NotMapped] public int RowIndex { get; set; }
@@ -376,12 +406,19 @@ namespace BreakersOfE.Models
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
-        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped]
+        public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C", "uncommon" => "U", "rare" => "R",
-            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
+            "common" => "C",
+            "uncommon" => "U",
+            "rare" => "R",
+            "mythic" => "M",
+            "special" => "S",
+            "bonus" => "B",
+            _ => "?"
         };
-        [NotMapped] public double CollectorNumberSort
+        [NotMapped]
+        public double CollectorNumberSort
         {
             get
             {
@@ -396,9 +433,11 @@ namespace BreakersOfE.Models
         [NotMapped] public string BuyAtDisplay => BuyAt.HasValue ? $"${BuyAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtDisplay => SellAt.HasValue ? $"${SellAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtValueDisplay => SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
-        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground("", TypeLine, Finish != CardFinish.NonFoil);
-        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
                 Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
@@ -459,7 +498,7 @@ namespace BreakersOfE.Models
         public string PrintType { get; set; } = "Unknown";
         public string BuyStatus { get; set; } = "Unassigned";
         public string SellStatus { get; set; } = "Unassigned";
-    
+
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
         [NotMapped] public int RowIndex { get; set; }
@@ -476,12 +515,19 @@ namespace BreakersOfE.Models
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
-        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped]
+        public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C", "uncommon" => "U", "rare" => "R",
-            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
+            "common" => "C",
+            "uncommon" => "U",
+            "rare" => "R",
+            "mythic" => "M",
+            "special" => "S",
+            "bonus" => "B",
+            _ => "?"
         };
-        [NotMapped] public double CollectorNumberSort
+        [NotMapped]
+        public double CollectorNumberSort
         {
             get
             {
@@ -496,9 +542,11 @@ namespace BreakersOfE.Models
         [NotMapped] public string BuyAtDisplay => BuyAt.HasValue ? $"${BuyAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtDisplay => SellAt.HasValue ? $"${SellAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtValueDisplay => SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
-        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground("", TypeLine, Finish != CardFinish.NonFoil);
-        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
                 Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
@@ -561,7 +609,7 @@ namespace BreakersOfE.Models
         public string PrintType { get; set; } = "Unknown";
         public string BuyStatus { get; set; } = "Unassigned";
         public string SellStatus { get; set; } = "Unassigned";
-    
+
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
         [NotMapped] public int RowIndex { get; set; }
@@ -578,12 +626,19 @@ namespace BreakersOfE.Models
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
-        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped]
+        public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C", "uncommon" => "U", "rare" => "R",
-            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
+            "common" => "C",
+            "uncommon" => "U",
+            "rare" => "R",
+            "mythic" => "M",
+            "special" => "S",
+            "bonus" => "B",
+            _ => "?"
         };
-        [NotMapped] public double CollectorNumberSort
+        [NotMapped]
+        public double CollectorNumberSort
         {
             get
             {
@@ -598,9 +653,11 @@ namespace BreakersOfE.Models
         [NotMapped] public string BuyAtDisplay => BuyAt.HasValue ? $"${BuyAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtDisplay => SellAt.HasValue ? $"${SellAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtValueDisplay => SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
-        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground("", TypeLine, Finish != CardFinish.NonFoil);
-        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
                 Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
@@ -650,7 +707,7 @@ namespace BreakersOfE.Models
         public string StorageLocation { get; set; } = string.Empty;
         public DateTime DateAdded { get; set; } = DateTime.Now;
         public DateTime DateModified { get; set; } = DateTime.Now;
-    
+
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
         [NotMapped] public int RowIndex { get; set; }
@@ -667,12 +724,19 @@ namespace BreakersOfE.Models
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
-        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped]
+        public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C", "uncommon" => "U", "rare" => "R",
-            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
+            "common" => "C",
+            "uncommon" => "U",
+            "rare" => "R",
+            "mythic" => "M",
+            "special" => "S",
+            "bonus" => "B",
+            _ => "?"
         };
-        [NotMapped] public double CollectorNumberSort
+        [NotMapped]
+        public double CollectorNumberSort
         {
             get
             {
@@ -683,7 +747,8 @@ namespace BreakersOfE.Models
             }
         }
         [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
-        [NotMapped] public string ColorDisplay
+        [NotMapped]
+        public string ColorDisplay
         {
             get
             {
@@ -693,9 +758,11 @@ namespace BreakersOfE.Models
                 return distinct[0].ToString();
             }
         }
-        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground(ColorIdentity, TypeLine, Finish != CardFinish.NonFoil);
-        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
                 Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
@@ -755,7 +822,7 @@ namespace BreakersOfE.Models
         public string PrintType { get; set; } = "Unknown";
         public string BuyStatus { get; set; } = "Unassigned";
         public string SellStatus { get; set; } = "Unassigned";
-    
+
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
         [NotMapped] public int RowIndex { get; set; }
@@ -772,12 +839,19 @@ namespace BreakersOfE.Models
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
-        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped]
+        public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C", "uncommon" => "U", "rare" => "R",
-            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
+            "common" => "C",
+            "uncommon" => "U",
+            "rare" => "R",
+            "mythic" => "M",
+            "special" => "S",
+            "bonus" => "B",
+            _ => "?"
         };
-        [NotMapped] public double CollectorNumberSort
+        [NotMapped]
+        public double CollectorNumberSort
         {
             get
             {
@@ -792,9 +866,11 @@ namespace BreakersOfE.Models
         [NotMapped] public string BuyAtDisplay => BuyAt.HasValue ? $"${BuyAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtDisplay => SellAt.HasValue ? $"${SellAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtValueDisplay => SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
-        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground("", TypeLine, Finish != CardFinish.NonFoil);
-        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
                 Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
@@ -840,10 +916,12 @@ namespace BreakersOfE.Models
         public decimal? Price { get; set; }
         public bool IsFoil { get; set; } = false;   // legacy — migrated into Finish
         public string Condition { get; set; } = "Near Mint";
+        /// <summary>v2: the binder copies' language (with finish and condition, the collection row they come from).</summary>
+        public string Language { get; set; } = CardLanguage.Default;
         public decimal? AskingPrice { get; set; }
         public string Notes { get; set; } = string.Empty;
         public DateTime DateAdded { get; set; } = DateTime.Now;
-    
+
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
         [NotMapped] public int RowIndex { get; set; }
@@ -858,12 +936,19 @@ namespace BreakersOfE.Models
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
-        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped]
+        public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C", "uncommon" => "U", "rare" => "R",
-            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
+            "common" => "C",
+            "uncommon" => "U",
+            "rare" => "R",
+            "mythic" => "M",
+            "special" => "S",
+            "bonus" => "B",
+            _ => "?"
         };
-        [NotMapped] public double CollectorNumberSort
+        [NotMapped]
+        public double CollectorNumberSort
         {
             get
             {
@@ -874,11 +959,18 @@ namespace BreakersOfE.Models
             }
         }
         [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
-        [NotMapped] public string PowerToughness =>
+        [NotMapped]
+        public string PowerToughness =>
             !string.IsNullOrWhiteSpace(Power) && !string.IsNullOrWhiteSpace(Toughness)
                 ? $"{Power}/{Toughness}" : string.Empty;
         [NotMapped] public string AskingPriceDisplay => AskingPrice.HasValue ? $"${AskingPrice.Value:F2}" : string.Empty;
-        [NotMapped] public string ColorDisplay
+        /// <summary>Market price × Trade % (Settings): the least a fair shop should give per copy.</summary>
+        [NotMapped]
+        public decimal? TradeValue =>
+            Price.HasValue ? Math.Round(Price.Value * Services.AppSettingsService.TradeFraction, 2) : null;
+        [NotMapped] public string TradeValueDisplay => TradeValue.HasValue ? $"${TradeValue.Value:F2}" : "—";
+        [NotMapped]
+        public string ColorDisplay
         {
             get
             {
@@ -888,9 +980,11 @@ namespace BreakersOfE.Models
                 return distinct[0].ToString();
             }
         }
-        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground(ColorIdentity, TypeLine, Finish != CardFinish.NonFoil);
-        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
                 Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.TradeBinder);
     }
@@ -937,7 +1031,7 @@ namespace BreakersOfE.Models
         public decimal? OfferPrice { get; set; }
         public string Notes { get; set; } = string.Empty;
         public DateTime DateAdded { get; set; } = DateTime.Now;
-    
+
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
         [NotMapped] public int RowIndex { get; set; }
@@ -952,12 +1046,19 @@ namespace BreakersOfE.Models
         [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
         [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
         [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
-        [NotMapped] public string RarityCode => Rarity?.ToLower() switch
+        [NotMapped]
+        public string RarityCode => Rarity?.ToLower() switch
         {
-            "common" => "C", "uncommon" => "U", "rare" => "R",
-            "mythic" => "M", "special" => "S", "bonus" => "B", _ => "?"
+            "common" => "C",
+            "uncommon" => "U",
+            "rare" => "R",
+            "mythic" => "M",
+            "special" => "S",
+            "bonus" => "B",
+            _ => "?"
         };
-        [NotMapped] public double CollectorNumberSort
+        [NotMapped]
+        public double CollectorNumberSort
         {
             get
             {
@@ -968,11 +1069,15 @@ namespace BreakersOfE.Models
             }
         }
         [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
-        [NotMapped] public string PowerToughness =>
+        [NotMapped]
+        public string PowerToughness =>
             !string.IsNullOrWhiteSpace(Power) && !string.IsNullOrWhiteSpace(Toughness)
                 ? $"{Power}/{Toughness}" : string.Empty;
         [NotMapped] public string OfferPriceDisplay => OfferPrice.HasValue ? $"${OfferPrice.Value:F2}" : string.Empty;
-        [NotMapped] public string ColorDisplay
+        /// <summary>Your offer is above the market price (shown in amber so you notice before you overpay).</summary>
+        [NotMapped] public bool IsOfferOverMarket => OfferPrice.HasValue && Price.HasValue && OfferPrice.Value > Price.Value;
+        [NotMapped]
+        public string ColorDisplay
         {
             get
             {
@@ -982,9 +1087,11 @@ namespace BreakersOfE.Models
                 return distinct[0].ToString();
             }
         }
-        [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground(ColorIdentity, TypeLine, Finish != CardFinish.NonFoil);
-        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
+        [NotMapped]
+        public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
                 Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.WantList);
     }

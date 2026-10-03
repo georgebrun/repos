@@ -1,0 +1,78 @@
+﻿<ui:FluentWindow x:Class="BreakersOfE.Views.Dialogs.FindMissingDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="Find Missing"
+        Width="720" SizeToContent="Height" MaxHeight="780"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica"
+        Background="{DynamicResource ApplicationBackgroundBrush}"
+        Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+
+    <!-- Edit → Decks → Deck → Collection → Find Missing…: the copies the deck
+         still needs. (1) Other printings you own of those cards — never ticked
+         on their own (some cards are for the collection, not for play).
+         (2) What's still missing → the Want List (ticked). -->
+    <DockPanel Margin="18,16,18,14">
+        <TextBlock DockPanel.Dock="Top" x:Name="HeaderText" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap"/>
+        <TextBlock DockPanel.Dock="Top" x:Name="NoteText" Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <ui:Button x:Name="BtnApply" Content="Apply ticked" Appearance="Primary" MinWidth="110" Margin="0,0,8,0"
+                       IsDefault="True" Click="Apply_Click"/>
+            <ui:Button x:Name="BtnCancel" Content="Cancel" MinWidth="72" IsCancel="True"/>
+        </StackPanel>
+
+        <ScrollViewer Margin="0,12,0,0" VerticalScrollBarVisibility="Auto" MaxHeight="560">
+            <StackPanel>
+                <!-- 1. Other printings you own -->
+                <StackPanel x:Name="SwapSection">
+                    <TextBlock Text="You own another printing" FontWeight="SemiBold" Margin="0,0,0,2"/>
+                    <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="Tick one to put your copies in the deck instead: the deck's card switches to your printing and those copies are claimed. Nothing here is ticked for you — some cards are for the collection, not for play."/>
+                    <ItemsControl x:Name="SwapList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}" Margin="0,0,0,8"
+                                          VerticalContentAlignment="Top">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Title}" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                                        <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="12"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </StackPanel>
+                                </CheckBox>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <!-- 2. Still missing → Want List -->
+                <StackPanel x:Name="WantSection" Margin="0,8,0,0">
+                    <TextBlock Text="Add to the Want List" FontWeight="SemiBold" Margin="0,0,0,2"/>
+                    <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="The deck's own printing and finish. The Want List is raised to what's missing — never doubled — and copies covered by a printing you ticked above aren't added."/>
+                    <ItemsControl x:Name="WantList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}" Margin="0,0,0,8"
+                                          VerticalContentAlignment="Top">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Title}" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                                        <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="12"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </StackPanel>
+                                </CheckBox>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</ui:FluentWindow>

@@ -2,8 +2,8 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- Shared left-side card detail panel: grid page, gallery page, and
-         (later) collection pages all host this one control. -->
+    <!-- Shared left-side card detail panel: the View tables (grid and
+         gallery) and the Edit pages all host this one control. -->
     <UserControl.Resources>
         <Style x:Key="DetailLabel" TargetType="TextBlock">
             <Setter Property="FontSize" Value="10"/>

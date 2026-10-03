@@ -4,7 +4,7 @@
 
     <!-- Card gallery view: virtualized rows of N image tiles, on-demand image
          download (cached by ScryfallId), own size slider. Self-contained so any
-         page can host it: the pool page now, collection pages later. The host
+         page can host it: the View tables and the Edit pages. The host
          feeds it cards in display order and reacts to CardClicked/CardOpened. -->
     <UserControl.Resources>
         <!-- Round + / − buttons on the tiles (Edit pages) -->

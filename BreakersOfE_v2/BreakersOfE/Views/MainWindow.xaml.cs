@@ -65,11 +65,12 @@ namespace BreakersOfE.Views
             NavDecks.Visibility = viewVis;
             NavOnline.Visibility = viewVis;
 
-            // Edit items (placeholder until editing exists)
+            // Edit items
             var editVis = open == NavSection.Edit ? Visibility.Visible : Visibility.Collapsed;
             NavEditPoolToCollection.Visibility = editVis;
             NavEditOnline.Visibility = editVis;
             NavEditDecks.Visibility = editVis;
+            NavEditLists.Visibility = editVis;
 
             // Edit button: at the bottom only while View is open; otherwise
             // stacked at the top under View.
@@ -175,6 +176,20 @@ namespace BreakersOfE.Views
                     if (open != null) mode = DeckEditMode.DeckToCollection;
                     deckPage.Start(mode, open);
                 }), System.Windows.Threading.DispatcherPriority.Loaded);
+                return;
+            }
+
+            // Edit → Lists → Collection → Trade Binder.
+            if (args.Page is EditTradeBinderPage binderPage)
+            {
+                Dispatcher.BeginInvoke(new Action(binderPage.Start), System.Windows.Threading.DispatcherPriority.Loaded);
+                return;
+            }
+
+            // Edit → Lists → Pool → Want List.
+            if (args.Page is EditWantListPage wantPage)
+            {
+                Dispatcher.BeginInvoke(new Action(wantPage.Start), System.Windows.Threading.DispatcherPriority.Loaded);
                 return;
             }
 

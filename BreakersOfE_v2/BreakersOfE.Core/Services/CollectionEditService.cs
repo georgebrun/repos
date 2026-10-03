@@ -48,7 +48,9 @@ namespace BreakersOfE.Services
         public int Used => UsedNonFoil + UsedFoil + UsedEtched;
         public int Owned(string finish) => CardFinish.Normalize(finish) switch
         {
-            CardFinish.Foil => Foil, CardFinish.Etched => Etched, _ => NonFoil,
+            CardFinish.Foil => Foil,
+            CardFinish.Etched => Etched,
+            _ => NonFoil,
         };
     }
 
@@ -169,6 +171,15 @@ namespace BreakersOfE.Services
             }
         }
 
+        /// <summary>Does a printing with these finishes come in <paramref name="finish"/>?</summary>
+        public static bool FinishExists(string finish, bool nonFoil, bool foil, bool etched) =>
+            CardFinish.Normalize(finish) switch
+            {
+                CardFinish.Foil => foil,
+                CardFinish.Etched => etched,
+                _ => nonFoil,
+            };
+
         /// <summary>The stored key (id) of a collection row, or 0.</summary>
         public static int RowId(object row)
         {
@@ -223,10 +234,12 @@ namespace BreakersOfE.Services
             string label = Label(poolCard, key, collTag);
             if (qty < 1) return Fail("Enter a quantity of 1 or more.");
 
-            var (nf, f, e) = FinishesOf(collTag, poolCard);
-            bool exists = key.Finish switch { CardFinish.Foil => f, CardFinish.Etched => e, _ => nf };
-            if (!exists)
-                return Fail($"{Name(poolCard)}: this printing doesn't exist in {CardFinish.Display(key.Finish)}.");
+            // The finish must exist for this printing — checked against the card
+            // database itself, never only the object the page passed in.
+            var (nf, f, e) = FinishesOf(collTag, FindPoolCard(collTag, sid) ?? poolCard);
+            if (!FinishExists(key.Finish, nf, f, e))
+                return Fail($"{Name(poolCard)} ({GetString(poolCard, "SetCode").ToUpperInvariant()} #{GetString(poolCard, "CollectorNumber")}) " +
+                            $"doesn't come in {CardFinish.Display(key.Finish)} — nothing added.");
 
             bool etchedOnly = e && !f;
             try
@@ -458,6 +471,8 @@ namespace BreakersOfE.Services
 
                 object? pool = FindPoolCard(collTag, row.ScryfallId);
                 var fins = pool != null ? FinishesOf(collTag, pool) : (true, true, true);
+                if (pool == null && newFinish != null)
+                    return Fail($"{row.Name}: not found in the card pool, so its finish can't be changed.");
                 bool etchedOnly = fins.Item3 && !fins.Item2;
                 var from = KeyOf(row, etchedOnly);
                 var to = KeyFor(collTag, row.ScryfallId, newFinish ?? from.Finish,
@@ -468,7 +483,7 @@ namespace BreakersOfE.Services
                     return new EditResult { Message = $"{name} is already {TextFor(collTag, from)}.", Touched = { from } };
                 if (pool != null && to.Finish != from.Finish)
                 {
-                    bool exists = to.Finish switch { CardFinish.Foil => fins.Item2, CardFinish.Etched => fins.Item3, _ => fins.Item1 };
+                    bool exists = FinishExists(to.Finish, fins.Item1, fins.Item2, fins.Item3);
                     if (!exists)
                         return Fail($"{name}: this printing doesn't exist in {CardFinish.Display(to.Finish)}.", from);
                 }
@@ -835,6 +850,8 @@ namespace BreakersOfE.Services
                     .Where(e => e.Game == OnlineGame.Mtgo && e.ScryfallId == sid).ToList(),
                 "ArenaCollection" => db.OnlineCollectionEntries
                     .Where(e => e.Game == OnlineGame.Arena && e.ScryfallId == sid).ToList(),
+                BinderTable => db.TradeBinderEntries.Where(e => e.ScryfallId == sid).ToList(),
+                WantTable => db.WantListEntries.Where(e => e.ScryfallId == sid).ToList(),
                 _ => db.CollectionEntries.Where(e => e.ScryfallId == sid).ToList(),
             };
             return rows.Select(r => new Row(r)).ToList();
@@ -872,6 +889,8 @@ namespace BreakersOfE.Services
             "CollArtSeries" => typeof(ArtSeriesCollectionEntry),
             "CollConspiracies" => typeof(ConspiracyCollectionEntry),
             "MtgoCollection" or "ArenaCollection" => typeof(OnlineCollectionEntry),
+            BinderTable => typeof(TradeBinderEntry),
+            WantTable => typeof(WantListEntry),
             _ => typeof(CollectionEntry),
         };
 
@@ -963,7 +982,7 @@ namespace BreakersOfE.Services
         /// <summary>"Deck A, Deck B" — who uses this printing (main collection only).</summary>
         private static string UsedBy(CollectionDbContext db, string collTag, string sid)
         {
-            if (collTag != "Collection") return "in use";
+            if (collTag != CardsTable) return "in use";
             try
             {
                 var names = db.DeckUsages.Where(u => u.ScryfallId == sid && (u.EnteredNonFoil + u.EnteredFoil + u.EnteredEtched) > 0)

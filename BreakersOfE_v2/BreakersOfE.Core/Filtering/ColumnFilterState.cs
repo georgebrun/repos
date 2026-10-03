@@ -67,55 +67,6 @@ namespace BreakersOfE.Filtering
             AllSelected = true;
         }
 
-        /// <summary>
-        /// Apply a text rule against the given distinct values and store the
-        /// matching ones as the checked set. This is how the Text Filters tab
-        /// feeds the single source of truth.
-        /// </summary>
-        public void ApplyTextRule(
-            TextFilterOperator op, string text, IEnumerable<string> distinctValues)
-        {
-            var matched = distinctValues.Where(v => TextMatch(v, op, text));
-            SelectedValues = new HashSet<string>(matched, StringComparer.Ordinal);
-            AllSelected = false; // a text rule always narrows
-        }
-
-        private static bool TextMatch(string? value, TextFilterOperator op, string text)
-        {
-            value ??= string.Empty;
-            string v = value.ToLowerInvariant();
-            string t = (text ?? string.Empty).ToLowerInvariant();
-
-            return op switch
-            {
-                TextFilterOperator.Contains        => v.Contains(t),
-                TextFilterOperator.DoesNotContain  => !v.Contains(t),
-                TextFilterOperator.Equals          => v == t,
-                TextFilterOperator.DoesNotEqual    => v != t,
-                TextFilterOperator.BeginsWith      => v.StartsWith(t),
-                TextFilterOperator.EndsWith        => v.EndsWith(t),
-                TextFilterOperator.IsBlank         => string.IsNullOrWhiteSpace(value),
-                TextFilterOperator.IsNotBlank      => !string.IsNullOrWhiteSpace(value),
-                TextFilterOperator.GreaterThan          => CompareNumeric(value, text) > 0,
-                TextFilterOperator.GreaterThanOrEqual   => CompareNumeric(value, text) >= 0,
-                TextFilterOperator.LessThan             => CompareNumeric(value, text) < 0,
-                TextFilterOperator.LessThanOrEqual      => CompareNumeric(value, text) <= 0,
-                _ => true
-            };
-        }
-
-        private static int CompareNumeric(string? a, string? b)
-        {
-            a ??= string.Empty;
-            b ??= string.Empty;
-            if (decimal.TryParse(a.TrimStart('$', ' '), NumberStyles.Any,
-                    CultureInfo.InvariantCulture, out var da) &&
-                decimal.TryParse(b.TrimStart('$', ' '), NumberStyles.Any,
-                    CultureInfo.InvariantCulture, out var db))
-                return da.CompareTo(db);
-            return string.Compare(a, b, StringComparison.OrdinalIgnoreCase);
-        }
-
         public static string OperatorLabel(TextFilterOperator op) => op switch
         {
             TextFilterOperator.Contains          => "Contains",
@@ -201,9 +152,6 @@ namespace BreakersOfE.Filtering
 
         /// <summary>Goes up whenever panel rules are set or everything is cleared (the panel re-reads then).</summary>
         public int Version { get; private set; }
-
-        /// <summary>Labels of the panel rules in force ("Type: Creature", …).</summary>
-        public IReadOnlyList<string> ExtraLabels => _extras.Values.Select(e => e.Label).ToList();
 
         /// <summary>The Filters panel's own settings for this table (the panel reads it back).</summary>
         public object? PanelState { get; set; }

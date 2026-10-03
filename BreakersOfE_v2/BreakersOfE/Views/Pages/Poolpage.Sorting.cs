@@ -95,6 +95,9 @@ namespace BreakersOfE.Views.Pages
             ["PriceTixDisplay"] = "PriceTix",
             ["PriceDisplay"] = "Price",
             ["RowValueDisplay"] = "RowValue",
+            ["AskingPriceDisplay"] = "AskingPrice",
+            ["OfferPriceDisplay"] = "OfferPrice",
+            ["TradeValueDisplay"] = "TradeValue",
         };
 
         private static string SortPropFor(string prop) =>
