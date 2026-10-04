@@ -96,19 +96,17 @@ namespace BreakersOfE.Services
         {
             if (string.IsNullOrEmpty(rarity)) return null;
 
-            // Detect dark theme for readable common symbols
-            bool dark = false;
-            try { dark = ThemeService.CurrentTheme == AppTheme.Dark; }
-            catch { }
+            bool dark = ThemeService.CurrentTheme == AppTheme.Dark;
 
             return rarity.ToLower() switch
             {
-                // Neutral symbol on the app's dark surfaces (set browser tiles,
-                // Set Completion) — independent of the grid-row theme colors.
-                "ondark" => new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
-                "common" => dark
-                    ? new SolidColorBrush(Color.FromRgb(0xAA, 0xAA, 0xAA)) // light gray on dark
-                    : new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1A)), // black on light
+                // Neutral symbol on the app's own surfaces (set browser tiles,
+                // Set Completion): light grey on Dark, dark grey on Light.
+                "ondark" => dark
+                    ? new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8))
+                    : new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50)),
+                // Card tables keep their light rows in every theme: black.
+                "common" => new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1A)),
                 "uncommon" => new SolidColorBrush(Color.FromRgb(0x84, 0x93, 0xA0)), // silver
                 "rare" => new SolidColorBrush(Color.FromRgb(0xC8, 0xA2, 0x00)), // gold
                 "mythic" => new SolidColorBrush(Color.FromRgb(0xD4, 0x50, 0x20)), // orange-red

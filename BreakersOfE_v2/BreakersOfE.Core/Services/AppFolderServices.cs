@@ -61,6 +61,62 @@ namespace BreakersOfE.Services
             return DefaultRootFolder;
         }
 
+        /// <summary>
+        /// First start after installing: no data folder chosen yet and no
+        /// default folder (Documents\BoE_V2) either. BoE then asks where to
+        /// keep its data before anything is created.
+        /// </summary>
+        public static bool IsFirstRun
+        {
+            get
+            {
+                if (_root != null) return false;
+                try
+                {
+                    return !File.Exists(PointerPath) && !Directory.Exists(DefaultRootFolder);
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Where data would go for a folder the user picked: the folder itself
+        /// when it's empty, new, or already holds BoE data; otherwise a
+        /// "BoE_V2" folder inside it (so BoE's files don't mix with others).
+        /// </summary>
+        public static string DataFolderFor(string picked)
+        {
+            string full = Path.GetFullPath(picked);
+            if (!Directory.Exists(full)) return full;
+            bool hasBoe = File.Exists(Path.Combine(full, "breakersofe.db")) ||
+                          File.Exists(Path.Combine(full, "Collection", "collection.db"));
+            if (hasBoe || !Directory.EnumerateFileSystemEntries(full).Any()) return full;
+            return Path.Combine(full, "BoE_V2");
+        }
+
+        /// <summary>
+        /// First start: use this data folder from now on (creates it; checks
+        /// BoE can save there). Returns "" or why it can't be used.
+        /// </summary>
+        public static string ChooseFirstFolder(string folder)
+        {
+            try
+            {
+                Directory.CreateDirectory(folder);
+                if (!CanWrite(folder)) return "BoE can't save in that folder (read-only, or no permission). Pick another.";
+                SetDataFolder(folder);
+                _root = Path.GetFullPath(folder);
+                return "";
+            }
+            catch (Exception ex)
+            {
+                return $"That folder can't be used: {ex.Message}";
+            }
+        }
+
         private static bool CanWrite(string folder)
         {
             try
@@ -89,6 +145,7 @@ namespace BreakersOfE.Services
                               StringComparison.OrdinalIgnoreCase))
             {
                 if (File.Exists(PointerPath)) File.Delete(PointerPath);
+                Directory.CreateDirectory(DefaultRootFolder);     // so the next start doesn't ask again (first run)
                 return;
             }
             File.WriteAllText(PointerPath, Path.GetFullPath(folder));

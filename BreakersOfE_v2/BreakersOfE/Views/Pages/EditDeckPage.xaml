@@ -69,7 +69,7 @@
 
             <DockPanel Grid.Row="2">
                 <!-- ═══ DECK + BUTTONS ═══ -->
-                <Border DockPanel.Dock="Top" Background="#15808080" CornerRadius="8"
+                <Border DockPanel.Dock="Top" Background="{DynamicResource BoePanelBrush}" CornerRadius="8"
                     Padding="12,6" Margin="0,0,0,8">
                     <StackPanel>
                         <!-- Which deck -->

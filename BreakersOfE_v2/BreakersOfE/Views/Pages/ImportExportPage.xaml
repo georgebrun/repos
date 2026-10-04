@@ -15,7 +15,7 @@
             <TabItem Header="Import">
                 <DockPanel Margin="0,10,0,0">
                     <!-- Options -->
-                    <Border DockPanel.Dock="Top" Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,0,0,8">
+                    <Border DockPanel.Dock="Top" Background="{DynamicResource BoePanelBrush}" CornerRadius="8" Padding="12,8" Margin="0,0,0,8">
                         <StackPanel>
                             <WrapPanel VerticalAlignment="Center">
                                 <TextBlock Text="Import into" VerticalAlignment="Center" Margin="0,0,6,0"
@@ -70,7 +70,7 @@
                     </Border>
 
                     <!-- Bottom: import / undo / status -->
-                    <Border DockPanel.Dock="Bottom" Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,8,0,0">
+                    <Border DockPanel.Dock="Bottom" Background="{DynamicResource BoePanelBrush}" CornerRadius="8" Padding="12,8" Margin="0,8,0,0">
                         <StackPanel>
                             <WrapPanel VerticalAlignment="Center">
                                 <Button x:Name="BtnApply" Content="Import" Padding="16,5" Margin="0,0,8,0" IsEnabled="False" Click="BtnApply_Click"/>
@@ -133,7 +133,7 @@
             <TabItem Header="Export">
                 <DockPanel Margin="0,10,0,0">
                     <!-- What and how -->
-                    <Border DockPanel.Dock="Top" Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,0,0,8">
+                    <Border DockPanel.Dock="Top" Background="{DynamicResource BoePanelBrush}" CornerRadius="8" Padding="12,8" Margin="0,0,0,8">
                         <StackPanel>
                             <WrapPanel VerticalAlignment="Center">
                                 <TextBlock Text="Export" VerticalAlignment="Center" Margin="0,0,6,0"
@@ -163,7 +163,7 @@
                     </Border>
 
                     <!-- Bottom: copy / save -->
-                    <Border DockPanel.Dock="Bottom" Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,8,0,0">
+                    <Border DockPanel.Dock="Bottom" Background="{DynamicResource BoePanelBrush}" CornerRadius="8" Padding="12,8" Margin="0,8,0,0">
                         <StackPanel>
                             <WrapPanel VerticalAlignment="Center">
                                 <Button x:Name="BtnExportCopy" Content="Copy to Clipboard" Padding="14,5" Margin="0,0,8,0" IsEnabled="False"

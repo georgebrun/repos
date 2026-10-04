@@ -27,6 +27,8 @@ namespace BreakersOfE.Views.Pages
         private string _layoutTable = "";     // table whose layout the grid shows now
         private bool _applyingLayout;         // true while code (not the user) moves columns
         private System.Windows.Threading.DispatcherTimer? _layoutSaveTimer;
+        private int _layoutVersionSeen;       // the shared layout's version this grid shows
+        private bool _savingLayout;           // this grid is saving (don't re-apply our own change)
 
         private void InitColumnLayout()
         {
@@ -54,9 +56,42 @@ namespace BreakersOfE.Views.Pages
             PoolGrid.PreviewMouseLeftButtonUp += (_, _) => RestoreColumnVirtualization();
 
             // Don't lose a pending change when leaving the page or closing the app.
-            Unloaded += (_, _) => SaveColumnLayoutNow();
+            // (Only a pending one: saving an unchanged grid could overwrite a newer
+            // layout made on the other page — View and Edit share it.)
+            Unloaded += (_, _) =>
+            {
+                Services.GridLayoutService.Changed -= SharedLayoutChanged;
+                SavePendingColumnLayout();
+            };
+            Loaded += (_, _) =>
+            {
+                Services.GridLayoutService.Changed -= SharedLayoutChanged;
+                Services.GridLayoutService.Changed += SharedLayoutChanged;
+                // Changed on the other page (View ↔ Edit) while this one was away?
+                if (!string.IsNullOrEmpty(_layoutTable) &&
+                    Services.GridLayoutService.Version(LayoutKey(_layoutTable)) != _layoutVersionSeen)
+                    ApplyColumnLayout(_layoutTable);
+            };
             if (Application.Current != null)
-                Application.Current.Exit += (_, _) => SaveColumnLayoutNow();
+                Application.Current.Exit += (_, _) => SavePendingColumnLayout();
+        }
+
+        /// <summary>The other page (View ↔ Edit) saved this table's layout: show it here too.</summary>
+        private void SharedLayoutChanged(string key)
+        {
+            if (_savingLayout || string.IsNullOrEmpty(_layoutTable) ||
+                !string.Equals(key, LayoutKey(_layoutTable), StringComparison.OrdinalIgnoreCase)) return;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (!string.IsNullOrEmpty(_layoutTable) &&
+                    Services.GridLayoutService.Version(LayoutKey(_layoutTable)) != _layoutVersionSeen)
+                    ApplyColumnLayout(_layoutTable);
+            }));
+        }
+
+        private void SavePendingColumnLayout()
+        {
+            if (_layoutSaveTimer?.IsEnabled == true) SaveColumnLayoutNow();
         }
 
         // ── Auto-scroll while dragging a column header ──────────────────
@@ -146,8 +181,14 @@ namespace BreakersOfE.Views.Pages
             PoolGrid.Columns.FirstOrDefault(c => ColumnHeader(c) == header);
 
         /// <summary>Does this column exist for this kind of table?</summary>
-        private static bool ColumnApplies(string header, TableKind kind) =>
-            !ColumnKinds.TryGetValue(header, out var kinds) || Array.IndexOf(kinds, kind) >= 0;
+        private static bool ColumnApplies(string header, string table)
+        {
+            var kind = KindOf(table);
+            if (ColumnKinds.TryGetValue(header, out var kinds) && Array.IndexOf(kinds, kind) < 0) return false;
+            // Legality: the Pool's cards (not its tokens, planes …), the Collection.
+            if (LegalityHeaders.Contains(header) && kind == TableKind.Pool && table != PoolCardsTag) return false;
+            return true;
+        }
 
         /// <summary>
         /// Show a table's layout: defaults first (XAML widths and order, plus the
@@ -158,8 +199,6 @@ namespace BreakersOfE.Views.Pages
             _applyingLayout = true;
             try
             {
-                var kind = KindOf(table);
-
                 // 1. Defaults. Set positions in ascending order so each
                 //    assignment lands where intended.
                 foreach (var kv in _defaultColumns.OrderBy(k => k.Value.index))
@@ -171,7 +210,7 @@ namespace BreakersOfE.Views.Pages
                     col.Visibility = DefaultHiddenColumns.Contains(kv.Key)   // defaults show every
                         ? Visibility.Collapsed : Visibility.Visible;          // column but the hidden-by-default ones
                 }
-                ApplyColumnSet(kind);                      // then hide what this table doesn't have
+                ApplyColumnSet(table);                     // then hide what this table doesn't have
 
                 // 2. This table's saved layout, if any.
                 var saved = Services.GridLayoutService.Get(LayoutKey(table));
@@ -189,12 +228,13 @@ namespace BreakersOfE.Views.Pages
 
                         // Only user choices: a column this table doesn't have
                         // stays hidden, and Name always shows.
-                        if (ColumnApplies(cl.Header, kind) && cl.Header != "Name")
+                        if (ColumnApplies(cl.Header, table) && cl.Header != "Name")
                             col.Visibility = cl.Visible ? Visibility.Visible : Visibility.Collapsed;
                     }
                 }
 
                 _layoutTable = table;
+                _layoutVersionSeen = Services.GridLayoutService.Version(LayoutKey(table));
             }
             finally
             {
@@ -240,7 +280,10 @@ namespace BreakersOfE.Views.Pages
                 Width = c.Width.IsAbsolute ? c.Width.Value : c.ActualWidth,
             }).ToList();
 
-            Services.GridLayoutService.Set(LayoutKey(_layoutTable), layout);
+            _savingLayout = true;
+            try { Services.GridLayoutService.Set(LayoutKey(_layoutTable), layout); }
+            finally { _savingLayout = false; }
+            _layoutVersionSeen = Services.GridLayoutService.Version(LayoutKey(_layoutTable));
         }
 
         /// <summary>Columns button: checklist of this table's regular columns.</summary>
@@ -260,7 +303,6 @@ namespace BreakersOfE.Views.Pages
         private void ShowColumnChecklist(FrameworkElement anchor, bool legality)
         {
             if (string.IsNullOrEmpty(_layoutTable)) return;
-            var kind = KindOf(_layoutTable);
 
             // Which columns this list covers
             IEnumerable<DataGridColumn> columns = legality
@@ -270,7 +312,7 @@ namespace BreakersOfE.Views.Pages
                 : PoolGrid.Columns
                     .OrderBy(c => c.DisplayIndex)
                     .Where(c => !LegalityHeaders.Contains(ColumnHeader(c)));
-            columns = columns.Where(c => ColumnApplies(ColumnHeader(c), kind)).ToList();
+            columns = columns.Where(c => ColumnApplies(ColumnHeader(c), _layoutTable)).ToList();
 
             var list = new StackPanel { Margin = new Thickness(10, 8, 10, 8) };
             var boxes = new List<(CheckBox box, DataGridColumn col)>();

@@ -7,7 +7,7 @@
     <!-- Settings: saved as you change them (Documents\BoE_V2\Settings.json). -->
     <Page.Resources>
         <Style x:Key="Section" TargetType="Border">
-            <Setter Property="Background" Value="#15808080"/>
+            <Setter Property="Background" Value="{DynamicResource BoePanelBrush}"/>
             <Setter Property="CornerRadius" Value="8"/>
             <Setter Property="Padding" Value="16,12"/>
             <Setter Property="Margin" Value="0,0,0,12"/>
@@ -33,6 +33,56 @@
         <StackPanel Margin="16" MaxWidth="900" HorizontalAlignment="Left">
             <TextBlock Text="Settings" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,4"/>
             <TextBlock Text="Changes are saved as you make them." Style="{StaticResource Hint}"/>
+
+            <!-- ═══ APPEARANCE ═══ -->
+            <Border Style="{StaticResource Section}">
+                <StackPanel>
+                    <TextBlock Text="Appearance" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Style="{StaticResource Hint}"
+                               Text="The app's colours. Changes right away. The card tables keep their light rows (text in the card's colour) in every theme, Custom too."/>
+                    <RadioButton x:Name="ThemeDark" GroupName="Theme" Content="Dark" Margin="0,0,0,4" Checked="Theme_Checked"/>
+                    <RadioButton x:Name="ThemeLight" GroupName="Theme" Content="Light" Margin="0,0,0,4" Checked="Theme_Checked"/>
+                    <RadioButton x:Name="ThemeSystem" GroupName="Theme" Content="Follow Windows" Checked="Theme_Checked"
+                                 ToolTip="Light or Dark as Windows' app mode is set (Windows Settings → Personalization → Colors); switches when Windows does"/>
+                    <TextBlock x:Name="ThemeNote" Style="{StaticResource Hint}" Margin="28,2,0,0"/>
+                    <RadioButton x:Name="ThemeCustom" GroupName="Theme" Content="Custom colours" Checked="Theme_Checked"
+                                 ToolTip="Light or Dark with your own colours; keep several sets as presets"/>
+
+                    <!-- Custom: the preset and its colours (shown when Custom is picked) -->
+                    <StackPanel x:Name="CustomPanel" Margin="28,10,0,0" Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="Preset" Style="{StaticResource Label}"/>
+                            <ComboBox x:Name="PresetBox" Width="220" SelectionChanged="PresetBox_SelectionChanged"/>
+                            <Button Content="New Preset" Padding="12,4" Margin="8,0,0,0" Click="BtnNewPreset_Click"
+                                    ToolTip="A copy of this preset under a new name"/>
+                            <Button x:Name="BtnDeletePreset" Content="Delete…" Padding="12,4" Margin="8,0,0,0" Click="BtnDeletePreset_Click"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="Name" Style="{StaticResource Label}"/>
+                            <TextBox x:Name="PresetNameBox" Width="220" LostFocus="PresetNameBox_LostFocus" KeyDown="PresetNameBox_KeyDown"
+                                     ToolTip="Rename this preset (Enter or click away to keep it)"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <TextBlock Text="Start from" Style="{StaticResource Label}"/>
+                            <RadioButton x:Name="BaseDark" GroupName="PresetBase" Content="Dark" Margin="0,0,16,0" Checked="Base_Checked"/>
+                            <RadioButton x:Name="BaseLight" GroupName="PresetBase" Content="Light" Checked="Base_Checked"/>
+                        </StackPanel>
+                        <!-- One row per colour (built in code): label, swatch (opens the palette), #hex, Default -->
+                        <StackPanel x:Name="ColorRows"/>
+                        <TextBlock x:Name="ContrastText" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource BoeWarningBrush}" Visibility="Collapsed"/>
+                        <Button Content="Reset All Colours" Padding="12,4" Margin="0,10,0,0" HorizontalAlignment="Left"
+                                Click="BtnResetColours_Click" ToolTip="Every colour of this preset back to its Light / Dark default"/>
+                    </StackPanel>
+
+                    <Popup x:Name="PalettePopup" StaysOpen="False" Placement="Bottom" AllowsTransparency="True">
+                        <Border Background="{DynamicResource SolidBackgroundFillColorBaseBrush}" CornerRadius="8" Padding="8"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1">
+                            <WrapPanel x:Name="PaletteWrap" Width="296"/>
+                        </Border>
+                    </Popup>
+                </StackPanel>
+            </Border>
 
             <!-- ═══ COLLECTION DEFAULTS ═══ -->
             <Border Style="{StaticResource Section}">
@@ -112,7 +162,7 @@
                                Text="Where BoE keeps your collection, decks, card data, pictures and exports. Moving it copies everything to the new folder, checks the copy, and restarts BoE there. The old folder stays as it was until you delete it."/>
                     <TextBlock x:Name="FolderText" TextWrapping="Wrap" Margin="0,0,0,4"/>
                     <TextBlock x:Name="FolderSizeText" Style="{StaticResource Hint}"/>
-                    <TextBlock x:Name="FolderProblem" TextWrapping="Wrap" Margin="0,0,0,8" Foreground="#E8A317" Visibility="Collapsed"/>
+                    <TextBlock x:Name="FolderProblem" TextWrapping="Wrap" Margin="0,0,0,8" Foreground="{DynamicResource BoeWarningBrush}" Visibility="Collapsed"/>
                     <WrapPanel>
                         <Button x:Name="BtnOpenFolder" Content="Open Folder" Padding="12,4" Margin="0,0,8,0" Click="BtnOpenFolder_Click"/>
                         <Button x:Name="BtnMoveFolder" Content="Move…" Padding="12,4" Margin="0,0,8,0" Click="BtnMoveFolder_Click"/>
@@ -125,7 +175,7 @@
                 </StackPanel>
             </Border>
 
-            <!-- Appearance (Light / Dark / Custom) and the Program Tour come in the next parts. -->
+            <!-- The Program Tour comes in a later part. -->
         </StackPanel>
     </ScrollViewer>
 </Page>

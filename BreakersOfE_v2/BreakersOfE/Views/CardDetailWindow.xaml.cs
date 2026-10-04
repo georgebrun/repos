@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -140,7 +140,8 @@ namespace BreakersOfE.Views
             {
                 var converter = new Services.ImageSourceConverter();
                 var img = converter.Convert(
-                    new object[] { setSymbolPath, rarity },
+                    // Common's black symbol is for the light table rows; here it sits on the window.
+                    new object[] { setSymbolPath, string.Equals(rarity, "common", StringComparison.OrdinalIgnoreCase) ? "ondark" : rarity },
                     typeof(ImageSource), null!,
                     System.Globalization.CultureInfo.CurrentCulture);
                 SetSymbol.Source = img as ImageSource;
@@ -202,7 +203,15 @@ namespace BreakersOfE.Views
         }
 
         private static readonly Brush NonFoilBrush = new SolidColorBrush(Color.FromRgb(0x4C, 0xA0, 0xFF));
-        private static readonly Brush FoilBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xC0, 0x00));
+        /// <summary>Text in a theme colour, kept in step when Light / Dark changes.</summary>
+        private static System.Windows.Controls.TextBlock Themed(System.Windows.Controls.TextBlock tb, string brushKey)
+        {
+            tb.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, brushKey);
+            return tb;
+        }
+
+        private static Brush FoilBrush =>                                     // gold that reads in Light and Dark
+            Application.Current.TryFindResource("BoeGoldBrush") as Brush ?? new SolidColorBrush(Color.FromRgb(0xFF, 0xC0, 0x00));
         private static readonly Brush EtchedBrush = new SolidColorBrush(Color.FromRgb(0xB0, 0x8C, 0xFF));
 
         private void ShowPriceHistory()
@@ -391,12 +400,11 @@ namespace BreakersOfE.Views
             }
 
             RulingsPanel.Children.Clear();
-            RulingsPanel.Children.Add(new System.Windows.Controls.TextBlock
+            RulingsPanel.Children.Add(Themed(new System.Windows.Controls.TextBlock
             {
                 Text = "Loading rulings...",
-                FontSize = 12,
-                Foreground = (Brush)FindResource("TextFillColorSecondaryBrush")
-            });
+                FontSize = 12
+            }, "TextFillColorSecondaryBrush"));
             RulingsHeader.Visibility = Visibility.Visible;
             RulingsBorder.Visibility = Visibility.Visible;
 
@@ -407,33 +415,30 @@ namespace BreakersOfE.Views
             RulingsPanel.Children.Clear();
             if (rulings.Count == 0)
             {
-                RulingsPanel.Children.Add(new System.Windows.Controls.TextBlock
+                RulingsPanel.Children.Add(Themed(new System.Windows.Controls.TextBlock
                 {
                     Text = "No rulings available.",
                     FontSize = 12,
-                    FontStyle = FontStyles.Italic,
-                    Foreground = (Brush)FindResource("TextFillColorSecondaryBrush")
-                });
+                    FontStyle = FontStyles.Italic
+                }, "TextFillColorSecondaryBrush"));
                 return;
             }
 
             foreach (var (date, text) in rulings)
             {
                 var sp = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
-                sp.Children.Add(new System.Windows.Controls.TextBlock
+                sp.Children.Add(Themed(new System.Windows.Controls.TextBlock
                 {
                     Text = date,
                     FontSize = 10,
-                    FontWeight = FontWeights.SemiBold,
-                    Foreground = (Brush)FindResource("TextFillColorTertiaryBrush")
-                });
-                sp.Children.Add(new System.Windows.Controls.TextBlock
+                    FontWeight = FontWeights.SemiBold
+                }, "TextFillColorTertiaryBrush"));
+                sp.Children.Add(Themed(new System.Windows.Controls.TextBlock
                 {
                     Text = text,
                     FontSize = 12,
-                    TextWrapping = TextWrapping.Wrap,
-                    Foreground = (Brush)FindResource("TextFillColorPrimaryBrush")
-                });
+                    TextWrapping = TextWrapping.Wrap
+                }, "TextFillColorPrimaryBrush"));
                 RulingsPanel.Children.Add(sp);
             }
         }

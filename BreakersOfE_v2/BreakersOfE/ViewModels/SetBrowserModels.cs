@@ -79,7 +79,7 @@ namespace BreakersOfE.ViewModels
                     if (!string.IsNullOrEmpty(SymbolPath))
                     {
                         _symbol = new Services.ImageSourceConverter().Convert(
-                            new object[] { SymbolPath, "ondark" },   // light gray: readable on the dark window
+                            new object[] { SymbolPath, "ondark" },   // grey that reads on the window (Light or Dark)
                             typeof(ImageSource), null!,
                             CultureInfo.CurrentCulture) as ImageSource;
                     }

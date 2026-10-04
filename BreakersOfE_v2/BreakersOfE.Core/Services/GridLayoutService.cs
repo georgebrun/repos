@@ -56,6 +56,22 @@ namespace BreakersOfE.Services
             return new Dictionary<string, List<ColumnLayout>>(StringComparer.OrdinalIgnoreCase);
         }
 
+        // ── Change notice: View and Edit show the same table, so a layout
+        //    changed on one shows on the other. ─────────────────────────
+        private static readonly Dictionary<string, int> _versions = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Raised (with the table key) after a table's layout or zoom is saved or reset.</summary>
+        public static event Action<string>? Changed;
+
+        /// <summary>Goes up each time a table's layout or zoom changes (a page compares it on return).</summary>
+        public static int Version(string table) => _versions.TryGetValue(table, out int v) ? v : 0;
+
+        private static void Bump(string table)
+        {
+            _versions[table] = Version(table) + 1;
+            Changed?.Invoke(table);
+        }
+
         /// <summary>The saved layout for a table, or null if it uses defaults.</summary>
         public static List<ColumnLayout>? Get(string table) =>
             All.TryGetValue(table, out var layout) ? layout : null;
@@ -65,12 +81,14 @@ namespace BreakersOfE.Services
         {
             All[table] = layout;
             Save();
+            Bump(table);
         }
 
         /// <summary>Forget a table's layout (back to defaults).</summary>
         public static void Remove(string table)
         {
             if (All.Remove(table)) Save();
+            Bump(table);
         }
 
         private static void Save()
@@ -183,6 +201,7 @@ namespace BreakersOfE.Services
             {
                 System.Diagnostics.Debug.WriteLine($"GridZoom save failed: {ex.Message}");
             }
+            Bump(table);
         }
     }
 }

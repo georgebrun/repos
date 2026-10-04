@@ -198,7 +198,7 @@ namespace BreakersOfE.Models
         [NotMapped]
         public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground(
-                ColorIdentity, TypeLine, Finish != CardFinish.NonFoil);
+                Colors, ColorIdentity, TypeLine);
         [NotMapped]
         public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
@@ -326,7 +326,7 @@ namespace BreakersOfE.Models
         }
         [NotMapped]
         public System.Windows.Media.Brush RowForegroundBrush =>
-            BreakersOfE.Services.CardColorService.GetForeground(ColorIdentity, TypeLine, Finish != CardFinish.NonFoil);
+            BreakersOfE.Services.CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
         [NotMapped]
         public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
@@ -435,7 +435,7 @@ namespace BreakersOfE.Models
         [NotMapped] public string SellAtValueDisplay => SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
         [NotMapped]
         public System.Windows.Media.Brush RowForegroundBrush =>
-            BreakersOfE.Services.CardColorService.GetForeground("", TypeLine, Finish != CardFinish.NonFoil);
+            BreakersOfE.Services.CardColorService.GetForeground("", "", TypeLine);
         [NotMapped]
         public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
@@ -544,7 +544,7 @@ namespace BreakersOfE.Models
         [NotMapped] public string SellAtValueDisplay => SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
         [NotMapped]
         public System.Windows.Media.Brush RowForegroundBrush =>
-            BreakersOfE.Services.CardColorService.GetForeground("", TypeLine, Finish != CardFinish.NonFoil);
+            BreakersOfE.Services.CardColorService.GetForeground("", "", TypeLine);
         [NotMapped]
         public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
@@ -655,7 +655,7 @@ namespace BreakersOfE.Models
         [NotMapped] public string SellAtValueDisplay => SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
         [NotMapped]
         public System.Windows.Media.Brush RowForegroundBrush =>
-            BreakersOfE.Services.CardColorService.GetForeground("", TypeLine, Finish != CardFinish.NonFoil);
+            BreakersOfE.Services.CardColorService.GetForeground("", "", TypeLine);
         [NotMapped]
         public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
@@ -760,7 +760,7 @@ namespace BreakersOfE.Models
         }
         [NotMapped]
         public System.Windows.Media.Brush RowForegroundBrush =>
-            BreakersOfE.Services.CardColorService.GetForeground(ColorIdentity, TypeLine, Finish != CardFinish.NonFoil);
+            BreakersOfE.Services.CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
         [NotMapped]
         public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
@@ -868,7 +868,7 @@ namespace BreakersOfE.Models
         [NotMapped] public string SellAtValueDisplay => SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
         [NotMapped]
         public System.Windows.Media.Brush RowForegroundBrush =>
-            BreakersOfE.Services.CardColorService.GetForeground("", TypeLine, Finish != CardFinish.NonFoil);
+            BreakersOfE.Services.CardColorService.GetForeground("", "", TypeLine);
         [NotMapped]
         public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
@@ -982,7 +982,7 @@ namespace BreakersOfE.Models
         }
         [NotMapped]
         public System.Windows.Media.Brush RowForegroundBrush =>
-            BreakersOfE.Services.CardColorService.GetForeground(ColorIdentity, TypeLine, Finish != CardFinish.NonFoil);
+            BreakersOfE.Services.CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
         [NotMapped]
         public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(
@@ -1089,7 +1089,7 @@ namespace BreakersOfE.Models
         }
         [NotMapped]
         public System.Windows.Media.Brush RowForegroundBrush =>
-            BreakersOfE.Services.CardColorService.GetForeground(ColorIdentity, TypeLine, Finish != CardFinish.NonFoil);
+            BreakersOfE.Services.CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
         [NotMapped]
         public System.Windows.Media.Brush RowBackgroundBrush =>
             BreakersOfE.Services.CardColorService.GetBackground(

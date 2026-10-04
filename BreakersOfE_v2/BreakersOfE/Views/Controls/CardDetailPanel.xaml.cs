@@ -121,7 +121,8 @@ namespace BreakersOfE.Views.Controls
             {
                 var converter = new Services.ImageSourceConverter();
                 var img = converter.Convert(
-                    new object[] { setSymbolPath, rarity },
+                    // Common's black symbol is for the light table rows; here it sits on the window.
+                    new object[] { setSymbolPath, string.Equals(rarity, "common", StringComparison.OrdinalIgnoreCase) ? "ondark" : rarity },
                     typeof(ImageSource), null!,
                     System.Globalization.CultureInfo.CurrentCulture);
                 DetailSetSymbol.Source = img as ImageSource;

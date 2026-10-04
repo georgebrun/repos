@@ -39,13 +39,13 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Thumb">
-                            <Border x:Name="Bd" CornerRadius="6" Margin="3" Background="#909A9A9A"/>
+                            <Border x:Name="Bd" CornerRadius="6" Margin="3" Background="{DynamicResource BoeScrollThumbBrush}"/>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#D0C0C0C0"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BoeScrollThumbHoverBrush}"/>
                                 </Trigger>
                                 <Trigger Property="IsDragging" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#F0E0E0E0"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BoeScrollThumbDragBrush}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -54,7 +54,7 @@
             </Style>
 
             <ControlTemplate x:Key="BoeVerticalScrollBar" TargetType="ScrollBar">
-                <Border Background="#18FFFFFF" CornerRadius="7">
+                <Border Background="#20808080" CornerRadius="7">
                     <Track x:Name="PART_Track" IsDirectionReversed="True">
                         <Track.DecreaseRepeatButton>
                             <RepeatButton Command="ScrollBar.PageUpCommand" Style="{StaticResource BoeScrollPage}"/>
@@ -70,7 +70,7 @@
             </ControlTemplate>
 
             <ControlTemplate x:Key="BoeHorizontalScrollBar" TargetType="ScrollBar">
-                <Border Background="#18FFFFFF" CornerRadius="7">
+                <Border Background="#20808080" CornerRadius="7">
                     <Track x:Name="PART_Track" IsDirectionReversed="False">
                         <Track.DecreaseRepeatButton>
                             <RepeatButton Command="ScrollBar.PageLeftCommand" Style="{StaticResource BoeScrollPage}"/>
@@ -107,6 +107,14 @@
             <!-- Plain WPF scroll bars and Wpf.Ui's own (DynamicScrollBar) both get it. -->
             <Style TargetType="ScrollBar" BasedOn="{StaticResource BoeScrollBar}"/>
             <Style TargetType="ui:DynamicScrollBar" BasedOn="{StaticResource BoeScrollBar}"/>
+
+            <!-- BoE's theme colours (Settings → Appearance swaps them; these are Dark's). -->
+            <SolidColorBrush x:Key="BoeGoldBrush" Color="#FFC000"/>
+            <SolidColorBrush x:Key="BoePanelBrush" Color="#15808080"/>
+            <SolidColorBrush x:Key="BoeWarningBrush" Color="#E8A317"/>
+            <SolidColorBrush x:Key="BoeScrollThumbBrush" Color="#909A9A9A"/>
+            <SolidColorBrush x:Key="BoeScrollThumbHoverBrush" Color="#D0C0C0C0"/>
+            <SolidColorBrush x:Key="BoeScrollThumbDragBrush" Color="#F0E0E0E0"/>
 
             <!-- Global value converters — available to all XAML pages -->
             <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />

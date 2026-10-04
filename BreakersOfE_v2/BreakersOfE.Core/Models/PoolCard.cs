@@ -6,7 +6,7 @@ using System.Windows.Media;
 
 namespace BreakersOfE.Models
 {
-    public class PoolCard : IOwnedCard, System.ComponentModel.INotifyPropertyChanged
+    public class PoolCard : IOwnedCard, ILegalityRow, System.ComponentModel.INotifyPropertyChanged
     {
         [Key]
         public int PoolId { get; set; }
@@ -191,6 +191,12 @@ namespace BreakersOfE.Models
         public string PriceUsdEtchedDisplay =>
             PriceUsdEtched.HasValue ? $"${PriceUsdEtched.Value:F2}" : "—";
 
+        // ── Legality columns: {Binding Legality[commander].Text} etc. (Pool's Legality button) ──
+        private LegalityAccessor? _legality;
+        [NotMapped]
+        public LegalityAccessor Legality =>
+            _legality ??= new LegalityAccessor(() => LegalitiesJson);
+
         // ── Legality columns ─────────────────────────────────────────────────
         [NotMapped] public string LegalityStandard => GetLegality("standard");
         [NotMapped] public string LegalityPioneer => GetLegality("pioneer");
@@ -244,7 +250,7 @@ namespace BreakersOfE.Models
         [NotMapped]
         public Brush RowForegroundBrush =>
             CardColorService.GetForeground(
-                ColorIdentity, TypeLine, IsFoil);
+                Colors, ColorIdentity, TypeLine);
 
         [NotMapped]
         public Brush RowBackgroundBrush =>

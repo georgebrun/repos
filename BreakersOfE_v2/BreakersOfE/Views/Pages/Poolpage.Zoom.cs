@@ -60,7 +60,12 @@ namespace BreakersOfE.Views.Pages
             PoolGrid.LayoutTransform = scale ?? Transform.Identity;
             TotalsGrid.LayoutTransform = scale ?? Transform.Identity;
             if (save && !string.IsNullOrEmpty(_layoutTable))
-                Services.GridLayoutService.SetZoom(LayoutKey(_layoutTable), zoom);
+            {
+                _savingLayout = true;
+                try { Services.GridLayoutService.SetZoom(LayoutKey(_layoutTable), zoom); }
+                finally { _savingLayout = false; }
+                _layoutVersionSeen = Services.GridLayoutService.Version(LayoutKey(_layoutTable));
+            }
             if (save) _vm.StatusText = $"Zoom {zoom:P0}";
         }
     }

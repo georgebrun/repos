@@ -89,7 +89,7 @@ namespace BreakersOfE.Models
 
         [NotMapped]
         public Brush RowForegroundBrush =>
-            CardColorService.GetForeground(string.Empty, TypeLine, IsFoil);
+            CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
 
         [NotMapped]
         public Brush RowBackgroundBrush =>
@@ -180,7 +180,7 @@ namespace BreakersOfE.Models
 
         [NotMapped]
         public Brush RowForegroundBrush =>
-            CardColorService.GetForeground(string.Empty, TypeLine, IsFoil);
+            CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
 
         [NotMapped]
         public Brush RowBackgroundBrush =>
@@ -273,7 +273,7 @@ namespace BreakersOfE.Models
 
         [NotMapped]
         public Brush RowForegroundBrush =>
-            CardColorService.GetForeground(string.Empty, TypeLine, IsFoil);
+            CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
 
         [NotMapped]
         public Brush RowBackgroundBrush =>
@@ -364,7 +364,7 @@ namespace BreakersOfE.Models
 
         [NotMapped]
         public Brush RowForegroundBrush =>
-            CardColorService.GetForeground(string.Empty, TypeLine, IsFoil);
+            CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
 
         [NotMapped]
         public Brush RowBackgroundBrush =>
@@ -438,6 +438,11 @@ namespace BreakersOfE.Models
         [NotMapped] public string PowerToughness => string.Empty;
         [NotMapped] public bool IsLand => false;
         [NotMapped] public bool IsCreature => false;
+
+        // Row text in the card's colour (was missing: Conspiracy rows took the theme's text colour).
+        [NotMapped]
+        public Brush RowForegroundBrush =>
+            CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
 
         [NotMapped]
         public Brush RowBackgroundBrush =>

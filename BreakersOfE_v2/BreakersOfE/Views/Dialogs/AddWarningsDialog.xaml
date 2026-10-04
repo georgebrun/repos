@@ -32,7 +32,7 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <DockPanel Margin="0,0,0,6">
-                            <TextBlock DockPanel.Dock="Left" Text="⚠" Foreground="#E8A317" Margin="0,0,8,0"/>
+                            <TextBlock DockPanel.Dock="Left" Text="⚠" Foreground="{DynamicResource BoeWarningBrush}" Margin="0,0,8,0"/>
                             <TextBlock Text="{Binding}" TextWrapping="Wrap"/>
                         </DockPanel>
                     </DataTemplate>

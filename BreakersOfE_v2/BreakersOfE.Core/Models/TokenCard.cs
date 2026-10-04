@@ -93,7 +93,7 @@ namespace BreakersOfE.Models
 
         [NotMapped]
         public Brush RowForegroundBrush =>
-            CardColorService.GetForeground(ColorIdentity, TypeLine, IsFoil);
+            CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
 
         [NotMapped]
         public Brush RowBackgroundBrush =>

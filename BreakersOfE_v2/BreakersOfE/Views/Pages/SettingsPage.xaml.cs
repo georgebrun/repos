@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using BreakersOfE.Models;
 using BreakersOfE.Services;
 
@@ -34,6 +35,8 @@ namespace BreakersOfE.Views.Pages
             ConditionBox.ItemsSource = CardCondition.All.Where(c => c != CardCondition.Unknown).ToList();
             StartPageBox.ItemsSource = AppSettingsService.StartPages.Select(p => new Choice<string>(p.Value, p.Label)).ToList();
             ReminderBox.ItemsSource = Reminders;
+            BuildColorRows();
+            BuildPalette();
             _loading = false;
         }
 
@@ -53,6 +56,9 @@ namespace BreakersOfE.Views.Pages
             ShowDownloadState();                                  // a download started earlier may still be running
             _ = RefreshPictureInfo(recount: false);
             _ = RefreshFolderInfo();
+            ThemeService.Changed -= OnThemeChanged;
+            ThemeService.Changed += OnThemeChanged;
+            Unloaded += (_, _) => ThemeService.Changed -= OnThemeChanged;
         }
 
         private void ShowSettings()
@@ -70,6 +76,15 @@ namespace BreakersOfE.Views.Pages
                     .FirstOrDefault(c => c.Value == s.StartPage);
                 ReminderBox.SelectedItem = Reminders.FirstOrDefault(r => r.Value == s.UpdateReminderDays)
                                            ?? Reminders.OrderBy(r => Math.Abs(r.Value - s.UpdateReminderDays)).First();
+                (ThemeService.SelectedMode switch
+                {
+                    AppTheme.Light => ThemeLight,
+                    AppTheme.System => ThemeSystem,
+                    AppTheme.Custom => ThemeCustom,
+                    _ => ThemeDark,
+                }).IsChecked = true;
+                ShowThemeNote();
+                ShowCustom();
             }
             finally
             {
@@ -96,6 +111,270 @@ namespace BreakersOfE.Views.Pages
             if (s.SaveMyPictures && !mineWasOn) SyncNow();
             if (s.SaveMyPictures != mineWasOn) _ = RefreshPictureInfo(recount: true);
         }
+
+        // ══════════════════════════════════════════════════════════════════
+        // APPEARANCE
+        // ══════════════════════════════════════════════════════════════════
+        private void Theme_Checked(object sender, RoutedEventArgs e)
+        {
+            if (_loading || !IsInitialized) return;
+            var mode = sender == ThemeLight ? AppTheme.Light
+                     : sender == ThemeSystem ? AppTheme.System
+                     : sender == ThemeCustom ? AppTheme.Custom
+                     : AppTheme.Dark;
+            ThemeApplier.Use(mode);
+            ShowThemeNote();
+            ShowCustom();
+        }
+
+        // ── Custom colours ───────────────────────────────────────────────
+        private sealed record ColorRow(string Key, Border Swatch, TextBox Hex, Button Default);
+        private readonly System.Collections.Generic.List<ColorRow> _colorRows = new();
+        private string _paletteKey = "";
+
+        /// <summary>Ready-made colours in the swatch palette: greys, dark and light tints, accents.</summary>
+        private static readonly string[] Palette =
+        {
+            "#000000", "#141414", "#202020", "#2B2B2B", "#333333", "#3C3C3C", "#4D4D4D", "#666666",
+            "#808080", "#999999", "#B3B3B3", "#CCCCCC", "#E0E0E0", "#F0F0F0", "#FAFAFA", "#FFFFFF",
+            "#1E2A38", "#1F2D24", "#2D1F1F", "#2A2438", "#1B2B2E", "#33291A", "#26303B", "#2E2A22",
+            "#EEF2F7", "#EDF7EE", "#F7EDED", "#F3EEF7", "#E8F4F8", "#FFF8E1", "#F5F0E6", "#E6EBF0",
+            "#0078D4", "#2D7D9A", "#00B7C3", "#107C10", "#498205", "#5C2D91", "#8E8CD8", "#B4009E",
+            "#C50F1F", "#CA5010", "#E8A317", "#FFB900", "#9A7000", "#7A5C00", "#004E8C", "#3A3A8C",
+        };
+
+        private static Brush Solid(string hex)
+        {
+            var b = new SolidColorBrush(ThemeApplier.ToColor(hex));
+            b.Freeze();
+            return b;
+        }
+
+        private void BuildColorRows()
+        {
+            foreach (var (key, label, hint) in ColorPreset.Slots)
+            {
+                var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+                row.Children.Add(new TextBlock { Text = label, Width = 190, VerticalAlignment = VerticalAlignment.Center, ToolTip = hint });
+                var swatch = new Border { Width = 40, Height = 22, CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1) };
+                swatch.SetResourceReference(Border.BorderBrushProperty, "ControlStrokeColorDefaultBrush");
+                var pick = new Button { Content = swatch, Padding = new Thickness(3), Tag = key, ToolTip = "Pick a colour" };
+                pick.Click += Swatch_Click;
+                row.Children.Add(pick);
+                var hex = new TextBox { Width = 96, Margin = new Thickness(8, 0, 0, 0), Tag = key, VerticalContentAlignment = VerticalAlignment.Center,
+                                        ToolTip = "Type a colour as #RRGGBB, then Enter" };
+                hex.LostFocus += (_, _) => HexEntered(hex);
+                hex.KeyDown += (_, e) => { if (e.Key == Key.Enter) HexEntered(hex); };
+                row.Children.Add(hex);
+                var def = new Button { Content = "Default", Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(8, 0, 0, 0), Tag = key,
+                                       ToolTip = "Back to the Light / Dark colour" };
+                def.Click += (_, _) => SetColor(key, "");
+                row.Children.Add(def);
+                var note = new TextBlock { Text = hint, FontSize = 12, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+                note.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+                row.Children.Add(note);
+                ColorRows.Children.Add(row);
+                _colorRows.Add(new ColorRow(key, swatch, hex, def));
+            }
+        }
+
+        private void BuildPalette()
+        {
+            foreach (string hex in Palette)
+            {
+                var b = new Button
+                {
+                    Width = 32, Height = 26, Margin = new Thickness(2), Padding = new Thickness(0), Tag = hex, ToolTip = hex, MinWidth = 0,
+                    Content = new Border { Width = 26, Height = 20, CornerRadius = new CornerRadius(3), Background = Solid(hex) },
+                };
+                b.Click += (_, _) =>
+                {
+                    PalettePopup.IsOpen = false;
+                    SetColor(_paletteKey, hex);
+                };
+                PaletteWrap.Children.Add(b);
+            }
+        }
+
+        /// <summary>The colour a slot shows: the preset's own, or the Light / Dark default ("" = default).</summary>
+        private static string Shown(ColorPreset p, string key)
+        {
+            string own = p.Get(key);
+            if (own.Length > 0) return own;
+            if (key == "Accent")
+            {
+                var c = Wpf.Ui.Appearance.ApplicationAccentColorManager.SystemAccent;
+                return $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+            }
+            return ColorPreset.DefaultFor(p.IsLight, key);
+        }
+
+        private void ShowCustom()
+        {
+            bool on = ThemeService.SelectedMode == AppTheme.Custom;
+            CustomPanel.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            if (!on) return;
+            var s = AppSettingsService.Current;
+            var p = s.ActivePreset();
+            bool was = _loading;
+            _loading = true;
+            try
+            {
+                PresetBox.ItemsSource = s.Presets.Select(x => x.Name).ToList();
+                PresetBox.SelectedItem = p.Name;
+                PresetNameBox.Text = p.Name;
+                BtnDeletePreset.IsEnabled = s.Presets.Count > 1;
+                (p.IsLight ? BaseLight : BaseDark).IsChecked = true;
+                foreach (var r in _colorRows)
+                {
+                    string shown = Shown(p, r.Key);
+                    r.Swatch.Background = Solid(shown);
+                    r.Hex.Text = shown;
+                    r.Default.IsEnabled = p.Get(r.Key).Length > 0;
+                }
+            }
+            finally
+            {
+                _loading = was;
+            }
+            ShowContrast(p);
+        }
+
+        /// <summary>Amber note when a text colour gets too close to its background (a warning only).</summary>
+        private void ShowContrast(ColorPreset p)
+        {
+            string window = Shown(p, "Window"), panel = Shown(p, "Panel");
+            var problems = new System.Collections.Generic.List<string>();
+            void Check(string what, string fore, string back, string backName, double need)
+            {
+                double c = ColorPreset.Contrast(fore, back);
+                if (c < need) problems.Add($"{what} on the {backName} is hard to read (contrast {c:0.0}; aim for {need:0.#} or more).");
+            }
+            Check("Text", Shown(p, "Text"), window, "window background", 4.5);
+            Check("Text", Shown(p, "Text"), panel, "panel background", 4.5);
+            Check("Secondary text", Shown(p, "SecondaryText"), window, "window background", 3);
+            Check("Warning", Shown(p, "Warning"), window, "window background", 3);
+            ContrastText.Text = string.Join("\n", problems.Select(x => "⚠ " + x));
+            ContrastText.Visibility = problems.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        /// <summary>Change one colour of the active preset ("" = back to the default) and show it.</summary>
+        private void SetColor(string key, string hex)
+        {
+            var s = AppSettingsService.Current;
+            s.ActivePreset().Set(key, hex);
+            AppSettingsService.Save(s);
+            ThemeApplier.Refresh();
+            ShowCustom();
+        }
+
+        private void Swatch_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button b || b.Tag is not string key) return;
+            _paletteKey = key;
+            PalettePopup.PlacementTarget = b;
+            PalettePopup.IsOpen = true;
+        }
+
+        private void HexEntered(TextBox box)
+        {
+            if (_loading || box.Tag is not string key) return;
+            var p = AppSettingsService.Current.ActivePreset();
+            string hex = ColorPreset.Normalize(box.Text);
+            if (hex.Length == 0 || hex == Shown(p, key)) { box.Text = Shown(p, key); return; }   // not a colour, or unchanged
+            SetColor(key, hex);
+        }
+
+        private void BtnResetColours_Click(object sender, RoutedEventArgs e)
+        {
+            var s = AppSettingsService.Current;
+            var p = s.ActivePreset();
+            foreach (var (key, _, _) in ColorPreset.Slots) p.Set(key, "");
+            AppSettingsService.Save(s);
+            ThemeApplier.Refresh();
+            ShowCustom();
+        }
+
+        private void Base_Checked(object sender, RoutedEventArgs e)
+        {
+            if (_loading || !IsInitialized) return;
+            var s = AppSettingsService.Current;
+            s.ActivePreset().Base = sender == BaseLight ? "Light" : "Dark";
+            AppSettingsService.Save(s);
+            ThemeApplier.Refresh();
+            ShowCustom();
+        }
+
+        private void PresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_loading || !IsInitialized || PresetBox.SelectedItem is not string name) return;
+            var s = AppSettingsService.Current;
+            s.CustomPreset = name;
+            AppSettingsService.Save(s);
+            ThemeApplier.Refresh();
+            ShowCustom();
+        }
+
+        private void BtnNewPreset_Click(object sender, RoutedEventArgs e)
+        {
+            var s = AppSettingsService.Current;
+            string name = "Custom";
+            for (int i = 2; s.Presets.Any(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)); i++) name = $"Custom {i}";
+            s.Presets.Add(s.ActivePreset().Copy(name));
+            s.CustomPreset = name;
+            AppSettingsService.Save(s);
+            ThemeApplier.Refresh();
+            ShowCustom();
+            PresetNameBox.Focus();
+            PresetNameBox.SelectAll();
+        }
+
+        private void BtnDeletePreset_Click(object sender, RoutedEventArgs e)
+        {
+            var s = AppSettingsService.Current;
+            if (s.Presets.Count < 2) return;
+            var p = s.ActivePreset();
+            if (MessageBox.Show(Window.GetWindow(this), $"Delete the preset \"{p.Name}\"?", "Custom Colours",
+                    MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+            s.Presets.Remove(p);
+            s.CustomPreset = s.Presets[0].Name;
+            AppSettingsService.Save(s);
+            ThemeApplier.Refresh();
+            ShowCustom();
+        }
+
+        private void PresetNameBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter) RenamePreset();
+        }
+
+        private void PresetNameBox_LostFocus(object sender, RoutedEventArgs e) => RenamePreset();
+
+        private void RenamePreset()
+        {
+            if (_loading) return;
+            var s = AppSettingsService.Current;
+            var p = s.ActivePreset();
+            string name = PresetNameBox.Text.Trim();
+            if (name.Length == 0 || name == p.Name ||
+                s.Presets.Any(x => x != p && string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                PresetNameBox.Text = p.Name;                          // empty or taken: keep the old name
+                return;
+            }
+            p.Name = name;
+            s.CustomPreset = name;
+            AppSettingsService.Save(s);
+            ShowCustom();
+        }
+
+        /// <summary>Follow Windows changed the theme while this page is open.</summary>
+        private void OnThemeChanged() => Dispatcher.BeginInvoke(new Action(ShowThemeNote));
+
+        private void ShowThemeNote() =>
+            ThemeNote.Text = ThemeService.SelectedMode == AppTheme.System
+                ? $"Windows is using {(ThemeService.CurrentTheme == AppTheme.Dark ? "Dark" : "Light")} now."
+                : "";
 
         private void TradeBox_LostFocus(object sender, RoutedEventArgs e)
         {

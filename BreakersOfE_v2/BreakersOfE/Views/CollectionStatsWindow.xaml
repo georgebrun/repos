@@ -22,7 +22,7 @@
         <!-- One summary number (big value + small label) -->
         <DataTemplate x:Key="SummaryTile">
             <Border Width="170" Margin="0,0,10,10" Padding="12,10" CornerRadius="8"
-                    Background="#18808080">
+                    Background="{DynamicResource BoePanelBrush}">
                 <StackPanel>
                     <TextBlock Text="{Binding Value}" FontSize="20" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
@@ -140,7 +140,7 @@
                         <DataGridTextColumn Header="Finish" Binding="{Binding FinishPill}"      Width="70">
                             <DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock">
-                                    <Setter Property="Foreground" Value="#FFC000"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource BoeGoldBrush}"/>
                                     <Setter Property="FontWeight" Value="Bold"/>
                                     <Setter Property="HorizontalAlignment" Value="Center"/>
                                 </Style>

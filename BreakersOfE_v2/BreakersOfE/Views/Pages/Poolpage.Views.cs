@@ -50,7 +50,7 @@ namespace BreakersOfE.Views.Pages
         {
             if (_embeddedGallery == null) return;
             _embeddedGallery = !_embeddedGallery.Value;
-            Services.GridLayoutService.SetEditGallery(LayoutKey(_currentTag), _embeddedGallery.Value);
+            Services.GridLayoutService.SetEditGallery(EditGalleryKey(_currentTag), _embeddedGallery.Value);
             SetViewMode(SwitchMode);
         }
 
@@ -96,7 +96,8 @@ namespace BreakersOfE.Views.Pages
                 ? Visibility.Visible : Visibility.Collapsed;
             DeckRulesPanel.Visibility = cardView && _currentTag == DeckTableTag && _openDeck != null
                 ? Visibility.Visible : Visibility.Collapsed;
-            BtnLegality.Visibility = mode == PoolViewMode.Grid && _currentTag == Services.CollectionEditService.CardsTable
+            BtnLegality.Visibility = mode == PoolViewMode.Grid &&
+                                     (_currentTag == Services.CollectionEditService.CardsTable || _currentTag == PoolCardsTag)
                 ? Visibility.Visible : Visibility.Collapsed;
             bool showTotals = mode == PoolViewMode.Grid &&
                               (IsCollectionKind(KindOf(_currentTag)) || _currentTag == DeckTableTag);

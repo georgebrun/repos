@@ -341,8 +341,8 @@ namespace BreakersOfE.Models
                 ? System.Windows.Media.Brushes.Black
                 : IsCommander
                     ? System.Windows.Media.Brushes.White
-                    : Services.CardColorService.GetForeground(
-                        ColorIdentity, TypeLine, false);
+                    : Services.CardColorService.GetForegroundFromCost(
+                        ManaCost, ColorIdentity, TypeLine);
 
         [JsonIgnore]
         public System.Windows.Media.Brush RowBackgroundBrush =>

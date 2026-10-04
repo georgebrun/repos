@@ -6,6 +6,7 @@
       xmlns:vm="clr-namespace:BreakersOfE.ViewModels"
       xmlns:ctl="clr-namespace:BreakersOfE.Views.Controls"
       xmlns:pages="clr-namespace:BreakersOfE.Views.Pages"
+      xmlns:conv="clr-namespace:BreakersOfE.Converters"
       ScrollViewer.VerticalScrollBarVisibility="Disabled"
       Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
@@ -17,6 +18,7 @@
         <svc:ImageSourceConverter x:Key="ImageSourceConverter" />
         <svc:ManaCostConverter x:Key="ManaCostConverter" />
         <pages:UsedInTableConverter x:Key="UsedInTable" />
+        <conv:RowBackgroundConverter x:Key="RowBackground" />
 
         <!-- Detail panel label/value styles -->
 
@@ -195,12 +197,23 @@
                   VirtualizingPanel.VirtualizationMode="Recycling"
                   ScrollViewer.CanContentScroll="True"
                   RowDetailsVisibilityMode="Collapsed"
+                  AlternationCount="2"
                   MouseDoubleClick="PoolGrid_MouseDoubleClick">
 
                 <DataGrid.RowStyle>
                     <Style TargetType="DataGridRow">
-                        <Setter Property="Foreground" Value="{Binding RowForegroundBrush}" />
-                        <Setter Property="Background" Value="{Binding RowBackgroundBrush}" />
+                        <!-- v1's light rows in every app theme. The fill alternates by the
+                         row's place on screen (AlternationIndex), so a sort never puts
+                         two tinted rows together. -->
+                        <Setter Property="Foreground" Value="{Binding RowForegroundBrush, FallbackValue=Black}" />
+                        <Setter Property="Background">
+                            <Setter.Value>
+                                <MultiBinding Converter="{StaticResource RowBackground}">
+                                    <Binding />
+                                    <Binding RelativeSource="{RelativeSource Self}" Path="(ItemsControl.AlternationIndex)" />
+                                </MultiBinding>
+                            </Setter.Value>
+                        </Setter>
                         <Style.Triggers>
                             <!-- The Background setter above hides the default selection
                              color, so draw selection explicitly. Light blue keeps the
@@ -468,9 +481,6 @@
                     <DataGridTextColumn Header="CMC" Binding="{Binding ManaValue}" Width="70"
                                     Visibility="Collapsed"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
-                    <DataGridTextColumn Header="Row" Binding="{Binding RowIndex}" Width="65"
-                                    Visibility="Collapsed"
-                                    HeaderTemplate="{StaticResource FilterableHeader}" />
 
                 </DataGrid.Columns>
             </DataGrid>
@@ -537,7 +547,7 @@
                                             MouseLeftButtonDown="SetTile_MouseLeftButtonDown">
                                             <Border.Style>
                                                 <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="#18808080"/>
+                                                    <Setter Property="Background" Value="{DynamicResource BoePanelBrush}"/>
                                                     <Setter Property="BorderBrush" Value="Transparent"/>
                                                     <Style.Triggers>
                                                         <Trigger Property="IsMouseOver" Value="True">
@@ -639,7 +649,7 @@
                                             MouseLeftButtonDown="DeckTile_MouseLeftButtonDown">
                                             <Border.Style>
                                                 <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="#18808080"/>
+                                                    <Setter Property="Background" Value="{DynamicResource BoePanelBrush}"/>
                                                     <Setter Property="BorderBrush" Value="Transparent"/>
                                                     <Style.Triggers>
                                                         <Trigger Property="IsMouseOver" Value="True">

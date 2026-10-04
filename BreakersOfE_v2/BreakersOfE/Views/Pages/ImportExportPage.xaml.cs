@@ -680,7 +680,8 @@ namespace BreakersOfE.Views.Pages
         public bool WillImport => Status is MatchStatus.Ready or MatchStatus.Check;
         public bool NeedsAttention => Status is not MatchStatus.Ready;
 
-        private static readonly Brush Amber = Freeze(new SolidColorBrush(Color.FromRgb(0xE8, 0xA3, 0x17)));
+        private static Brush Amber =>                                     // the Warning colour (Settings → Appearance)
+            Application.Current.TryFindResource("BoeWarningBrush") as Brush ?? Freeze(new SolidColorBrush(Color.FromRgb(0xE8, 0xA3, 0x17)));
         private static readonly Brush Red = Freeze(new SolidColorBrush(Color.FromRgb(0xD1, 0x34, 0x38)));
         private static Brush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
 
@@ -713,7 +714,7 @@ namespace BreakersOfE.Views.Pages
                 _finish = CollectionEditService.ResolveFinish(Line.Finish, p, out problem);
             if (_finish == null)
             {
-                Set(MatchStatus.Problem, $"{CardFinish.Display(Line.Finish)} asked for, but this printing {problem} — pick a finish or leave it out", Amber);
+                Set(MatchStatus.Problem, $"{CardFinish.Display(Line.Finish ?? "")} asked for, but this printing {problem} — pick a finish or leave it out", Amber);
                 return;
             }
             if (!p.Has(_finish))

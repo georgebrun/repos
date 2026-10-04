@@ -70,7 +70,7 @@
                 <!-- ═══ BUTTONS (Pool → Want List) ═══
                  Act on the rows selected last, in either table. Qty applies to
                  every button (and the keys / right-click). -->
-                <Border DockPanel.Dock="Top" Background="#15808080" CornerRadius="8"
+                <Border DockPanel.Dock="Top" Background="{DynamicResource BoePanelBrush}" CornerRadius="8"
                     Padding="12,6" Margin="0,0,0,8">
                     <StackPanel>
                         <WrapPanel VerticalAlignment="Center">

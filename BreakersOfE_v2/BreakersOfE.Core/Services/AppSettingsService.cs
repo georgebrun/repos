@@ -38,6 +38,19 @@ namespace BreakersOfE.Services
 
         /// <summary>Remind to Update Database after this many days (0 = never).</summary>
         public int UpdateReminderDays { get; set; } = 14;
+
+        /// <summary>App theme: "Dark" (default), "Light", "System" (follow Windows) or "Custom". The card tables keep their light rows in all of them.</summary>
+        public string Theme { get; set; } = "Dark";
+
+        /// <summary>Custom colour presets (at least one, "Custom").</summary>
+        public System.Collections.Generic.List<ColorPreset> Presets { get; set; } = new() { new ColorPreset() };
+
+        /// <summary>The preset Custom uses.</summary>
+        public string CustomPreset { get; set; } = "Custom";
+
+        /// <summary>The preset Custom uses (the first one if the name isn't found).</summary>
+        public ColorPreset ActivePreset() =>
+            Presets.FirstOrDefault(p => string.Equals(p.Name, CustomPreset, StringComparison.OrdinalIgnoreCase)) ?? Presets[0];
     }
 
     /// <summary>
@@ -85,6 +98,9 @@ namespace BreakersOfE.Services
                     if (!Models.CardCondition.All.Contains(s.DefaultCondition)) s.DefaultCondition = Models.CardCondition.Default;
                     if (!StartPages.Any(p => p.Value == s.StartPage)) s.StartPage = "pool";
                     s.UpdateReminderDays = Math.Clamp(s.UpdateReminderDays, 0, 365);
+                    s.Theme = ThemeService.Parse(s.Theme).ToString();
+                    s.Presets = ColorPreset.Clean(s.Presets);
+                    s.CustomPreset = s.ActivePreset().Name;
                     return s;
                 }
             }

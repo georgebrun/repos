@@ -139,7 +139,7 @@ namespace BreakersOfE.Models
         [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
 
         [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
-            Services.CardColorService.GetForeground(ColorIdentity, TypeLine, Finish != CardFinish.NonFoil);
+            Services.CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
         [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
             Services.CardColorService.GetBackground(
                 Finish != CardFinish.NonFoil, RowIndex, Services.TableType.Collection);

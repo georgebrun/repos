@@ -53,7 +53,6 @@ namespace BreakersOfE.Views.Pages
             ["Power"] = "Power",
             ["Toughness"] = "Toughness",
             ["CMC"] = "ManaValue",
-            ["Row"] = "RowIndex",
             // Deck-only columns
             ["SB"] = "SideboardDisplay",
             ["Non-Foil"] = "Quantity",
@@ -107,6 +106,9 @@ namespace BreakersOfE.Views.Pages
         /// <summary>All open decks share one table (and one saved layout).</summary>
         private const string DeckTableTag = "Deck";
 
+        /// <summary>The Pool's main table (regular cards).</summary>
+        private const string PoolCardsTag = "Cards";
+
         // Columns that only some kinds have. Columns not listed are shared.
         private static readonly Dictionary<string, TableKind[]> ColumnKinds = BuildColumnKinds();
 
@@ -133,8 +135,9 @@ namespace BreakersOfE.Views.Pages
             map["Price"] = new[] { C, S, B, W, MC };
             map["Condition"] = csb;
             map["Value"] = new[] { C, S, B, W, D, MC };
-            foreach (var h in new[] { "Color", "Flavor", "Power", "Toughness", "CMC", "Row" })
-                map[h] = new[] { C, S, B, W, D, MC, AC };
+            // Every table, the Pool too (they used to be collection / deck only).
+            foreach (var h in new[] { "Color", "Flavor", "Power", "Toughness", "CMC" })
+                map[h] = new[] { TableKind.Pool, C, S, B, W, D, MP, AP, MC, AC };
             // MTGO pool: its price in tickets. Finish: the paper finishes mean
             // nothing online, so the online pools and Arena don't show it.
             map["Tix"] = new[] { MP };
@@ -163,7 +166,7 @@ namespace BreakersOfE.Views.Pages
             foreach (var fmt in Models.LegalityInfo.Formats)
             {
                 LegalityHeaders.Add(fmt.Header);
-                ColumnKinds[fmt.Header] = new[] { TableKind.Collection };
+                ColumnKinds[fmt.Header] = new[] { TableKind.Pool, TableKind.Collection };   // v1 showed legality in the Pool too
                 ColumnToProperty[fmt.Header] = PoolColumnFilters.LegalityPrefix + fmt.Key;
                 if (!fmt.DefaultVisible) DefaultHiddenColumns.Add(fmt.Header);
             }
@@ -178,11 +181,11 @@ namespace BreakersOfE.Views.Pages
         private const string DeckLegalHeader = "Legal";
 
         /// <summary>Hide the columns this kind of table doesn't have.</summary>
-        private void ApplyColumnSet(TableKind kind)
+        private void ApplyColumnSet(string table)
         {
             foreach (var col in PoolGrid.Columns)
             {
-                if (!ColumnApplies(col.Header?.ToString() ?? "", kind))
+                if (!ColumnApplies(col.Header?.ToString() ?? "", table))
                     col.Visibility = Visibility.Collapsed;
             }
         }
@@ -254,7 +257,7 @@ namespace BreakersOfE.Views.Pages
             LoadPoolCore(tag);
             // Edit tables: this table's own Grid / Gallery (saved, else the page's default).
             if (_embeddedGalleryDefault is bool d)
-                _embeddedGallery = Services.GridLayoutService.GetEditGallery(LayoutKey(tag)) ?? d;
+                _embeddedGallery = Services.GridLayoutService.GetEditGallery(EditGalleryKey(tag)) ?? d;
             SetViewMode(SwitchMode);
         }
 
@@ -316,7 +319,7 @@ namespace BreakersOfE.Views.Pages
                 _lastSortProp = "Name";
                 _lastSortAsc = true;
             }
-            SaveColumnLayoutNow();
+            SavePendingColumnLayout();           // only an unsaved change (the layout is shared with View / Edit)
             ApplyColumnLayout(tag);
             FilterPanelView.CancelPending();     // a filter still waiting for typing belongs to the old table
             _usedInOpen.Clear();                 // "Used in" tables open belong to the old rows

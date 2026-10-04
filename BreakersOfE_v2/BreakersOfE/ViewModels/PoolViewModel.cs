@@ -179,14 +179,14 @@ namespace BreakersOfE.ViewModels
                             label = "Arena cards"; break;
                         case "MtgoCollection":
                         case "ArenaCollection":
-                        {
-                            string game = tag == "MtgoCollection" ? Models.OnlineGame.Mtgo : Models.OnlineGame.Arena;
-                            using (var cdb = new CollectionDbContext())
-                                rows = cdb.OnlineCollectionEntries.AsNoTracking().Where(c => c.Game == game)
-                                          .OrderBy(c => c.Name).ThenBy(c => c.SetCode)
-                                          .ToList().Cast<object>().ToList();
-                            label = "collection rows"; break;
-                        }
+                            {
+                                string game = tag == "MtgoCollection" ? Models.OnlineGame.Mtgo : Models.OnlineGame.Arena;
+                                using (var cdb = new CollectionDbContext())
+                                    rows = cdb.OnlineCollectionEntries.AsNoTracking().Where(c => c.Game == game)
+                                              .OrderBy(c => c.Name).ThenBy(c => c.SetCode)
+                                              .ToList().Cast<object>().ToList();
+                                label = "collection rows"; break;
+                            }
                         case "Cards":
                         default:
                             rows = db.PoolCards.AsNoTracking()
@@ -207,8 +207,6 @@ namespace BreakersOfE.ViewModels
                     Services.OwnedCountService.Fill(tag, rows);
                 else if (!IsOnlineCollectionTag(tag))
                     Services.FinishInfoService.Fill(tag, rows);   // etched facts from the pool
-
-                AssignRowIndices(rows);
 
                 System.Windows.Application.Current?.Dispatcher?.BeginInvoke(() =>
                 {
@@ -285,7 +283,6 @@ namespace BreakersOfE.ViewModels
             string note = StatusNote?.Invoke(filtered) ?? "";
             if (ExtraFilter != null)
                 filtered = filtered.Where(ExtraFilter).ToList();
-            AssignRowIndices(filtered);
             Items = filtered;
 
             if (Filters.HasActiveFilters || ExtraFilter != null)
@@ -294,37 +291,28 @@ namespace BreakersOfE.ViewModels
                 StatusText = $"{_allRows.Count:N0} {_label}" + note;
         }
 
-        private static void AssignRowIndices(List<object> rows)
-        {
-            for (int i = 0; i < rows.Count; i++)
-            {
-                var prop = rows[i]?.GetType().GetProperty("RowIndex");
-                prop?.SetValue(rows[i], i);
-            }
-        }
-
         private static string TitleFor(string tag) => tag switch
         {
-            "Tokens"       => "Card Pool — Tokens",
-            "Planes"       => "Card Pool — Planes",
-            "Schemes"      => "Card Pool — Schemes",
-            "Vanguards"    => "Card Pool — Vanguards",
-            "ArtSeries"    => "Card Pool — Art Series",
+            "Tokens" => "Card Pool — Tokens",
+            "Planes" => "Card Pool — Planes",
+            "Schemes" => "Card Pool — Schemes",
+            "Vanguards" => "Card Pool — Vanguards",
+            "ArtSeries" => "Card Pool — Art Series",
             "Conspiracies" => "Card Pool — Conspiracies",
-            "Collection"   => "Collection — Cards",
-            "CollTokens"       => "Collection — Tokens",
-            "CollPlanes"       => "Collection — Planes",
-            "CollSchemes"      => "Collection — Schemes",
-            "CollVanguards"    => "Collection — Vanguards",
-            "CollArtSeries"    => "Collection — Art Series",
+            "Collection" => "Collection — Cards",
+            "CollTokens" => "Collection — Tokens",
+            "CollPlanes" => "Collection — Planes",
+            "CollSchemes" => "Collection — Schemes",
+            "CollVanguards" => "Collection — Vanguards",
+            "CollArtSeries" => "Collection — Art Series",
             "CollConspiracies" => "Collection — Conspiracies",
-            "TradeBinder"      => "Trade Binder",
-            "WantList"         => "Want List",
-            "MtgoCards"        => "Online — MTGO Cards",
-            "ArenaCards"       => "Online — Arena Cards",
-            "MtgoCollection"   => "Online — MTGO Collection",
-            "ArenaCollection"  => "Online — Arena Collection",
-            _              => "Card Pool — Cards"
+            "TradeBinder" => "Trade Binder",
+            "WantList" => "Want List",
+            "MtgoCards" => "Online — MTGO Cards",
+            "ArenaCards" => "Online — Arena Cards",
+            "MtgoCollection" => "Online — MTGO Collection",
+            "ArenaCollection" => "Online — Arena Collection",
+            _ => "Card Pool — Cards"
         };
     }
 }

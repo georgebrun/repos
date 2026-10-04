@@ -231,7 +231,7 @@ namespace BreakersOfE.Views.Pages
             DeckRulesText.Text = Services.DeckRulesService.SummaryLine(rule, checks);
             // ISA-101: plain when all is well, amber only when something needs attention.
             if (problems.Count > 0)
-                DeckRulesText.Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xA3, 0x17));
+                DeckRulesText.SetResourceReference(TextBlock.ForegroundProperty, "BoeWarningBrush");
             else
                 DeckRulesText.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
             DeckRulesText.ToolTip = string.Join("\n", checks.Select(c =>

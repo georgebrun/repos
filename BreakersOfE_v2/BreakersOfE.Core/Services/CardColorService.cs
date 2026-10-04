@@ -4,170 +4,152 @@ namespace BreakersOfE.Services
 {
     public enum TableType { Pool, Collection, Deck, TradeBinder, WantList }
 
+    /// <summary>
+    /// Card-table colours (v1's light rows). The tables keep this look in
+    /// every app theme (Light, Dark, Follow Windows), so nothing here depends
+    /// on the theme.
+    /// • Text: the card's colour — lands brown, colourless grey, two or more
+    ///   colours gold, else white / blue / black / red / green.
+    /// • Rows: white, alternating with a light tint per table (Pool red,
+    ///   decks green, the rest blue). Alternation follows the row's place on
+    ///   screen (see <see cref="RowBackground"/>), so it survives sorting.
+    /// </summary>
     public static class CardColorService
     {
-        // ════════════════════════════════════════════════════════════════════
-        // FOREGROUND — theme-aware text color by color identity
-        // ════════════════════════════════════════════════════════════════════
-        public static Brush GetForeground(string colorIdentity,
-            string typeLine, bool isFoil)
+        private static SolidColorBrush Frozen(byte r, byte g, byte b)
         {
-            bool dark = ThemeService.CurrentTheme == AppTheme.Dark;
+            var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+            brush.Freeze();
+            return brush;
+        }
 
-            // Land
-            if (!string.IsNullOrWhiteSpace(typeLine) &&
-                typeLine.Contains("Land"))
-                return dark
-                    ? new SolidColorBrush(
-                        Color.FromRgb(0xDE, 0xB8, 0x87)) // burlywood
-                    : new SolidColorBrush(
-                        Color.FromRgb(0x8B, 0x45, 0x13)); // saddle brown
+        // ── Text colours (unchanged from v1's light theme) ───────────────
+        private static readonly Brush LandText = Frozen(0x8B, 0x45, 0x13);       // saddle brown
+        private static readonly Brush ColorlessText = Frozen(0x55, 0x55, 0x55);  // dark grey
+        private static readonly Brush MultiText = Frozen(0xB8, 0x86, 0x0B);      // dark goldenrod
+        private static readonly Brush WhiteText = Frozen(0x8B, 0x7D, 0x00);      // dark gold
+        private static readonly Brush BlueText = Frozen(0x00, 0x50, 0xAA);
+        private static readonly Brush BlackText = Frozen(0x66, 0x00, 0xAA);      // purple
+        private static readonly Brush RedText = Frozen(0xCC, 0x00, 0x00);
+        private static readonly Brush GreenText = Frozen(0x00, 0x64, 0x00);
 
-            // Artifact / colorless
-            if (string.IsNullOrWhiteSpace(colorIdentity) ||
-                (!string.IsNullOrWhiteSpace(typeLine) &&
-                 typeLine.Contains("Artifact")))
-                return dark
-                    ? new SolidColorBrush(
-                        Color.FromRgb(0xBB, 0xBB, 0xBB)) // light gray
-                    : new SolidColorBrush(
-                        Color.FromRgb(0x55, 0x55, 0x55)); // dark gray
+        // ── Row colours ──────────────────────────────────────────────────
+        private static readonly Brush RowWhite = Frozen(0xFF, 0xFF, 0xFF);
+        private static readonly Brush PoolTint = Frozen(0xFF, 0xED, 0xED);       // faded red
+        private static readonly Brush DeckTint = Frozen(0xED, 0xFF, 0xED);       // faded green
+        private static readonly Brush CollectionTint = Frozen(0xEE, 0xF2, 0xF7); // faded blue
+        private static readonly Brush CellBorder = Frozen(0x00, 0x00, 0x00);
 
-            // Multicolor
-            if (colorIdentity.Length > 1)
-                return dark
-                    ? new SolidColorBrush(
-                        Color.FromRgb(0xFF, 0xD7, 0x00)) // bright gold
-                    : new SolidColorBrush(
-                        Color.FromRgb(0xB8, 0x86, 0x0B)); // dark goldenrod
+        // ════════════════════════════════════════════════════════════════════
+        // TEXT — the card's colour
+        // ════════════════════════════════════════════════════════════════════
 
-            return colorIdentity switch
+        /// <summary>
+        /// Row text for a card whose colours are known (Scryfall's "colors").
+        /// Two-faced cards don't carry colours for the whole card, so those
+        /// use the colour identity instead.
+        /// </summary>
+        public static Brush GetForeground(string? colors, string? colorIdentity, string? typeLine)
+        {
+            if (IsLand(typeLine)) return LandText;
+            string c = colors ?? "";
+            if (c.Length == 0 && (typeLine ?? "").Contains("//"))
+                c = colorIdentity ?? "";
+            return ByColors(c);
+        }
+
+        /// <summary>
+        /// Row text for a card known only by mana cost and colour identity
+        /// (deck lines): the coloured mana symbols of the front face; no
+        /// mana cost at all (a two-faced card, or a card with a colour
+        /// dot instead) → the colour identity.
+        /// </summary>
+        public static Brush GetForegroundFromCost(string? manaCost, string? colorIdentity, string? typeLine)
+        {
+            if (IsLand(typeLine)) return LandText;
+            string cost = FrontFace(manaCost);
+            if (cost.Length == 0) return ByColors(colorIdentity ?? "");
+            var colours = new System.Text.StringBuilder();
+            bool inSymbol = false;
+            foreach (char ch in cost)
             {
-                "W" => dark
-                    ? new SolidColorBrush(
-                        Color.FromRgb(0xFF, 0xD7, 0x00)) // bright gold
-                    : new SolidColorBrush(
-                        Color.FromRgb(0x8B, 0x7D, 0x00)), // dark gold
+                if (ch == '{') inSymbol = true;
+                else if (ch == '}') inSymbol = false;
+                else if (inSymbol && "WUBRG".IndexOf(char.ToUpperInvariant(ch)) >= 0) colours.Append(char.ToUpperInvariant(ch));
+            }
+            return ByColors(colours.ToString());
+        }
 
-                "U" => dark
-                    ? new SolidColorBrush(
-                        Color.FromRgb(0x4D, 0xA6, 0xFF)) // light blue
-                    : new SolidColorBrush(
-                        Color.FromRgb(0x00, 0x50, 0xAA)), // dark blue
+        /// <summary>Lands are brown (judged by the front face: a spell // land card is the spell's colour).</summary>
+        private static bool IsLand(string? typeLine) => FrontFace(typeLine).Contains("Land");
 
-                "B" => dark
-                    ? new SolidColorBrush(
-                        Color.FromRgb(0xCC, 0x99, 0xFF)) // light purple
-                    : new SolidColorBrush(
-                        Color.FromRgb(0x66, 0x00, 0xAA)), // purple
+        private static string FrontFace(string? text)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            int cut = text.IndexOf("//", System.StringComparison.Ordinal);
+            return cut < 0 ? text : text[..cut];
+        }
 
-                "R" => dark
-                    ? new SolidColorBrush(
-                        Color.FromRgb(0xFF, 0x66, 0x66)) // light red
-                    : new SolidColorBrush(
-                        Color.FromRgb(0xCC, 0x00, 0x00)), // dark red
-
-                "G" => dark
-                    ? new SolidColorBrush(
-                        Color.FromRgb(0x66, 0xCC, 0x66)) // light green
-                    : new SolidColorBrush(
-                        Color.FromRgb(0x00, 0x64, 0x00)), // dark green
-
-                _ => dark
-                    ? new SolidColorBrush(
-                        Color.FromRgb(0xFF, 0xD7, 0x00))
-                    : new SolidColorBrush(
-                        Color.FromRgb(0xB8, 0x86, 0x0B))
+        private static Brush ByColors(string colors)
+        {
+            char single = '\0';
+            int count = 0;
+            foreach (char ch in "WUBRG")
+                if (colors.IndexOf(ch) >= 0 || colors.IndexOf(char.ToLowerInvariant(ch)) >= 0)
+                {
+                    single = ch;
+                    count++;
+                }
+            if (count == 0) return ColorlessText;
+            if (count > 1) return MultiText;
+            return single switch
+            {
+                'W' => WhiteText,
+                'U' => BlueText,
+                'B' => BlackText,
+                'R' => RedText,
+                _ => GreenText,
             };
         }
 
         // ════════════════════════════════════════════════════════════════════
-        // BACKGROUND — alternating rows + foil shimmer
+        // ROWS
         // ════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// A row's fill from its place on screen (0 = white, 1 = tinted), so
+        /// sorting never puts two tinted rows together. Deck footers and the
+        /// commander keep their own colours.
+        /// </summary>
+        public static Brush RowBackground(object? item, int alternation)
+        {
+            bool tinted = alternation % 2 == 1;
+            switch (item)
+            {
+                case Models.DeckCard d when d.IsFooter || d.IsCommander:
+                    return d.RowBackgroundBrush;
+                case Models.DeckCard:
+                    return tinted ? DeckTint : RowWhite;
+                case Models.IOwnedCard:                                   // the Pool's card kinds
+                    return tinted ? PoolTint : RowWhite;
+                default:
+                    return tinted ? CollectionTint : RowWhite;
+            }
+        }
+
+        /// <summary>A row's fill by its number (older bindings; the tables use <see cref="RowBackground"/>).</summary>
         public static Brush GetBackground(bool isFoil, int rowIndex,
             TableType tableType = TableType.Collection)
         {
-            bool dark = ThemeService.CurrentTheme == AppTheme.Dark;
-            bool isEven = rowIndex % 2 == 0;
-
-            if (dark)
+            if (rowIndex % 2 == 0) return RowWhite;
+            return tableType switch
             {
-                return tableType switch
-                {
-                    TableType.Pool => isEven
-                        ? new SolidColorBrush(Color.FromRgb(0x2E, 0x1A, 0x1A))  // red-tinted dark
-                        : new SolidColorBrush(Color.FromRgb(0x3A, 0x20, 0x20)),
-                    TableType.Deck => isEven
-                        ? new SolidColorBrush(Color.FromRgb(0x18, 0x2A, 0x1A))  // green-tinted dark
-                        : new SolidColorBrush(Color.FromRgb(0x1E, 0x36, 0x22)),
-                    _ => isEven
-                        ? new SolidColorBrush(Color.FromRgb(0x18, 0x22, 0x30))  // blue-tinted dark
-                        : new SolidColorBrush(Color.FromRgb(0x1E, 0x2A, 0x3C)),
-                };
-            }
-            else
-            {
-                return tableType switch
-                {
-                    TableType.Pool => isEven
-                        ? new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF))
-                        : new SolidColorBrush(Color.FromRgb(0xFF, 0xED, 0xED)),  // faded red light
-                    TableType.Deck => isEven
-                        ? new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF))
-                        : new SolidColorBrush(Color.FromRgb(0xED, 0xFF, 0xED)),  // faded green light
-                    _ => isEven
-                        ? new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF))
-                        : new SolidColorBrush(Color.FromRgb(0xEE, 0xF2, 0xF7)),
-                };
-            }
-        }
-
-        // ════════════════════════════════════════════════════════════════════
-        // CELL BORDER BRUSH
-        // ════════════════════════════════════════════════════════════════════
-        public static Brush GetCellBorderBrush()
-        {
-            bool dark = ThemeService.CurrentTheme == AppTheme.Dark;
-            return dark
-                ? new SolidColorBrush(
-                    Color.FromRgb(0xE0, 0xE0, 0xE0)) // off-white
-                : new SolidColorBrush(
-                    Color.FromRgb(0x00, 0x00, 0x00)); // black
-        }
-
-        // ════════════════════════════════════════════════════════════════════
-        // FOIL BRUSH BUILDER
-        // ════════════════════════════════════════════════════════════════════
-        private static LinearGradientBrush BuildFoilBrush(bool dark)
-        {
-            var g = new LinearGradientBrush
-            {
-                StartPoint = new System.Windows.Point(0.5, 0),
-                EndPoint = new System.Windows.Point(0.5, 1)
+                TableType.Pool => PoolTint,
+                TableType.Deck => DeckTint,
+                _ => CollectionTint,
             };
-
-            if (dark)
-            {
-                // Dark mode — gold shimmer
-                g.GradientStops.Add(new GradientStop(
-                    Color.FromRgb(0x3D, 0x30, 0x00), 0.0));
-                g.GradientStops.Add(new GradientStop(
-                    Color.FromRgb(0x7A, 0x60, 0x00), 0.5));
-                g.GradientStops.Add(new GradientStop(
-                    Color.FromRgb(0x3D, 0x30, 0x00), 1.0));
-            }
-            else
-            {
-                // Light mode — silver shimmer
-                g.GradientStops.Add(new GradientStop(
-                    Color.FromRgb(0xB5, 0xB5, 0xB5), 0.0));
-                g.GradientStops.Add(new GradientStop(
-                    Color.FromRgb(0xF2, 0xF2, 0xF2), 0.5));
-                g.GradientStops.Add(new GradientStop(
-                    Color.FromRgb(0xB5, 0xB5, 0xB5), 1.0));
-            }
-
-            return g;
         }
+
+        public static Brush GetCellBorderBrush() => CellBorder;
     }
 }

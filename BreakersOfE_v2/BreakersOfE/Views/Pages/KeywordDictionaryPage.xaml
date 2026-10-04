@@ -32,7 +32,7 @@
 
     <DockPanel Margin="16">
         <!-- Official rules: when they were downloaded, and a button to get them now -->
-        <Border DockPanel.Dock="Top" Background="#15808080" CornerRadius="8" Padding="12,8" Margin="0,0,0,10">
+        <Border DockPanel.Dock="Top" Background="{DynamicResource BoePanelBrush}" CornerRadius="8" Padding="12,8" Margin="0,0,0,10">
             <DockPanel>
                 <Button x:Name="BtnGetRules" DockPanel.Dock="Right" Content="Get the Official Rules" Padding="12,4"
                         Click="BtnGetRules_Click"

@@ -156,7 +156,7 @@
                     <StackPanel Visibility="{Binding IsPaneOpen, ElementName=RootNavigation,
                                              Converter={StaticResource BoolToVisibilityConverter}}">
                         <TextBlock x:Name="UpdateReminder" Margin="14,8,8,0" FontSize="12" TextWrapping="Wrap"
-                                   Foreground="#E8A317" Cursor="Hand" Visibility="Collapsed"
+                                   Foreground="{DynamicResource BoeWarningBrush}" Cursor="Hand" Visibility="Collapsed"
                                    MouseLeftButtonUp="UpdateReminder_Click"
                                    ToolTip="Click to update the card database and prices"/>
                     </StackPanel>

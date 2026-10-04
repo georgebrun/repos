@@ -48,7 +48,7 @@
         <TextBlock x:Name="RulesText" Margin="0,12,0,0" FontSize="12" TextWrapping="Wrap"
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
         <TextBlock x:Name="ErrorText" Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap"
-                   Foreground="#E8A317" Visibility="Collapsed"/>
+                   Foreground="{DynamicResource BoeWarningBrush}" Visibility="Collapsed"/>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
             <ui:Button x:Name="BtnOk" Content="Create" Appearance="Primary" MinWidth="72" Margin="0,0,8,0"

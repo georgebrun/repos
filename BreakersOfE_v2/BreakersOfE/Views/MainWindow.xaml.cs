@@ -9,6 +9,7 @@ namespace BreakersOfE.Views
         public MainWindow()
         {
             InitializeComponent();
+            Application.Current.MainWindow = this;      // (the first-run folder question may have opened first)
 
             RootNavigation.Navigated += RootNavigation_Navigated;
             UpdateModeSwitch();
@@ -23,6 +24,7 @@ namespace BreakersOfE.Views
                 ShowUpdateReminder();
                 // The data folder from Settings couldn't be used (drive not connected …): say so now,
                 // before anything gets added to the default folder by mistake.
+                if (Services.AppFolderService.DataFolderProblem.Length > 0) App.CloseSplash(now: true);   // the message below must be seen
                 if (Services.AppFolderService.DataFolderProblem.Length > 0)
                     System.Windows.MessageBox.Show(this,
                         Services.AppFolderService.DataFolderProblem +
@@ -226,9 +228,29 @@ namespace BreakersOfE.Views
                 : "Grid view (click for Gallery)";
         }
 
+        private bool _splashWaiting = true;
+
+        /// <summary>The startup picture stays until the first page shows its cards (or any other page opens).</summary>
+        private void CloseSplashWhenReady(object page)
+        {
+            if (!_splashWaiting) return;
+            _splashWaiting = false;
+            if (page is PoolPage pool)
+            {
+                void Ready()
+                {
+                    pool.ItemsReloaded -= Ready;
+                    App.CloseSplash();
+                }
+                pool.ItemsReloaded += Ready;
+            }
+            else App.CloseSplash();
+        }
+
         private void RootNavigation_Navigated(
             NavigationView sender, NavigatedEventArgs args)
         {
+            CloseSplashWhenReady(args.Page);
             // After an update (or a Settings change) the reminder may no longer apply.
             ShowUpdateReminder();
 

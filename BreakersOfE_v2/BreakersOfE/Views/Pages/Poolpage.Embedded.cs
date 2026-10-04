@@ -27,7 +27,14 @@ namespace BreakersOfE.Views.Pages
         private string _layoutPrefix = "";
 
         /// <summary>The key a table's layout and zoom are saved under.</summary>
-        private string LayoutKey(string table) => _layoutPrefix + table;
+        /// <summary>
+        /// Column layout and zoom: one per table, shared by View and Edit
+        /// (the Collection on View and on Edit look the same).
+        /// </summary>
+        private static string LayoutKey(string table) => table;
+
+        /// <summary>Edit pages' own Grid / Gallery choice per table.</summary>
+        private string EditGalleryKey(string table) => _layoutPrefix + table;
 
         /// <summary>Selection changed (grid or gallery): the card, or null.</summary>
         public event Action<object?>? SelectedCardChanged;
@@ -243,7 +250,7 @@ namespace BreakersOfE.Views.Pages
             if (!same)
             {
                 if (_embeddedGalleryDefault is bool d)
-                    _embeddedGallery = Services.GridLayoutService.GetEditGallery(LayoutKey(DeckTableTag)) ?? d;
+                    _embeddedGallery = Services.GridLayoutService.GetEditGallery(EditGalleryKey(DeckTableTag)) ?? d;
                 SetViewMode(SwitchMode);
             }
             // Same deck: the view stays; the rules line was re-read above.
@@ -261,7 +268,7 @@ namespace BreakersOfE.Views.Pages
             _vm.LoadRows("Deck", new List<object>(), "lines");
             _vm.EmptyMessage = message;
             if (_embeddedGalleryDefault is bool d)
-                _embeddedGallery = Services.GridLayoutService.GetEditGallery(LayoutKey(DeckTableTag)) ?? d;
+                _embeddedGallery = Services.GridLayoutService.GetEditGallery(EditGalleryKey(DeckTableTag)) ?? d;
             SetViewMode(SwitchMode);
         }
 

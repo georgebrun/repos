@@ -38,9 +38,8 @@ namespace BreakersOfE.Views.Pages
         public static void ShowStatus(TextBlock target, string text, bool warning)
         {
             target.Text = text;
-            target.Foreground = warning
-                ? new SolidColorBrush(Color.FromRgb(0xE8, 0xA3, 0x17))
-                : (Brush)target.FindResource("TextFillColorSecondaryBrush");
+            if (warning) target.SetResourceReference(TextBlock.ForegroundProperty, "BoeWarningBrush");          // Settings → Appearance
+            else target.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");   // follows Light / Dark
         }
 
         /// <summary>An OK / Cancel question over the page's window.</summary>

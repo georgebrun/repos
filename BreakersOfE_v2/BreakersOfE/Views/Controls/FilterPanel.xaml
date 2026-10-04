@@ -8,7 +8,7 @@
          column filters), so grid, gallery and funnels always agree. -->
     <UserControl.Resources>
         <Style x:Key="Group" TargetType="Border">
-            <Setter Property="Background" Value="#15808080"/>
+            <Setter Property="Background" Value="{DynamicResource BoePanelBrush}"/>
             <Setter Property="CornerRadius" Value="8"/>
             <Setter Property="Padding" Value="10,6,10,8"/>
             <Setter Property="Margin" Value="0,0,8,8"/>
