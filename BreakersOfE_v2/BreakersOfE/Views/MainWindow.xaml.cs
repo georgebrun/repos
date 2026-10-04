@@ -16,9 +16,20 @@ namespace BreakersOfE.Views
             // Sections start closed and stacked: click View to open the listings.
             ApplySection(NavSection.None);
 
-            // Land on the main Cards pool by default.
+            // Land on the start page chosen in Settings (the main Cards pool by default).
             Loaded += (_, _) =>
-                RootNavigation.Navigate(typeof(PoolPage));
+            {
+                OpenStartPage();
+                ShowUpdateReminder();
+                // The data folder from Settings couldn't be used (drive not connected …): say so now,
+                // before anything gets added to the default folder by mistake.
+                if (Services.AppFolderService.DataFolderProblem.Length > 0)
+                    System.Windows.MessageBox.Show(this,
+                        Services.AppFolderService.DataFolderProblem +
+                        "\n\nChanges you make now are saved in the default folder. To use your data folder, " +
+                        "connect it and restart BoE (or pick it again in Settings → Data folder).",
+                        "Data Folder", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            };
         }
 
         // ── View / Edit section accordion ───────────────────────────────
@@ -33,6 +44,77 @@ namespace BreakersOfE.Views
         /// <summary>Update Database (pane footer, always last): open the update page.</summary>
         private void BtnUpdateDatabase_Click(object sender, RoutedEventArgs e) =>
             RootNavigation.Navigate(typeof(DatabaseUpdatePage));
+
+        /// <summary>Settings (pane footer).</summary>
+        private void BtnSettings_Click(object sender, RoutedEventArgs e) =>
+            RootNavigation.Navigate(typeof(SettingsPage));
+
+        /// <summary>Settings → Open on: the page the app starts on.</summary>
+        private void OpenStartPage()
+        {
+            string start = Services.AppSettingsService.Current.StartPage;
+            switch (start)
+            {
+                case "keywords":
+                    RootNavigation.Navigate(typeof(KeywordDictionaryPage));
+                    return;
+                case "collection":
+                case "decks":
+                case "sets":
+                    ApplySection(NavSection.View);
+                    if (start == "collection") NavCollection.IsExpanded = true;
+                    if (RootNavigation.Navigate(start == "collection" ? "coll-cards" : start == "decks" ? "view-decks" : "view-sets"))
+                        return;
+                    break;
+            }
+            RootNavigation.Navigate(typeof(PoolPage));
+        }
+
+        /// <summary>Settings → Remind me to update: an amber line above Update Database when the card data is old.</summary>
+        private void ShowUpdateReminder()
+        {
+            try
+            {
+                int days = Services.AppSettingsService.Current.UpdateReminderDays;
+                var st = new Services.AgentCoordinator().ReadStatus();
+                // A prices-only update counts too (prices are what get old fastest).
+                DateTime? last = st.LastPoolUpdate > st.LastPriceUpdate || st.LastPriceUpdate == null ? st.LastPoolUpdate : st.LastPriceUpdate;
+                int age = last.HasValue ? (int)(DateTime.UtcNow - last.Value).TotalDays : -1;
+                if (days > 0 && (age < 0 || age >= days))
+                {
+                    UpdateReminder.Text = age < 0
+                        ? "No card data update yet — click to update."
+                        : $"Card data and prices are {age} days old — click to update.";
+                    UpdateReminder.Visibility = Visibility.Visible;
+                }
+                else UpdateReminder.Visibility = Visibility.Collapsed;
+            }
+            catch
+            {
+                UpdateReminder.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void UpdateReminder_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) =>
+            RootNavigation.Navigate(typeof(DatabaseUpdatePage));
+
+        /// <summary>Keyword Dictionary (pane footer): the keyword reference page.</summary>
+        private void BtnKeywordDictionary_Click(object sender, RoutedEventArgs e) =>
+            RootNavigation.Navigate(typeof(KeywordDictionaryPage));
+
+        /// <summary>
+        /// Keyword Dictionary → "Show in Pool / My Collection": open View on
+        /// Card Pool \ Cards or Collection \ Cards, filtered to that keyword.
+        /// </summary>
+        public void ShowKeyword(string keyword, bool collection)
+        {
+            PoolPage.RequestKeyword(collection ? "Collection" : "Cards", keyword);
+            if (_openSection != NavSection.View) ApplySection(NavSection.View);
+            if (collection) NavCollection.IsExpanded = true;
+            else NavCardPool.IsExpanded = true;
+            if (!RootNavigation.Navigate(collection ? "coll-cards" : "pool-cards"))
+                RootNavigation.Navigate(typeof(PoolPage));
+        }
 
         private void BtnSectionView_Click(object sender, RoutedEventArgs e) => ToggleSection(NavSection.View);
         private void BtnSectionEdit_Click(object sender, RoutedEventArgs e) => ToggleSection(NavSection.Edit);
@@ -71,6 +153,7 @@ namespace BreakersOfE.Views
             NavEditOnline.Visibility = editVis;
             NavEditDecks.Visibility = editVis;
             NavEditLists.Visibility = editVis;
+            NavEditImport.Visibility = editVis;
 
             // Edit button: at the bottom only while View is open; otherwise
             // stacked at the top under View.
@@ -146,6 +229,9 @@ namespace BreakersOfE.Views
         private void RootNavigation_Navigated(
             NavigationView sender, NavigatedEventArgs args)
         {
+            // After an update (or a Settings change) the reminder may no longer apply.
+            ShowUpdateReminder();
+
             // Edit → Pool → Collection: tag "Edit:<pool>" picks the table pair.
             if (args.Page is EditCollectionPage editPage)
             {

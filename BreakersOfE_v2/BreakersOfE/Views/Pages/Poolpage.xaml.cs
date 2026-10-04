@@ -362,6 +362,8 @@ namespace BreakersOfE.Views.Pages
 
             // Filters panel: this table's lists and settings; Sort list in step.
             SyncFilterPanel();
+            // Opened from the Keyword Dictionary: just that keyword.
+            ApplyPendingKeyword();
 
             // Edit page: re-select the row an edit just touched.
             ApplyPendingSelection();

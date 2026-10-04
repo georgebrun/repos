@@ -5,14 +5,13 @@ using BreakersOfE.Services;
 namespace BreakersOfE
 {
     /// <summary>
-    /// App.xaml.cs — first code that runs on startup.
+    /// App.xaml.cs — first code that runs on startup, and the last on exit.
     ///
-    /// For this fresh v2 build we keep it minimal:
-    ///   - Ensure the BoE_V2 folder tree exists
-    ///   - Ensure the pool database exists (EnsureCreated via EnsureSchema)
-    ///
-    /// Collection/deck initialization will be added back when we rebuild
-    /// those features. Right now the goal is: create a pool DB and show it.
+    /// Startup: the BoE_V2 folder tree, leftovers from an interrupted update,
+    /// the pool databases (cards and online) and the collection database —
+    /// each brought up to the current schema (only ever ADDS tables/columns).
+    /// Exit: the collection database's write-ahead log is merged into
+    /// collection.db, so the file on disk is complete and current.
     /// </summary>
     public partial class App : Application
     {
@@ -60,6 +59,29 @@ namespace BreakersOfE
             {
                 // Same policy as the pool: never block startup on this.
             }
+
+            // Pictures of your cards, kept for offline use: downloaded in the
+            // background (Settings → Card pictures).
+            PictureSync.StartBackground();
+        }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            PictureSync.StopBackground();
+
+            // Merge collection.db-wal into collection.db and reset it (TRUNCATE),
+            // so the main file is complete — e.g. for a backup or a copy to
+            // another computer. Best-effort: never blocks closing.
+            try
+            {
+                using var collection = new CollectionDbContext();
+                collection.Checkpoint();
+            }
+            catch
+            {
+                // closing anyway
+            }
+            base.OnExit(e);
         }
     }
 }

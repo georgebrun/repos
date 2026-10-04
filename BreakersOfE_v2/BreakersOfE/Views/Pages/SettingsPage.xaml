@@ -1,0 +1,131 @@
+<Page x:Class="BreakersOfE.Views.Pages.SettingsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Loaded="Page_Loaded"
+      Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+
+    <!-- Settings: saved as you change them (Documents\BoE_V2\Settings.json). -->
+    <Page.Resources>
+        <Style x:Key="Section" TargetType="Border">
+            <Setter Property="Background" Value="#15808080"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="16,12"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+        <Style x:Key="Label" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Width" Value="190"/>
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="16" MaxWidth="900" HorizontalAlignment="Left">
+            <TextBlock Text="Settings" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <TextBlock Text="Changes are saved as you make them." Style="{StaticResource Hint}"/>
+
+            <!-- ═══ COLLECTION DEFAULTS ═══ -->
+            <Border Style="{StaticResource Section}">
+                <StackPanel>
+                    <TextBlock Text="Collection defaults" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Style="{StaticResource Hint}"
+                               Text="What new cards go in as on the Edit pages and in imports that don't say (each page can still change it for the cards you're adding)."/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="Language" Style="{StaticResource Label}"/>
+                        <ComboBox x:Name="LanguageBox" Width="220" SelectionChanged="Setting_Changed"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="Condition" Style="{StaticResource Label}"/>
+                        <ComboBox x:Name="ConditionBox" Width="220" SelectionChanged="Setting_Changed"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Trade %" Style="{StaticResource Label}"/>
+                        <TextBox x:Name="TradeBox" Width="70" TextAlignment="Center" LostFocus="TradeBox_LostFocus"
+                                 PreviewTextInput="Digits_PreviewTextInput"/>
+                        <TextBlock Text="of market price — what a shop pays in trade credit (Trade Binder's Trade Value)"
+                                   VerticalAlignment="Center" Margin="10,0,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="480"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ CARD PICTURES ═══ -->
+            <Border Style="{StaticResource Section}">
+                <StackPanel>
+                    <TextBlock Text="Card pictures" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Style="{StaticResource Hint}"
+                               Text="Pictures kept on your computer show even when you're offline. Others are shown from the internet and not kept; offline, they show the &quot;Scryfall Fail&quot; card."/>
+                    <CheckBox x:Name="SaveMineCheck" Margin="0,0,0,6" Checked="Setting_Changed" Unchecked="Setting_Changed"
+                              Content="Keep pictures of my cards (collection, Trade Binder, Want List, decks)"
+                              ToolTip="Downloaded in the background a few minutes after you add cards; offline, it catches up when you're back online"/>
+                    <CheckBox x:Name="SaveViewedCheck" Margin="0,0,0,10" Checked="Setting_Changed" Unchecked="Setting_Changed"
+                              Content="Also keep every picture I look at (the Pool's too — uses more space)"/>
+                    <TextBlock x:Name="SyncText" Style="{StaticResource Hint}" Margin="0,0,0,6"/>
+                    <TextBlock x:Name="CacheText" Style="{StaticResource Hint}"/>
+                    <WrapPanel>
+                        <Button x:Name="BtnSyncNow" Content="Get My Cards' Pictures Now" Padding="12,4" Margin="0,0,8,0"
+                                Click="BtnSyncNow_Click" ToolTip="Download the missing pictures of your cards right away"/>
+                        <Button x:Name="BtnDownloadAll" Content="Download All Pictures…" Padding="12,4" Margin="0,0,8,0"
+                                Click="BtnDownloadAll_Click" ToolTip="Every card's picture, for using the whole Pool offline (asks first: it's a lot of data)"/>
+                        <Button x:Name="BtnStopDownload" Content="Stop" Padding="12,4" Margin="0,0,8,0" Visibility="Collapsed"
+                                Click="BtnStopDownload_Click" ToolTip="Stop downloading (what's saved stays; Download All continues from here next time)"/>
+                        <Button x:Name="BtnClearPictures" Content="Delete Kept Pictures…" Padding="12,4"
+                                Click="BtnClearPictures_Click" ToolTip="Free the space (your cards' pictures download again in the background)"/>
+                    </WrapPanel>
+                    <ProgressBar x:Name="DownloadBar" Height="6" Margin="0,10,0,0" Visibility="Collapsed"/>
+                    <TextBlock x:Name="DownloadText" Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ STARTUP & UPDATES ═══ -->
+            <Border Style="{StaticResource Section}">
+                <StackPanel>
+                    <TextBlock Text="Startup and updates" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Style="{StaticResource Hint}" Text="Where BoE opens, and when it reminds you that card data and prices are getting old."/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="Open on" Style="{StaticResource Label}"/>
+                        <ComboBox x:Name="StartPageBox" Width="260" DisplayMemberPath="Label" SelectionChanged="Setting_Changed"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Remind me to update after" Style="{StaticResource Label}"/>
+                        <ComboBox x:Name="ReminderBox" Width="160" DisplayMemberPath="Label" SelectionChanged="Setting_Changed"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ DATA FOLDER ═══ -->
+            <Border Style="{StaticResource Section}">
+                <StackPanel>
+                    <TextBlock Text="Data folder" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Style="{StaticResource Hint}"
+                               Text="Where BoE keeps your collection, decks, card data, pictures and exports. Moving it copies everything to the new folder, checks the copy, and restarts BoE there. The old folder stays as it was until you delete it."/>
+                    <TextBlock x:Name="FolderText" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                    <TextBlock x:Name="FolderSizeText" Style="{StaticResource Hint}"/>
+                    <TextBlock x:Name="FolderProblem" TextWrapping="Wrap" Margin="0,0,0,8" Foreground="#E8A317" Visibility="Collapsed"/>
+                    <WrapPanel>
+                        <Button x:Name="BtnOpenFolder" Content="Open Folder" Padding="12,4" Margin="0,0,8,0" Click="BtnOpenFolder_Click"/>
+                        <Button x:Name="BtnMoveFolder" Content="Move…" Padding="12,4" Margin="0,0,8,0" Click="BtnMoveFolder_Click"/>
+                        <Button x:Name="BtnDefaultFolder" Content="Use Documents\BoE_V2 Again" Padding="12,4" Click="BtnDefaultFolder_Click"
+                                ToolTip="Go back to the default folder (its data as it is there — nothing is copied)"/>
+                    </WrapPanel>
+                    <ProgressBar x:Name="MoveBar" Height="6" Margin="0,10,0,0" Visibility="Collapsed"/>
+                    <TextBlock x:Name="MoveText" Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Appearance (Light / Dark / Custom) and the Program Tour come in the next parts. -->
+        </StackPanel>
+    </ScrollViewer>
+</Page>

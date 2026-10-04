@@ -143,9 +143,9 @@ namespace BreakersOfE.Views.Pages
             AddToBox.ItemsSource = new[] { "Main deck", "Sideboard" };
             AddToBox.SelectedIndex = 0;
             LanguageBox.ItemsSource = CardLanguage.All;
-            LanguageBox.SelectedItem = CardLanguage.Default;
+            LanguageBox.SelectedItem = AppSettingsService.Current.DefaultLanguage;      // Settings → Collection defaults
             ConditionBox.ItemsSource = CardCondition.All;
-            ConditionBox.SelectedItem = CardCondition.Default;
+            ConditionBox.SelectedItem = AppSettingsService.Current.DefaultCondition;
 
             BuildMenus();
             UpdateButtons();
@@ -334,7 +334,9 @@ namespace BreakersOfE.Views.Pages
                 catch (Exception ex) { ShowStatus($"Could not save the deck: {ex.Message}", true); return false; }
             }
             // A deck never claims more than it lists (the file may have changed elsewhere).
-            CollectionEditService.SyncClaims(deck);
+            string? syncProblem = CollectionEditService.SyncClaims(deck, out var syncError) < 0
+                ? $"Couldn't check this deck's collection copies ({syncError}) — some may still be claimed for cards the deck no longer lists. Reopening the deck tries again."
+                : null;
             // Lines without a ScryfallId (very old files) can't be told apart: not editable here.
             int unkeyed = deck.Cards.Count(c => string.IsNullOrEmpty(c.ScryfallId));
 
@@ -363,6 +365,7 @@ namespace BreakersOfE.Views.Pages
             UpdateUndo();
             if (unkeyed > 0 && other)
                 ShowStatus($"{unkeyed} line(s) in this deck have no Scryfall ID (an old file) — they can't be changed here.", true);
+            if (syncProblem != null) ShowStatus(syncProblem, true);
             return true;
         }
 
@@ -745,8 +748,17 @@ namespace BreakersOfE.Views.Pages
                     return;
                 }
                 // A deck never claims more than it lists: free the extra copies.
-                int freed = CollectionEditService.SyncClaims(_deck);
-                if (freed > 0)
+                int freed = CollectionEditService.SyncClaims(_deck, out var syncError);
+                if (freed < 0)
+                    result = new DeckEditResult
+                    {
+                        Changed = result.Changed,
+                        Warning = true,
+                        Touched = result.Touched,
+                        Message = $"{result.Message}  Couldn't check the deck's collection copies afterwards ({syncError}) — " +
+                                  "some may still be claimed for cards the deck no longer lists. Reopening the deck tries again.",
+                    };
+                else if (freed > 0)
                     result = new DeckEditResult
                     {
                         Changed = result.Changed,

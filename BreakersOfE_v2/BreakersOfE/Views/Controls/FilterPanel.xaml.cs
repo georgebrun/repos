@@ -29,6 +29,10 @@ namespace BreakersOfE.Views.Controls
         public string? Deck { get; set; }
         public string? List { get; set; }
         public string Text { get; set; } = "";
+        /// <summary>Keywords as typed ("Flying, Lifelink").</summary>
+        public string Keywords { get; set; } = "";
+        /// <summary>Cards with ANY of the keywords (false: with ALL of them).</summary>
+        public bool KeywordsAny { get; set; }
         public string PriceMin { get; set; } = "";
         public string PriceMax { get; set; } = "";
         public string MvMin { get; set; } = "";
@@ -98,13 +102,15 @@ namespace BreakersOfE.Views.Controls
         private IEnumerable<ToggleButton> RarityChips => new[] { RarC, RarU, RarR, RarM, RarS };
         private IEnumerable<TextBox> TextBoxes => new[]
         {
-            ArtistBox, FullTextBox, PriceMin, PriceMax, MvMin, MvMax, PowMin, PowMax, TouMin, TouMax, OwnMin, OwnMax,
+            ArtistBox, FullTextBox, KeywordBox, PriceMin, PriceMax, MvMin, MvMax, PowMin, PowMax, TouMin, TouMax, OwnMin, OwnMax,
         };
         private IEnumerable<TextBox> NumberBoxes => new[]
         {
             PriceMin, PriceMax, MvMin, MvMax, PowMin, PowMax, TouMin, TouMax, OwnMin, OwnMax,
         };
-        private IEnumerable<ComboBox> Combos => new[] { TypeBox, FormatBox, FinishBox, CollectionBox, SetBox, DeckBox, ListsBox };
+        private IEnumerable<ComboBox> Combos => new[] { TypeBox, FormatBox, FinishBox, CollectionBox, SetBox, DeckBox, ListsBox, KeywordModeBox };
+
+        private static readonly List<FilterChoice> KeywordModes = new() { new("Has all", null), new("Has any", "any") };
 
         public FilterPanel()
         {
@@ -124,8 +130,10 @@ namespace BreakersOfE.Views.Controls
             _loading = true;
             TypeBox.ItemsSource = Types;
             FinishBox.ItemsSource = Finishes;
+            KeywordModeBox.ItemsSource = KeywordModes;
             TypeBox.SelectedIndex = 0;
             FinishBox.SelectedIndex = 0;
+            KeywordModeBox.SelectedIndex = 0;
             _loading = false;
         }
 
@@ -186,6 +194,8 @@ namespace BreakersOfE.Views.Controls
                 Select(ListsBox, s.List);
                 ArtistBox.Text = s.Artist;
                 FullTextBox.Text = s.Text;
+                KeywordBox.Text = s.Keywords;
+                Select(KeywordModeBox, s.KeywordsAny ? "any" : null);
                 PriceMin.Text = s.PriceMin; PriceMax.Text = s.PriceMax;
                 MvMin.Text = s.MvMin; MvMax.Text = s.MvMax;
                 PowMin.Text = s.PowMin; PowMax.Text = s.PowMax;
@@ -213,6 +223,8 @@ namespace BreakersOfE.Views.Controls
             List = Value(ListsBox),
             Artist = ArtistBox.Text.Trim(),
             Text = FullTextBox.Text.Trim(),
+            Keywords = KeywordBox.Text.Trim(),
+            KeywordsAny = Value(KeywordModeBox) == "any",
             PriceMin = PriceMin.Text.Trim(), PriceMax = PriceMax.Text.Trim(),
             MvMin = MvMin.Text.Trim(), MvMax = MvMax.Text.Trim(),
             PowMin = PowMin.Text.Trim(), PowMax = PowMax.Text.Trim(),
@@ -239,6 +251,73 @@ namespace BreakersOfE.Views.Controls
         }
 
         private void BtnClear_Click(object sender, RoutedEventArgs e) => ClearRequested?.Invoke();
+
+        // ── Keyword picker ───────────────────────────────────────────────
+        /// <summary>One keyword in the picker list.</summary>
+        public sealed class KeywordPick : System.ComponentModel.INotifyPropertyChanged
+        {
+            public string Name { get; init; } = "";
+            private bool _checked;
+            public bool IsChecked
+            {
+                get => _checked;
+                set { _checked = value; PropertyChanged?.Invoke(this, new(nameof(IsChecked))); }
+            }
+            public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+        }
+
+        private List<KeywordPick>? _picks;
+        private int _picksVersion = -1;
+
+        /// <summary>The keywords typed in the box ("Flying, Lifelink" → Flying, Lifelink).</summary>
+        public static List<string> SplitKeywords(string text) =>
+            (text ?? "").Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        private async void BtnPickKeywords_Click(object sender, RoutedEventArgs e)
+        {
+            KeywordSearch.Text = "";
+            KeywordPopup.IsOpen = true;
+            try
+            {
+                KeywordPickHint.Text = "Loading keywords…";
+                var names = await System.Threading.Tasks.Task.Run(() => Services.KeywordIndex.AllKeywords());
+                // New the first time, and again after Update Database brings new keywords.
+                if (_picks == null || _picksVersion != Services.KeywordIndex.Version)
+                {
+                    _picksVersion = Services.KeywordIndex.Version;
+                    _picks = names.Select(n => new KeywordPick { Name = n }).ToList();
+                    KeywordList.ItemsSource = _picks;
+                }
+            }
+            catch (Exception ex)
+            {
+                KeywordPickHint.Text = $"Could not load the keywords: {ex.Message}";
+                return;
+            }
+            var chosen = new HashSet<string>(SplitKeywords(KeywordBox.Text), StringComparer.OrdinalIgnoreCase);
+            foreach (var p in _picks) p.IsChecked = chosen.Contains(p.Name);
+            KeywordPickHint.Text = $"{_picks.Count:N0} keywords on cards. Look one up in the Keyword Dictionary.";
+            KeywordSearch.Focus();
+        }
+
+        private void KeywordSearch_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_picks == null) return;
+            string q = KeywordSearch.Text.Trim();
+            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_picks);
+            view.Filter = q.Length == 0 ? null : o => ((KeywordPick)o).Name.Contains(q, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>A tick in the picker: the box lists what's ticked (typed ones it doesn't know stay).</summary>
+        private void KeywordPick_Click(object sender, RoutedEventArgs e)
+        {
+            if (_picks == null || (sender as FrameworkElement)?.DataContext is not KeywordPick pick) return;
+            var list = SplitKeywords(KeywordBox.Text);
+            list.RemoveAll(k => k.Equals(pick.Name, StringComparison.OrdinalIgnoreCase));
+            if (pick.IsChecked) list.Add(pick.Name);
+            KeywordBox.Text = string.Join(", ", list);       // filters after the usual typing pause
+        }
 
         /// <summary>Number boxes: digits and one decimal point.</summary>
         private void Num_PreviewTextInput(object sender, TextCompositionEventArgs e)

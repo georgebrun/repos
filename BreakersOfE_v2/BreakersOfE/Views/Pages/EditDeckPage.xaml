@@ -4,7 +4,8 @@
       xmlns:ctl="clr-namespace:BreakersOfE.Views.Controls"
       ScrollViewer.VerticalScrollBarVisibility="Disabled"
       Loaded="Page_Loaded"
-      PreviewKeyDown="Page_PreviewKeyDown">
+      PreviewKeyDown="Page_PreviewKeyDown"
+      Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
     <!-- Edit → Decks: Pool → Deck and Collection → Deck (the source on top,
          the deck below) and Deck → Collection (the deck on top, the collection

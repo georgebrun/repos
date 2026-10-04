@@ -1468,9 +1468,25 @@ namespace BreakersOfE.Services
                 // Non-fatal — the keyword catalog is a nice-to-have
             }
 
+            // The official rules text for every keyword (Wizards' Comprehensive
+            // Rules). Non-fatal: the dictionary keeps the last good copy.
+            try
+            {
+                Report(progress, "Updating keyword dictionary...", 99,
+                    "Downloading the Comprehensive Rules...");
+                await ComprehensiveRulesService.DownloadAsync(ct);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Comprehensive Rules download: {ex.Message}");
+            }
+
             // Merge catalogs + pool-discovered keywords into the dictionary
             Report(progress, "Updating keyword dictionary...", 99,
                 "Merging keywords...");
+            KeywordIndex.Reset();                    // new cards: rebuilt on next use
+            MtgKeywordService.RulesChanged();
             MtgKeywordService.Reset();
             MtgKeywordService.RefreshFromPool();
             result.NewKeywordsDiscovered =

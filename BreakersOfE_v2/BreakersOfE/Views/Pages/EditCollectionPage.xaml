@@ -4,7 +4,8 @@
       xmlns:ctl="clr-namespace:BreakersOfE.Views.Controls"
       ScrollViewer.VerticalScrollBarVisibility="Disabled"
       Loaded="Page_Loaded"
-      PreviewKeyDown="Page_PreviewKeyDown">
+      PreviewKeyDown="Page_PreviewKeyDown"
+      Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
     <!-- Edit → Pool → Collection: the pool table on top, the matching
          collection table below (same tables as View, embedded), the card

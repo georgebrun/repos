@@ -104,6 +104,36 @@
                                      ToolTip="Card name or rules text contains"/>
                         </WrapPanel>
                         <WrapPanel Margin="0,6,0,0">
+                            <TextBlock Text="Keywords" Style="{StaticResource Label}"/>
+                            <TextBox x:Name="KeywordBox" Width="220"
+                                     ToolTip="Keywords, separated by commas — e.g. Flying, Lifelink. Or pick them with the … button."/>
+                            <Button x:Name="BtnPickKeywords" Content="…" Padding="8,3" Margin="4,0,8,0"
+                                    Click="BtnPickKeywords_Click" ToolTip="Pick keywords from a list"/>
+                            <ComboBox x:Name="KeywordModeBox" Width="110" VerticalAlignment="Center"
+                                      ToolTip="Cards with every keyword listed, or with at least one of them"/>
+                        </WrapPanel>
+                        <!-- Keyword picker: every keyword some card has, with a search box -->
+                        <Popup x:Name="KeywordPopup" PlacementTarget="{Binding ElementName=BtnPickKeywords}"
+                               Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
+                            <Border Background="{DynamicResource ApplicationBackgroundBrush}" BorderThickness="1"
+                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" CornerRadius="6" Padding="8" Width="300">
+                                <DockPanel>
+                                    <TextBox x:Name="KeywordSearch" DockPanel.Dock="Top" Margin="0,0,0,6"
+                                             TextChanged="KeywordSearch_TextChanged" ToolTip="Type to find a keyword"/>
+                                    <TextBlock x:Name="KeywordPickHint" DockPanel.Dock="Bottom" Margin="0,6,0,0" FontSize="11"
+                                               TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <ListBox x:Name="KeywordList" Height="320">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <CheckBox Content="{Binding Name}" IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                                          Click="KeywordPick_Click"/>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </DockPanel>
+                            </Border>
+                        </Popup>
+                        <WrapPanel Margin="0,6,0,0">
                             <TextBlock x:Name="PriceLabel" Text="Price" Style="{StaticResource Label}"/>
                             <TextBox x:Name="PriceMin" Width="64" TextAlignment="Center" ToolTip="From"/>
                             <TextBlock Text="–" Style="{StaticResource Label}" Margin="4,0,4,0"/>

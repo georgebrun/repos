@@ -99,9 +99,24 @@ namespace BreakersOfE.ViewModels
         {
             get
             {
+                // "Card not found" (offline?) tries again when the tile is shown a minute later.
+                if (_isNotFound && !_loading && DateTime.UtcNow - _failedAt > TimeSpan.FromMinutes(1))
+                {
+                    _image = null;
+                    IsNotFound = false;                      // card back (no name overlay) while it tries
+                }
                 if (_image == null && !_loading) BeginLoad();
-                return _image;
+                return _image ?? CardPictures.CardBack;      // face down until the picture arrives
             }
+        }
+
+        /// <summary>No picture (offline, or none exists): "Scryfall Fail" shows, with the card's name on it.</summary>
+        private bool _isNotFound;
+        private DateTime _failedAt;
+        public bool IsNotFound
+        {
+            get => _isNotFound;
+            private set { if (_isNotFound != value) { _isNotFound = value; OnPropertyChanged(); } }
         }
 
         private GalleryItem(object card, string sid, string url, string name,
@@ -120,14 +135,12 @@ namespace BreakersOfE.ViewModels
             _loading = true;
             try
             {
-                string? path = await ImageCacheService.EnsureCachedAsync(ScryfallId, ImageUrl);
-                if (path == null) return;   // offline / no image → name placeholder stays
-
-                var bmp = await Task.Run(() => ImageCacheService.LoadBitmap(path, DecodeWidth));
-                if (bmp == null) return;
-
-                _image = bmp;
-                GalleryImageTracker.Track(this);
+                // Kept on disk when it's yours (or Settings keeps everything); else shown from the internet.
+                var bmp = await ImageCacheService.GetPictureAsync(ScryfallId, ImageUrl, DecodeWidth);
+                IsNotFound = bmp == null;
+                if (bmp == null) _failedAt = DateTime.UtcNow;
+                _image = bmp ?? CardPictures.NotFound;
+                if (bmp != null) GalleryImageTracker.Track(this);
                 OnPropertyChanged(nameof(Image));
             }
             finally
@@ -139,7 +152,7 @@ namespace BreakersOfE.ViewModels
         /// <summary>
         /// Drops the decoded bitmap to cap memory. Silent (no PropertyChanged):
         /// if the tile scrolls back into view, the binding re-reads Image and it
-        /// reloads from the disk cache (fast, no download).
+        /// reloads — from disk when kept, else from the internet again.
         /// </summary>
         internal void ReleaseImage() => _image = null;
 

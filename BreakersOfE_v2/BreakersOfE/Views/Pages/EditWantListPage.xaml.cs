@@ -79,9 +79,9 @@ namespace BreakersOfE.Views.Pages
             _bottom.GridPreviewKeyDown += Bottom_GridPreviewKeyDown;
 
             LanguageBox.ItemsSource = CardLanguage.All;
-            LanguageBox.SelectedItem = CardLanguage.Default;
+            LanguageBox.SelectedItem = AppSettingsService.Current.DefaultLanguage;      // Settings → Collection defaults
             ConditionBox.ItemsSource = CardCondition.All;
-            ConditionBox.SelectedItem = CardCondition.Default;
+            ConditionBox.SelectedItem = AppSettingsService.Current.DefaultCondition;
 
             BuildMenus();
 

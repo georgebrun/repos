@@ -119,6 +119,19 @@
                                             </Style>
                                         </Image.Style>
                                     </Image>
+                                    <!-- "Scryfall Fail" (no picture): the card's name in its text box -->
+                                    <Grid Visibility="{Binding IsNotFound, Converter={StaticResource BoolToVisibilityConverter}}"
+                                          IsHitTestVisible="False">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="66*"/>
+                                            <RowDefinition Height="25*"/>
+                                            <RowDefinition Height="9*"/>
+                                        </Grid.RowDefinitions>
+                                        <Viewbox Grid.Row="1" Stretch="Uniform" StretchDirection="DownOnly" Margin="14,4,14,4">
+                                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="260"
+                                                       FontSize="20" FontWeight="SemiBold" Foreground="#202020"/>
+                                        </Viewbox>
+                                    </Grid>
                                     <!-- Owned marker + finish pill sit just below the title bar
                                          (at the top of the art), so the name and mana cost stay
                                          readable. Proportional rows keep them there at any card size. -->

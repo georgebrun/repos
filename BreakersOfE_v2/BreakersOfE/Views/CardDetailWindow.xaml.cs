@@ -154,8 +154,7 @@ namespace BreakersOfE.Views
             PopulateLegality();
 
             // Card image
-            LoadImage(Get("ImageNormalUrl"),
-                    Services.ImageCacheService.GetCachedPath(Get("ScryfallId")) ?? Get("LocalImagePath"));
+            ShowPicture(back: false);
             string backUrl = Get("ImageBackUrl");
             BtnFlipFace.Visibility = !string.IsNullOrEmpty(backUrl)
                 ? Visibility.Visible : Visibility.Collapsed;
@@ -310,33 +309,15 @@ namespace BreakersOfE.Views
                 i == 0 ? char.ToUpper(c) : c == '_' ? ' ' : c));
 
         // ── Image loading ───────────────────────────────────────────────
-        private void LoadImage(string url, string localPath)
+        private int _picVersion;
+
+        /// <summary>The card's picture (front or back): card back while it comes, "Scryfall Fail" if none.</summary>
+        private void ShowPicture(bool back)
         {
-            try
-            {
-                if (!string.IsNullOrEmpty(localPath) && File.Exists(localPath))
-                {
-                    var bmp = new BitmapImage();
-                    bmp.BeginInit();
-                    bmp.UriSource = new Uri(localPath, UriKind.Absolute);
-                    bmp.CacheOption = BitmapCacheOption.OnLoad;
-                    bmp.EndInit();
-                    bmp.Freeze();
-                    CardImage.Source = bmp;
-                    return;
-                }
-                if (!string.IsNullOrEmpty(url))
-                {
-                    var bmp = new BitmapImage();
-                    bmp.BeginInit();
-                    bmp.UriSource = new Uri(url, UriKind.Absolute);
-                    bmp.CacheOption = BitmapCacheOption.OnLoad;
-                    bmp.EndInit();
-                    CardImage.Source = bmp;
-                }
-                else CardImage.Source = null;
-            }
-            catch { CardImage.Source = null; }
+            int v = ++_picVersion;
+            _ = back
+                ? Services.CardPictures.ShowAsync(CardImage, null, Get("ImageBackUrl"), Get("LocalImageBackPath"), () => v == _picVersion)
+                : Services.CardPictures.ShowAsync(CardImage, Get("ScryfallId"), Get("ImageNormalUrl"), Get("LocalImagePath"), () => v == _picVersion);
         }
 
         // ── Rarity badge color ──────────────────────────────────────────
@@ -365,13 +346,12 @@ namespace BreakersOfE.Views
             _showingBack = !_showingBack;
             if (_showingBack)
             {
-                LoadImage(Get("ImageBackUrl"), Get("LocalImageBackPath"));
+                ShowPicture(back: true);
                 BtnFlipFace.Content = "🔄 Show Front Face";
             }
             else
             {
-                LoadImage(Get("ImageNormalUrl"),
-                    Services.ImageCacheService.GetCachedPath(Get("ScryfallId")) ?? Get("LocalImagePath"));
+                ShowPicture(back: false);
                 BtnFlipFace.Content = "🔄 Show Back Face";
             }
         }

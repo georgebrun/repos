@@ -659,10 +659,9 @@ namespace BreakersOfE.Services
         {
             using var db = new CollectionDbContext();
             var list = new List<Dictionary<string, object?>>();
-            foreach (var sid in sids)
-                foreach (var row in Rows(db, collTag, sid))
-                    list.Add(db.Entry(row.Entity).Properties
-                        .ToDictionary(p => p.Metadata.Name, p => p.CurrentValue));
+            foreach (var row in RowsMany(db, collTag, sids))
+                list.Add(db.Entry(row.Entity).Properties
+                    .ToDictionary(p => p.Metadata.Name, p => p.CurrentValue));
             return list;
         }
 
@@ -729,7 +728,7 @@ namespace BreakersOfE.Services
                 var entityType = db.Model.FindEntityType(type)!;
                 string keyName = entityType.FindPrimaryKey()!.Properties[0].Name;
 
-                var current = snap.Sids.SelectMany(s => Rows(db, snap.CollTag, s)).ToList();
+                var current = RowsMany(db, snap.CollTag, snap.Sids);
                 var byId = current.ToDictionary(r => r.Id);
                 var keep = new HashSet<int>(snap.Rows.Select(v => v[keyName] is int i ? i : 0));
 
@@ -856,6 +855,54 @@ namespace BreakersOfE.Services
             };
             return rows.Select(r => new Row(r)).ToList();
         }
+
+        /// <summary>
+        /// The rows of many printings at once (in batches of 400 — one query
+        /// per printing would crawl on an import of thousands).
+        /// </summary>
+        private static List<Row> RowsMany(CollectionDbContext db, string collTag, IEnumerable<string> sids)
+        {
+            var result = new List<Row>();
+            var all = sids.Where(s => !string.IsNullOrEmpty(s)).Distinct().ToList();
+            for (int i = 0; i < all.Count; i += 400)
+            {
+                var chunk = all.Skip(i).Take(400).ToList();
+                IEnumerable<object> rows = collTag switch
+                {
+                    "CollTokens" => db.TokenCollectionEntries.Where(e => chunk.Contains(e.ScryfallId)).ToList(),
+                    "CollPlanes" => db.PlanarCollectionEntries.Where(e => chunk.Contains(e.ScryfallId)).ToList(),
+                    "CollSchemes" => db.SchemeCollectionEntries.Where(e => chunk.Contains(e.ScryfallId)).ToList(),
+                    "CollVanguards" => db.VanguardCollectionEntries.Where(e => chunk.Contains(e.ScryfallId)).ToList(),
+                    "CollArtSeries" => db.ArtSeriesCollectionEntries.Where(e => chunk.Contains(e.ScryfallId)).ToList(),
+                    "CollConspiracies" => db.ConspiracyCollectionEntries.Where(e => chunk.Contains(e.ScryfallId)).ToList(),
+                    "MtgoCollection" => db.OnlineCollectionEntries
+                        .Where(e => e.Game == OnlineGame.Mtgo && chunk.Contains(e.ScryfallId)).ToList(),
+                    "ArenaCollection" => db.OnlineCollectionEntries
+                        .Where(e => e.Game == OnlineGame.Arena && chunk.Contains(e.ScryfallId)).ToList(),
+                    BinderTable => db.TradeBinderEntries.Where(e => chunk.Contains(e.ScryfallId)).ToList(),
+                    WantTable => db.WantListEntries.Where(e => chunk.Contains(e.ScryfallId)).ToList(),
+                    _ => db.CollectionEntries.Where(e => chunk.Contains(e.ScryfallId)).ToList(),
+                };
+                result.AddRange(rows.Select(r => new Row(r)));
+            }
+            return result;
+        }
+
+        /// <summary>Every printing (Scryfall id) with a row in a table.</summary>
+        private static List<string> AllSids(CollectionDbContext db, string collTag) => collTag switch
+        {
+            "CollTokens" => db.TokenCollectionEntries.Select(e => e.ScryfallId).Distinct().ToList(),
+            "CollPlanes" => db.PlanarCollectionEntries.Select(e => e.ScryfallId).Distinct().ToList(),
+            "CollSchemes" => db.SchemeCollectionEntries.Select(e => e.ScryfallId).Distinct().ToList(),
+            "CollVanguards" => db.VanguardCollectionEntries.Select(e => e.ScryfallId).Distinct().ToList(),
+            "CollArtSeries" => db.ArtSeriesCollectionEntries.Select(e => e.ScryfallId).Distinct().ToList(),
+            "CollConspiracies" => db.ConspiracyCollectionEntries.Select(e => e.ScryfallId).Distinct().ToList(),
+            "MtgoCollection" => db.OnlineCollectionEntries.Where(e => e.Game == OnlineGame.Mtgo).Select(e => e.ScryfallId).Distinct().ToList(),
+            "ArenaCollection" => db.OnlineCollectionEntries.Where(e => e.Game == OnlineGame.Arena).Select(e => e.ScryfallId).Distinct().ToList(),
+            BinderTable => db.TradeBinderEntries.Select(e => e.ScryfallId).Distinct().ToList(),
+            WantTable => db.WantListEntries.Select(e => e.ScryfallId).Distinct().ToList(),
+            _ => db.CollectionEntries.Select(e => e.ScryfallId).Distinct().ToList(),
+        };
 
         private static Row? FindById(CollectionDbContext db, string collTag, int id) =>
             id <= 0 ? null : db.Find(EntryType(collTag), id) is { } e ? new Row(e) : null;

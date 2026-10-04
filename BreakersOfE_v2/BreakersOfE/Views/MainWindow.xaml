@@ -112,6 +112,55 @@
                                ToolTip="Edit your collection and decks"/>
                     </StackPanel>
 
+                    <!-- Keyword Dictionary: a reference, open in View or Edit alike -->
+                    <ui:Button x:Name="BtnKeywordDictionary" Content="Keyword Dictionary"
+                           Icon="{ui:SymbolIcon BookQuestionMark24}"
+                           Appearance="Transparent"
+                           HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                           Margin="4,4,8,0"
+                           Click="BtnKeywordDictionary_Click"
+                           ToolTip="Look up any keyword: what it means, the official rules, and the cards that have it"
+                           Visibility="{Binding IsPaneOpen, ElementName=RootNavigation,
+                                        Converter={StaticResource BoolToVisibilityConverter}}"/>
+                    <ui:Button Width="36" Height="36" Padding="0"
+                           HorizontalAlignment="Left" Margin="6,4,0,0"
+                           Appearance="Transparent"
+                           Icon="{ui:SymbolIcon BookQuestionMark24}"
+                           Click="BtnKeywordDictionary_Click"
+                           ToolTip="Keyword Dictionary"
+                           Visibility="{Binding IsPaneOpen, ElementName=RootNavigation,
+                                        Converter={StaticResource BoolToVisibilityConverter},
+                                        ConverterParameter=Invert}"/>
+
+                    <!-- Settings -->
+                    <ui:Button x:Name="BtnSettings" Content="Settings"
+                           Icon="{ui:SymbolIcon Settings24}"
+                           Appearance="Transparent"
+                           HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                           Margin="4,4,8,0"
+                           Click="BtnSettings_Click"
+                           ToolTip="Defaults, card pictures, startup, data folder"
+                           Visibility="{Binding IsPaneOpen, ElementName=RootNavigation,
+                                        Converter={StaticResource BoolToVisibilityConverter}}"/>
+                    <ui:Button Width="36" Height="36" Padding="0"
+                           HorizontalAlignment="Left" Margin="6,4,0,0"
+                           Appearance="Transparent"
+                           Icon="{ui:SymbolIcon Settings24}"
+                           Click="BtnSettings_Click"
+                           ToolTip="Settings"
+                           Visibility="{Binding IsPaneOpen, ElementName=RootNavigation,
+                                        Converter={StaticResource BoolToVisibilityConverter},
+                                        ConverterParameter=Invert}"/>
+
+                    <!-- Card data getting old (Settings → Remind me to update): amber, click to update -->
+                    <StackPanel Visibility="{Binding IsPaneOpen, ElementName=RootNavigation,
+                                             Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBlock x:Name="UpdateReminder" Margin="14,8,8,0" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="#E8A317" Cursor="Hand" Visibility="Collapsed"
+                                   MouseLeftButtonUp="UpdateReminder_Click"
+                                   ToolTip="Click to update the card database and prices"/>
+                    </StackPanel>
+
                     <!-- Update Database: always the very last thing in the pane.
                      A plain button (not a tree item) so nothing can sit below it. -->
                     <ui:Button x:Name="BtnUpdateDatabase" Content="Update Database"
@@ -149,6 +198,7 @@
 
                         <ui:NavigationViewItem Content="Cards"
                                                Tag="Cards"
+                                               TargetPageTag="pool-cards"
                                                TargetPageType="{x:Type pages:PoolPage}"
                                                Icon="{ui:SymbolIcon Grid24}" />
 
@@ -188,6 +238,7 @@
                 <!-- ═══ SETS (set browser over the Cards pool) ═══ -->
                 <ui:NavigationViewItem x:Name="NavSets" Content="Sets"
                                        Tag="Sets"
+                                       TargetPageTag="view-sets"
                                        TargetPageType="{x:Type pages:PoolPage}"
                                        Icon="{ui:SymbolIcon Layer24}" />
 
@@ -202,6 +253,7 @@
 
                         <ui:NavigationViewItem Content="Cards"
                                                Tag="Collection"
+                                               TargetPageTag="coll-cards"
                                                TargetPageType="{x:Type pages:PoolPage}"
                                                Icon="{ui:SymbolIcon Grid24}" />
 
@@ -251,6 +303,7 @@
                 <!-- ═══ DECKS (deck browser → open a deck; changes are made under Edit → Decks) ═══ -->
                 <ui:NavigationViewItem x:Name="NavDecks" Content="Decks"
                                        Tag="Decks"
+                                       TargetPageTag="view-decks"
                                        TargetPageType="{x:Type pages:PoolPage}"
                                        Icon="{ui:SymbolIcon Stack24}" />
 
@@ -363,6 +416,13 @@
                                                Icon="{ui:SymbolIcon ArrowRight24}" />
                     </ui:NavigationViewItem.MenuItems>
                 </ui:NavigationViewItem>
+
+                <!-- Import / Export: card lists in and out (other apps, MTG Deck Tools, BoE's own full file) -->
+                <ui:NavigationViewItem x:Name="NavEditImport" Content="Import / Export"
+                                       Tag="EditImport"
+                                       TargetPageType="{x:Type pages:ImportExportPage}"
+                                       Visibility="Collapsed"
+                                       Icon="{ui:SymbolIcon Folder24}" />
 
                 <!-- Online → Collection: the MTGO or Arena pool on top, that game's collection below -->
                 <ui:NavigationViewItem x:Name="NavEditOnline" Content="Online → Collection"

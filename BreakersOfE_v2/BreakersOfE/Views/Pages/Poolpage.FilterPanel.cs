@@ -29,6 +29,35 @@ namespace BreakersOfE.Views.Pages
         {
             FilterPanelView.Changed += ApplyFilterPanel;
             FilterPanelView.ClearRequested += ClearFilterPanel;
+            // Which cards have which keywords: built in the background so the first keyword filter is quick.
+            _ = System.Threading.Tasks.Task.Run(Services.KeywordIndex.EnsureLoaded);
+        }
+
+        // ── "Show in Pool / My Collection" from the Keyword Dictionary ──
+        private static (string Tag, string Keyword)? _pendingKeyword;
+
+        /// <summary>
+        /// The Keyword Dictionary asks for a table filtered to one keyword: when
+        /// that table's rows arrive, its filters are cleared and the panel opens
+        /// with just that keyword.
+        /// </summary>
+        public static void RequestKeyword(string tag, string keyword) => _pendingKeyword = (tag, keyword);
+
+        private void ApplyPendingKeyword()
+        {
+            if (_pendingKeyword is not { } p || p.Tag != _currentTag || _inSetsContext || _inDecksContext) return;
+            _pendingKeyword = null;
+            // Just this keyword: every other filter off (as Clear All Filters).
+            _vm.Filters.ClearAll();
+            _missingOnly = false;
+            BtnMissingOnly.IsChecked = false;
+            UpdateChecklist(reapply: false);
+            RefreshFunnelIcons();
+            BtnFilters.IsChecked = true;
+            FilterPanelView.Visibility = Visibility.Visible;
+            SyncFilterPanel(force: true);
+            FilterPanelView.Load(new FilterPanelState { Keywords = p.Keyword });
+            ApplyFilterPanel();
         }
 
         private void BtnFilters_Click(object sender, RoutedEventArgs e)
@@ -104,7 +133,7 @@ namespace BreakersOfE.Views.Pages
         private static readonly string[] PanelKeys =
         {
             "panel:type", "panel:format", "panel:finish", "panel:artist", "panel:collection",
-            "panel:deck", "panel:list", "panel:text", "panel:price", "panel:mv", "panel:pow", "panel:tou", "panel:own",
+            "panel:deck", "panel:list", "panel:text", "panel:keyword", "panel:price", "panel:mv", "panel:pow", "panel:tou", "panel:own",
         };
 
         /// <summary>The panel changed: turn its choices into filters and apply them.</summary>
@@ -157,6 +186,8 @@ namespace BreakersOfE.Views.Pages
                        PStr(r, "OracleText").Contains(s.Text, StringComparison.OrdinalIgnoreCase)
                 : null);
 
+            f.SetExtra("panel:keyword", "", KeywordTest(s.Keywords, s.KeywordsAny));
+
             f.SetExtra("panel:price", "", RangeTest(PriceProp(sample), s.PriceMin, s.PriceMax));
             f.SetExtra("panel:mv", "", RangeTest("ManaValue", s.MvMin, s.MvMax));
             f.SetExtra("panel:pow", "", RangeTest("Power", s.PowMin, s.PowMax));
@@ -197,6 +228,8 @@ namespace BreakersOfE.Views.Pages
             if (s.Deck != null) labels.Add(s.Deck.StartsWith("path:") ? "In one deck" : s.Deck == "any" ? "In a deck" : "Not in a deck");
             if (s.List != null) labels.Add(s.List == "want" ? "On Want List" : "In Trade Binder");
             if (s.Text.Length > 0) labels.Add($"Text \"{s.Text}\"");
+            var kws = FilterPanel.SplitKeywords(s.Keywords);
+            if (kws.Count > 0) labels.Add("Keywords " + string.Join(s.KeywordsAny ? " or " : " + ", kws));
             void Range(string name, string min, string max)
             {
                 if (min.Length > 0 || max.Length > 0) labels.Add($"{name} {(min.Length > 0 ? min : "…")}–{(max.Length > 0 ? max : "…")}");
@@ -298,6 +331,33 @@ namespace BreakersOfE.Views.Pages
             "Favorites" => r => PVal(r, "IsFavorite") is true,
             _ => null,
         };
+
+        /// <summary>
+        /// Cards with all (or any) of the keywords. By card name from the pool's
+        /// keyword lists, so deck lines and collection rows answer like the pool;
+        /// a card the pool doesn't know uses its own row's keywords.
+        /// </summary>
+        private static Func<object, bool>? KeywordTest(string text, bool any)
+        {
+            var want = FilterPanel.SplitKeywords(text);
+            if (want.Count == 0) return null;
+            Services.KeywordIndex.EnsureLoaded();
+            return r =>
+            {
+                string name = PStr(r, "Name");
+                if (Services.KeywordIndex.Knows(name))
+                {
+                    var has = Services.KeywordIndex.For(name);
+                    return any ? want.Any(has.Contains) : want.All(has.Contains);
+                }
+                // Not in the pool's keyword lists (no keywords, or not a pool card): the row's own, if any.
+                string own = PStr(r, "Keywords");
+                if (own.Length == 0) return false;
+                var mine = own.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                bool Has(string w) => mine.Contains(w, StringComparer.OrdinalIgnoreCase);
+                return any ? want.Any(Has) : want.All(Has);
+            };
+        }
 
         private static Func<object, bool>? DeckTest(string? choice)
         {

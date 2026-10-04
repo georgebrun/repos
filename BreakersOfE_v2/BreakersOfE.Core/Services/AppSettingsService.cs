@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 
 namespace BreakersOfE.Services
@@ -12,6 +13,31 @@ namespace BreakersOfE.Services
         /// credit. Trade Value = market × Trade %. Approved default: 70%.
         /// </summary>
         public int TradePercent { get; set; } = AppSettingsService.DefaultTradePercent;
+
+        /// <summary>Language new cards go in as (Edit pages, imports that don't say).</summary>
+        public string DefaultLanguage { get; set; } = Models.CardLanguage.Default;
+
+        /// <summary>Condition new cards go in as.</summary>
+        public string DefaultCondition { get; set; } = Models.CardCondition.Default;
+
+        /// <summary>
+        /// Keep pictures of YOUR cards (collection, Trade Binder, Want List,
+        /// decks) on disk, so they show offline. Downloaded in the background
+        /// as cards are added.
+        /// </summary>
+        public bool SaveMyPictures { get; set; } = true;
+
+        /// <summary>
+        /// Also keep every other picture you look at (the Pool's). Off: those
+        /// are shown from the internet and not saved.
+        /// </summary>
+        public bool SaveViewedPictures { get; set; }
+
+        /// <summary>The page the app opens on: pool, collection, decks, sets or keywords.</summary>
+        public string StartPage { get; set; } = "pool";
+
+        /// <summary>Remind to Update Database after this many days (0 = never).</summary>
+        public int UpdateReminderDays { get; set; } = 14;
     }
 
     /// <summary>
@@ -23,6 +49,16 @@ namespace BreakersOfE.Services
     public static class AppSettingsService
     {
         public const int DefaultTradePercent = 70;
+
+        /// <summary>The start pages Settings offers (value, label).</summary>
+        public static readonly (string Value, string Label)[] StartPages =
+        {
+            ("pool", "Card Pool — Cards"),
+            ("collection", "Collection — Cards"),
+            ("decks", "Decks"),
+            ("sets", "Sets"),
+            ("keywords", "Keyword Dictionary"),
+        };
 
         private static string FilePath => Path.Combine(AppFolderService.RootFolder, "Settings.json");
         private static readonly JsonSerializerOptions _json = new() { WriteIndented = true };
@@ -44,6 +80,11 @@ namespace BreakersOfE.Services
                     JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath), _json) is { } s)
                 {
                     if (s.TradePercent < 1 || s.TradePercent > 100) s.TradePercent = DefaultTradePercent;
+                    // Anything unknown (hand-edited, older file) falls back to the default.
+                    if (!Models.CardLanguage.All.Contains(s.DefaultLanguage)) s.DefaultLanguage = Models.CardLanguage.Default;
+                    if (!Models.CardCondition.All.Contains(s.DefaultCondition)) s.DefaultCondition = Models.CardCondition.Default;
+                    if (!StartPages.Any(p => p.Value == s.StartPage)) s.StartPage = "pool";
+                    s.UpdateReminderDays = Math.Clamp(s.UpdateReminderDays, 0, 365);
                     return s;
                 }
             }

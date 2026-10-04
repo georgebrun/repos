@@ -445,10 +445,14 @@ namespace BreakersOfE.Services
         /// After every deck change: a deck never claims more than it lists.
         /// Extra claims are freed (other languages first, then the best
         /// condition first — the reverse of claiming). Also keeps the deck's
-        /// name and type current on its usage rows. Returns copies freed.
+        /// name and type current on its usage rows. Returns copies freed, or
+        /// −1 when it failed (<paramref name="error"/> says why) — the page
+        /// must say so: the collection may still claim copies the deck no
+        /// longer lists.
         /// </summary>
-        public static int SyncClaims(Deck deck)
+        public static int SyncClaims(Deck deck, out string? error)
         {
+            error = null;
             if (string.IsNullOrEmpty(deck.DeckId)) return 0;
             try
             {
@@ -520,7 +524,8 @@ namespace BreakersOfE.Services
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Sync claims: {ex.Message}");
-                return 0;
+                error = ex.Message;
+                return -1;
             }
         }
 

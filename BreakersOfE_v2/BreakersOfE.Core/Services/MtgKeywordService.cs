@@ -22,7 +22,12 @@ namespace BreakersOfE.Services
         Replacement,
         FormatSpecific,
         Discovered,
-        Other
+        Other,
+        // Added in v2 (stored as numbers in keywords.json: only ever add at the end).
+        /// <summary>Keyword actions (701.x): Scry, Mill, Investigate …</summary>
+        KeywordAction,
+        /// <summary>Ability words: Landfall, Raid … (no rules meaning of their own).</summary>
+        AbilityWord,
     }
 
     /// <summary>
@@ -48,10 +53,31 @@ namespace BreakersOfE.Services
             KeywordCategory.Cost => "Cost / Payment",
             KeywordCategory.Replacement => "Replacement",
             KeywordCategory.FormatSpecific => "Format-Specific",
-            KeywordCategory.Discovered => "Discovered",
+            KeywordCategory.Discovered => "More Keyword Abilities",
             KeywordCategory.Other => "Other",
+            KeywordCategory.KeywordAction => "Keyword Actions",
+            KeywordCategory.AbilityWord => "Ability Words",
             _ => "Other"
         };
+
+        /// <summary>Placeholder for a keyword nobody has defined yet.</summary>
+        public const string NoDefinition = "No definition available.";
+
+        /// <summary>Has a definition of its own (built in, or reminder text from a card).</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool HasDefinition => Definition.Length > 0 && Definition != NoDefinition;
+
+        /// <summary>The Comprehensive Rules number ("702.36"), when the rules are downloaded and have it.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string RuleNumber { get; set; } = "";
+
+        /// <summary>The official rules text (every sub-rule), or "".</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string RulesText { get; set; } = "";
+
+        /// <summary>Anything to read about it: a definition or the official rules.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool HasAnyText => HasDefinition || RulesText.Length > 0;
     }
 
     /// <summary>
@@ -797,8 +823,84 @@ namespace BreakersOfE.Services
         {
             get
             {
-                if (!_initialized) LoadFromCache();
-                return _merged.AsReadOnly();
+                lock (_rulesLock)
+                {
+                    if (!_initialized) LoadFromCache();
+                    if (!_rulesApplied) ApplyRules();
+                    return _merged.AsReadOnly();
+                }
+            }
+        }
+
+        private static readonly object _rulesLock = new();
+        private static bool _rulesApplied;
+
+        /// <summary>Replace the list (update thread): rules attach again on the next read.</summary>
+        private static void SetMerged(List<MtgKeyword> list)
+        {
+            lock (_rulesLock)
+            {
+                _merged = list;
+                _initialized = true;
+                _rulesApplied = false;
+            }
+        }
+
+        /// <summary>The list as it is now (a copy: safe to loop over while it's replaced).</summary>
+        private static List<MtgKeyword> MergedCopy()
+        {
+            lock (_rulesLock) return new List<MtgKeyword>(_merged);
+        }
+
+        /// <summary>New Comprehensive Rules were downloaded: attach them again on the next read.</summary>
+        public static void RulesChanged()
+        {
+            lock (_rulesLock)
+            {
+                ComprehensiveRulesService.Reset();
+                _rulesApplied = false;
+            }
+        }
+
+        /// <summary>
+        /// Attach each keyword's official rules (when downloaded), and add the
+        /// keyword abilities and actions the rules have that the list doesn't.
+        /// </summary>
+        private static void ApplyRules()
+        {
+            _rulesApplied = true;
+            try
+            {
+                var rules = ComprehensiveRulesService.Entries;
+                if (rules.Count == 0) return;
+                var list = new List<MtgKeyword>(_merged);        // a new list: others may be reading the old one
+                var byName = new Dictionary<string, MtgKeyword>(System.StringComparer.OrdinalIgnoreCase);
+                foreach (var k in list) byName.TryAdd(k.Name, k);
+                foreach (var e in rules.Values)
+                    if (!byName.ContainsKey(e.Title))
+                    {
+                        var added = new MtgKeyword
+                        {
+                            Name = e.Title,
+                            Category = e.IsAction ? KeywordCategory.KeywordAction : KeywordCategory.Discovered,
+                            Definition = MtgKeyword.NoDefinition,
+                        };
+                        list.Add(added);
+                        byName[e.Title] = added;
+                    }
+                foreach (var k in list)
+                {
+                    var e = k.Category == KeywordCategory.AbilityWord ? null : ComprehensiveRulesService.Find(k.Name);
+                    k.RuleNumber = e?.Number ?? "";
+                    k.RulesText = e?.Text ?? "";
+                    // A keyword action the catalogs only knew as "discovered".
+                    if (e is { IsAction: true } && k.Category == KeywordCategory.Discovered) k.Category = KeywordCategory.KeywordAction;
+                }
+                _merged = list.OrderBy(k => k.CategoryName).ThenBy(k => k.Name).ToList();
+            }
+            catch (System.Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Keyword rules: {ex.Message}");
             }
         }
 
@@ -843,7 +945,7 @@ namespace BreakersOfE.Services
         {
             try
             {
-                var json = JsonSerializer.Serialize(_merged,
+                var json = JsonSerializer.Serialize(MergedCopy(),
                     new JsonSerializerOptions { WriteIndented = false });
                 File.WriteAllText(AppFolderService.KeywordCachePath, json);
             }
@@ -916,11 +1018,10 @@ namespace BreakersOfE.Services
             }
             catch { /* Pool may not exist yet */ }
 
-            _merged = known.Values
+            SetMerged(known.Values
                 .OrderBy(k => k.CategoryName)
                 .ThenBy(k => k.Name)
-                .ToList();
-            _initialized = true;
+                .ToList());
         }
 
         /// <summary>
@@ -941,39 +1042,49 @@ namespace BreakersOfE.Services
 
             var known = new Dictionary<string, MtgKeyword>(
                 System.StringComparer.OrdinalIgnoreCase);
-            foreach (var kw in _merged)
+            foreach (var kw in MergedCopy())
                 known[kw.Name] = kw;
 
             int added = 0;
 
-            void Merge(IEnumerable<string>? source)
+            bool recategorized = false;
+            void Merge(IEnumerable<string>? source, KeywordCategory category)
             {
                 if (source == null) return;
                 foreach (var name in source)
                 {
                     if (string.IsNullOrWhiteSpace(name)) continue;
-                    if (known.ContainsKey(name)) continue;
+                    if (known.TryGetValue(name, out var have))
+                    {
+                        // Found on cards first ("discovered"): Scryfall says what kind it is.
+                        if (have.Category == KeywordCategory.Discovered && category != KeywordCategory.Discovered)
+                        {
+                            have.Category = category;
+                            recategorized = true;
+                        }
+                        continue;
+                    }
 
                     known[name] = new MtgKeyword
                     {
                         Name = name,
-                        Category = KeywordCategory.Discovered,
-                        Definition = "No definition available."
+                        Category = category,
+                        Definition = MtgKeyword.NoDefinition
                     };
                     added++;
                 }
             }
 
-            Merge(keywordAbilities);
-            Merge(keywordActions);
-            Merge(abilityWords);
+            Merge(keywordAbilities, KeywordCategory.Discovered);
+            Merge(keywordActions, KeywordCategory.KeywordAction);
+            Merge(abilityWords, KeywordCategory.AbilityWord);
 
-            if (added > 0)
+            if (added > 0 || recategorized)
             {
-                _merged = known.Values
+                SetMerged(known.Values
                     .OrderBy(k => k.CategoryName)
                     .ThenBy(k => k.Name)
-                    .ToList();
+                    .ToList());
             }
 
             return added;
@@ -985,8 +1096,12 @@ namespace BreakersOfE.Services
         /// </summary>
         public static void Reset()
         {
-            _initialized = false;
-            _merged = new();
+            lock (_rulesLock)
+            {
+                _initialized = false;
+                _rulesApplied = false;
+                _merged = new();
+            }
         }
 
         /// <summary>
@@ -1001,7 +1116,7 @@ namespace BreakersOfE.Services
 
             var known = new Dictionary<string, MtgKeyword>(
                 System.StringComparer.OrdinalIgnoreCase);
-            foreach (var kw in _merged)
+            foreach (var kw in MergedCopy())
                 known[kw.Name] = kw;
 
             var needDefs = known.Values
@@ -1038,10 +1153,10 @@ namespace BreakersOfE.Services
 
             if (found > 0)
             {
-                _merged = known.Values
+                SetMerged(known.Values
                     .OrderBy(k => k.CategoryName)
                     .ThenBy(k => k.Name)
-                    .ToList();
+                    .ToList());
             }
             return found;
         }

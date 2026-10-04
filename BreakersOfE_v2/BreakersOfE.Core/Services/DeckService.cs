@@ -101,7 +101,7 @@ namespace BreakersOfE.Services
                 var map = pdb.PoolCards.AsNoTracking()
                     .Where(p => scryfallIds.Contains(p.ScryfallId))
                     .Select(p => new { p.ScryfallId, p.PoolId, p.LegalitiesJson, p.IsGameChanger,
-                                       p.IsNonFoil, p.IsFoil, p.IsEtched, p.PriceUsdEtched })
+                                       p.IsNonFoil, p.IsFoil, p.IsEtched, p.PriceUsd, p.PriceUsdFoil, p.PriceUsdEtched })
                     .ToList()
                     .GroupBy(p => p.ScryfallId)
                     .ToDictionary(g => g.Key, g => g.First());
@@ -123,6 +123,11 @@ namespace BreakersOfE.Services
                     card.IsFoil = pc.IsFoil;
                     card.IsEtched = pc.IsEtched;
                     card.PriceUsdEtched = pc.PriceUsdEtched;
+                    // Today's prices (the deck file keeps the ones from when the card was
+                    // added, often blank): the deck's value and its exports stay current.
+                    // A price the pool doesn't have keeps the saved one.
+                    if (pc.PriceUsd.HasValue) card.PriceUsd = pc.PriceUsd;
+                    if (pc.PriceUsdFoil.HasValue) card.PriceUsdFoil = pc.PriceUsdFoil;
                     if (pc.IsEtched && !pc.IsFoil)
                     {
                         card.IsFoil = false;                               // etched-only printing

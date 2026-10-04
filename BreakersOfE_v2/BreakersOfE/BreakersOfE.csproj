@@ -14,6 +14,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- v1's stand-in card pictures: card back (loading) and "Scryfall Fail" (no picture) -->
+    <Resource Include="Resources\Images\*.png" />
+    <Resource Include="Resources\Images\*.jpg" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Reference the shared Core library -->
     <ProjectReference Include="..\BreakersOfE.Core\BreakersOfE.Core.csproj" />
   </ItemGroup>

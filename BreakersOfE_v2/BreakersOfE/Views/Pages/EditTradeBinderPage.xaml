@@ -5,7 +5,8 @@
       ScrollViewer.VerticalScrollBarVisibility="Disabled"
       Loaded="Page_Loaded"
       Unloaded="Page_Unloaded"
-      PreviewKeyDown="Page_PreviewKeyDown">
+      PreviewKeyDown="Page_PreviewKeyDown"
+      Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
     <!-- Edit → Lists → Collection → Trade Binder: your card collection on top,
          the Trade Binder below (same tables as View, embedded), the card

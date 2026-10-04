@@ -132,8 +132,7 @@ namespace BreakersOfE.Views.Controls
             }
 
             // Card image (shared ScryfallId cache first)
-            LoadCardImage(Get("ImageNormalUrl"),
-                Services.ImageCacheService.GetCachedPath(Get("ScryfallId")) ?? Get("LocalImagePath"));
+            ShowPicture(back: false);
 
             // Back face button
             string backUrl = Get("ImageBackUrl");
@@ -141,39 +140,15 @@ namespace BreakersOfE.Views.Controls
                 ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        private void LoadCardImage(string url, string localPath)
-        {
-            try
-            {
-                // Try local first
-                if (!string.IsNullOrEmpty(localPath) && File.Exists(localPath))
-                {
-                    var bmp = new System.Windows.Media.Imaging.BitmapImage();
-                    bmp.BeginInit();
-                    bmp.UriSource = new Uri(localPath, UriKind.Absolute);
-                    bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                    bmp.EndInit();
-                    bmp.Freeze();
-                    DetailCardImage.Source = bmp;
-                    return;
-                }
+        private int _picVersion;
 
-                // Fall back to URL
-                if (!string.IsNullOrEmpty(url))
-                {
-                    var bmp = new System.Windows.Media.Imaging.BitmapImage();
-                    bmp.BeginInit();
-                    bmp.UriSource = new Uri(url, UriKind.Absolute);
-                    bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                    bmp.EndInit();
-                    DetailCardImage.Source = bmp;
-                }
-                else
-                {
-                    DetailCardImage.Source = null;
-                }
-            }
-            catch { DetailCardImage.Source = null; }
+        /// <summary>The card's picture (front or back): card back while it comes, "Scryfall Fail" if none.</summary>
+        private void ShowPicture(bool back)
+        {
+            int v = ++_picVersion;
+            _ = back
+                ? Services.CardPictures.ShowAsync(DetailCardImage, null, Get("ImageBackUrl"), Get("LocalImageBackPath"), () => v == _picVersion)
+                : Services.CardPictures.ShowAsync(DetailCardImage, Get("ScryfallId"), Get("ImageNormalUrl"), Get("LocalImagePath"), () => v == _picVersion);
         }
 
         private void BtnShowBackFace_Click(object sender, RoutedEventArgs e)
@@ -183,13 +158,12 @@ namespace BreakersOfE.Views.Controls
             _showingBack = !_showingBack;
             if (_showingBack)
             {
-                LoadCardImage(Get("ImageBackUrl"), Get("LocalImageBackPath"));
+                ShowPicture(back: true);
                 BtnShowBackFace.Content = "🔄 Show Front Face";
             }
             else
             {
-                LoadCardImage(Get("ImageNormalUrl"),
-                    Services.ImageCacheService.GetCachedPath(Get("ScryfallId")) ?? Get("LocalImagePath"));
+                ShowPicture(back: false);
                 BtnShowBackFace.Content = "🔄 Show Back Face";
             }
         }
@@ -203,6 +177,7 @@ namespace BreakersOfE.Views.Controls
 
         private void Clear()
         {
+            _picVersion++;                          // a picture still on its way is no longer wanted
             DetailCardImage.Source = null;
             DetailName.Text = "";
             DetailType.Text = "";

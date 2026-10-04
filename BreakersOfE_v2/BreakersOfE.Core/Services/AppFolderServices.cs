@@ -13,11 +13,86 @@ namespace BreakersOfE.Services
     public static class AppFolderService
     {
         // ── Root folder — v2 uses its own isolated folder ──────────────────────
-        public static string RootFolder =>
-            EnsureFolder(Path.Combine(
-                Environment.GetFolderPath(
-                    Environment.SpecialFolder.MyDocuments),
-                "BoE_V2"));
+        // Normally Documents\BoE_V2. Settings → Data folder can move it: the
+        // new place is remembered in a small pointer file OUTSIDE the data
+        // folder (%LocalAppData%\BreakersOfE_V2\data-folder.txt), read once
+        // at startup. A pointer to a folder that isn't there (an unplugged
+        // drive) falls back to the default and says so (DataFolderProblem).
+        public static string RootFolder => EnsureFolder(_root ??= ResolveRoot());
+
+        private static string? _root;
+
+        /// <summary>Documents\BoE_V2 — where the data lives unless moved.</summary>
+        public static string DefaultRootFolder =>
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "BoE_V2");
+
+        private static string PointerPath =>
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                         "BreakersOfE_V2", "data-folder.txt");
+
+        /// <summary>Set when the remembered data folder couldn't be used (shown in Settings).</summary>
+        public static string DataFolderProblem { get; private set; } = "";
+
+        private static string ResolveRoot()
+        {
+            try
+            {
+                if (File.Exists(PointerPath))
+                {
+                    string chosen = File.ReadAllText(PointerPath).Trim();
+                    if (chosen.Length > 0)
+                    {
+                        if (Directory.Exists(chosen) && CanWrite(chosen)) return chosen;
+                        if (Directory.Exists(chosen))
+                        {
+                            DataFolderProblem = $"BoE can't save in your data folder \"{chosen}\" (read-only, or no permission), " +
+                                                "so it's using the default folder for now.";
+                            return DefaultRootFolder;
+                        }
+                        DataFolderProblem = $"Your data folder \"{chosen}\" wasn't found (a drive not connected?), " +
+                                            "so BoE is using the default folder for now.";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DataFolderProblem = $"Couldn't read where your data folder is ({ex.Message}); using the default.";
+            }
+            return DefaultRootFolder;
+        }
+
+        private static bool CanWrite(string folder)
+        {
+            try
+            {
+                string probe = Path.Combine(folder, ".boe-write-test");
+                File.WriteAllText(probe, "");
+                File.Delete(probe);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Remember a new data folder (used from the next start). Null or the
+        /// default folder: forget the pointer, back to Documents\BoE_V2.
+        /// </summary>
+        public static void SetDataFolder(string? folder)
+        {
+            string? dir = Path.GetDirectoryName(PointerPath);
+            if (dir != null) Directory.CreateDirectory(dir);
+            if (string.IsNullOrWhiteSpace(folder) ||
+                string.Equals(Path.GetFullPath(folder).TrimEnd('\\'), Path.GetFullPath(DefaultRootFolder).TrimEnd('\\'),
+                              StringComparison.OrdinalIgnoreCase))
+            {
+                if (File.Exists(PointerPath)) File.Delete(PointerPath);
+                return;
+            }
+            File.WriteAllText(PointerPath, Path.GetFullPath(folder));
+        }
 
         // ── User data folders ─────────────────────────────────────────────────
         public static string DecksFolder =>

@@ -6,7 +6,8 @@
       xmlns:vm="clr-namespace:BreakersOfE.ViewModels"
       xmlns:ctl="clr-namespace:BreakersOfE.Views.Controls"
       xmlns:pages="clr-namespace:BreakersOfE.Views.Pages"
-      ScrollViewer.VerticalScrollBarVisibility="Disabled">
+      ScrollViewer.VerticalScrollBarVisibility="Disabled"
+      Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
     <Page.DataContext>
         <vm:PoolViewModel />
