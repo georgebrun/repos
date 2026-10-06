@@ -91,10 +91,13 @@ namespace BreakersOfE.ViewModels
         private async Task StartFullUpdateWithRulings()
         {
             await StartFullUpdate();
-            // Only continue to rulings if the full update succeeded
-            if (StatusText == "Update complete!")
+            // Only continue to rulings if the full update succeeded (a flag, not the
+            // status text: a late progress report could have changed the text).
+            if (_fullUpdateOk)
                 await DownloadRulings();
         }
+
+        private bool _fullUpdateOk;
 
         /// <summary>
         /// Full database update: download bulk data → import all cards →
@@ -104,6 +107,7 @@ namespace BreakersOfE.ViewModels
         [RelayCommand]
         private async Task StartFullUpdate()
         {
+            _fullUpdateOk = false;
             if (!PreflightCheck()) return;
 
             IsRunning = true;
@@ -132,7 +136,7 @@ namespace BreakersOfE.ViewModels
                 {
                     // Propagate prices to collection
                     CanCancel = false;                 // the card database is already saved
-                    StatusText = "Propagating prices to collection...";
+                    StatusText = "Propagating prices to collection…";
                     ProgressPercent = 95;
                     await Task.Run(PropagatePoolPricesToCollection);
 
@@ -142,6 +146,10 @@ namespace BreakersOfE.ViewModels
 
                     _coordinator.RecordPoolUpdate();
                     _coordinator.RecordPriceUpdate();
+                    _fullUpdateOk = true;
+                    // Symbols may have been re-downloaded: draw them fresh.
+                    Services.ImageSourceConverter.ClearCache();
+                    Services.ManaCostConverter.ClearCache();
 
                     // Fire keyword rebuild in background (low priority)
                     _ = Task.Run(() => RebuildKeywordDictionaryBackground(), CancellationToken.None);
@@ -219,7 +227,7 @@ namespace BreakersOfE.ViewModels
                 if (result.Success)
                 {
                     CanCancel = false;                 // the card database is already saved
-                    StatusText = "Propagating prices to collection...";
+                    StatusText = "Propagating prices to collection…";
                     ProgressPercent = 95;
                     await Task.Run(PropagatePoolPricesToCollection);
 
@@ -272,7 +280,7 @@ namespace BreakersOfE.ViewModels
             if (_cts == null || !CanCancel) return;
             CanCancel = false;
             _cts.Cancel();
-            StatusText = "Cancelling...";
+            StatusText = "Cancelling…";
             DetailText = "Stopping safely — your databases are not being changed.";
         }
 

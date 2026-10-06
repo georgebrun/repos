@@ -80,7 +80,6 @@ namespace BreakersOfE.Models
 
         // ── Display-only: lets the shared grid, gallery and detail panel show
         //    online rows like any other collection row. ─────────────────────
-        [NotMapped] public int RowIndex { get; set; }
         [NotMapped] public bool IsFoil => IsFoilAvailable;
         [NotMapped] public bool IsNonFoil => IsNonFoilAvailable;
         [NotMapped] public bool IsOnMtgo => Game == OnlineGame.Mtgo;
@@ -140,8 +139,5 @@ namespace BreakersOfE.Models
 
         [NotMapped] public System.Windows.Media.Brush RowForegroundBrush =>
             Services.CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
-        [NotMapped] public System.Windows.Media.Brush RowBackgroundBrush =>
-            Services.CardColorService.GetBackground(
-                Finish != CardFinish.NonFoil, RowIndex, Services.TableType.Collection);
     }
 }

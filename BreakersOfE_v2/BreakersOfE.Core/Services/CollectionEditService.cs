@@ -183,10 +183,14 @@ namespace BreakersOfE.Services
         /// <summary>The stored key (id) of a collection row, or 0.</summary>
         public static int RowId(object row)
         {
-            var key = row.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .FirstOrDefault(p => p.GetCustomAttribute<System.ComponentModel.DataAnnotations.KeyAttribute>() != null);
+            var key = _keyProps.GetOrAdd(row.GetType(), t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .FirstOrDefault(p => p.GetCustomAttribute<System.ComponentModel.DataAnnotations.KeyAttribute>() != null));
             return key?.GetValue(row) is int id ? id : 0;
         }
+
+        // Property lookups, once per model type (they run in loops over many rows).
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, PropertyInfo?> _keyProps = new();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<(Type, string), PropertyInfo?> _rowProps = new();
 
         // ── Counts ──────────────────────────────────────────────────────
         /// <summary>
@@ -806,7 +810,7 @@ namespace BreakersOfE.Services
             public Row(object entity) => Entity = entity;
             // Not every table has every field (e.g. Conspiracy rows have no
             // UsedCount): a missing field reads as 0/empty and writes are skipped.
-            private PropertyInfo? P(string n) => Entity.GetType().GetProperty(n);
+            private PropertyInfo? P(string n) => _rowProps.GetOrAdd((Entity.GetType(), n), k => k.Item1.GetProperty(k.Item2));
             public int Id => RowId(Entity);
             public string ScryfallId => P("ScryfallId")?.GetValue(Entity) as string ?? "";
             public string Name => P("Name")?.GetValue(Entity) as string ?? "";
@@ -953,7 +957,7 @@ namespace BreakersOfE.Services
             var skip = new HashSet<string>(StringComparer.Ordinal)
             {
                 "Quantity", "FoilQuantity", "Finish", "Price", "UsedCount", "Condition", "Language",
-                "Notes", "DateAdded", "DateModified", "RowIndex", "IsFoil", "IsNonFoil", "IsEtched",
+                "Notes", "DateAdded", "DateModified", "IsFoil", "IsNonFoil", "IsEtched",
             };
             var src = poolCard.GetType();
             foreach (var to in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))

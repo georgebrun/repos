@@ -41,8 +41,15 @@ namespace BreakersOfE.Data
             // Passive checkpoint after each save nudges the write-ahead log to
             // merge into the main collection.db without blocking writers. Keeps
             // the -wal file small and the main file close to current.
-            try { Database.ExecuteSqlRaw("PRAGMA wal_checkpoint(PASSIVE);"); }
-            catch { /* best-effort */ }
+            // Not inside a transaction: SQLite refuses a checkpoint there, and the
+            // driver keeps retrying for its full 30-second timeout before giving
+            // up (that froze deck opening once claims got their transaction).
+            // The next save outside a transaction does it instead.
+            if (Database.CurrentTransaction == null)
+            {
+                try { Database.ExecuteSqlRaw("PRAGMA wal_checkpoint(PASSIVE);"); }
+                catch { /* best-effort */ }
+            }
             return result;
         }
 

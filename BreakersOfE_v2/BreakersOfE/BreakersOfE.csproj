@@ -31,8 +31,6 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.*" />
     <!-- SVG rendering for mana symbols -->
     <PackageReference Include="SharpVectors.Reloaded" Version="1.*" />
-    <!-- Jitsi video embed for playtest (Phase 9, but include now so it resolves) -->
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.*" />
   </ItemGroup>
 
 </Project>

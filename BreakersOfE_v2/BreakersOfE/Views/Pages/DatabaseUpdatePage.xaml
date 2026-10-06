@@ -23,23 +23,19 @@
         <vm:DatabaseUpdateViewModel />
     </Page.DataContext>
 
-    <ScrollViewer Margin="24">
-        <StackPanel MaxWidth="700" HorizontalAlignment="Left">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="16" MaxWidth="900" HorizontalAlignment="Left">
 
             <!-- ═══ HEADER ═══ -->
-            <TextBlock Text="Database Update"
-                       FontSize="32" FontWeight="SemiBold"
-                       Margin="0,0,0,8" />
-            <TextBlock Text="Download card data, prices, and symbols from Scryfall."
-                       FontSize="14" Opacity="0.6"
-                       Margin="0,0,0,24" />
+            <TextBlock Text="Update Database" Style="{StaticResource BoePageTitle}"/>
+            <TextBlock Text="Download card data, prices and symbols from Scryfall."
+                       Style="{StaticResource BoeHint}" Margin="0,0,0,12"/>
 
             <!-- ═══ LAST UPDATE INFO ═══ -->
-            <ui:Card Margin="0,0,0,16">
-                <StackPanel Margin="16">
-                    <TextBlock Text="Last Updates" FontSize="16" FontWeight="Medium"
-                               Margin="0,0,0,12" />
-                    <Grid>
+            <Border Style="{StaticResource BoePanel}">
+                <StackPanel>
+                    <TextBlock Text="Last Updates" Style="{StaticResource BoeSectionTitle}"/>
+                    <Grid Margin="0,4,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="16" />
@@ -50,128 +46,109 @@
                             <RowDefinition />
                         </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Full Update:"
-                                   Opacity="0.6" />
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Card data:" Style="{StaticResource BoeLabel}"/>
                         <TextBlock Grid.Row="0" Grid.Column="2"
                                    Text="{Binding LastPoolUpdateText}" />
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Prices:"
-                                   Opacity="0.6" Margin="0,4,0,0" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Prices:" Style="{StaticResource BoeLabel}"
+                                   Margin="0,4,0,0" />
                         <TextBlock Grid.Row="1" Grid.Column="2"
                                    Text="{Binding LastPriceUpdateText}"
                                    Margin="0,4,0,0" />
                     </Grid>
 
-                    <!-- Staleness warning -->
+                    <!-- Staleness warning (amber: needs attention) -->
                     <TextBlock Text="{Binding PriceStaleWarning}"
-                               Foreground="Orange"
+                               Foreground="{DynamicResource BoeWarningBrush}"
+                               TextWrapping="Wrap"
                                Margin="0,8,0,0"
-                               Visibility="{Binding PriceStaleWarning, 
+                               Visibility="{Binding PriceStaleWarning,
                                    Converter={StaticResource StringToVisibilityConverter}}" />
                 </StackPanel>
-            </ui:Card>
+            </Border>
 
             <!-- ═══ ACTION BUTTONS ═══ -->
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,12"
-                        IsEnabled="{Binding CanStart}">
-
-                <ui:Button Content="Full Update + Rulings"
-                           Appearance="Primary"
-                           Command="{Binding StartFullUpdateWithRulingsCommand}"
-                           Margin="0,0,12,0"
-                           ToolTip="Full database update including rulings download">
-                    <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="ArrowDownload24" />
-                    </ui:Button.Icon>
-                </ui:Button>
-
-            </StackPanel>
-
-            <TextBlock Text="Individual Downloads" FontSize="12" Opacity="0.5"
-                       Margin="0,0,0,6"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-            <!-- The start buttons are disabled while an update runs; Cancel sits
-                 OUTSIDE that panel (a disabled panel disables everything in it). -->
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,24">
-                <StackPanel Orientation="Horizontal"
-                        IsEnabled="{Binding CanStart}">
-
-                    <ui:Button Content="Full Database Update"
-                           Command="{Binding StartFullUpdateCommand}"
-                           Margin="0,0,12,0">
-                        <ui:Button.Icon>
-                            <ui:SymbolIcon Symbol="ArrowDownload24" />
-                        </ui:Button.Icon>
-                    </ui:Button>
-
-                    <ui:Button Content="Update Prices Only"
-                           Command="{Binding StartPriceUpdateCommand}"
-                           Margin="0,0,12,0">
-                        <ui:Button.Icon>
-                            <ui:SymbolIcon Symbol="CurrencyDollarEuro24" />
-                        </ui:Button.Icon>
-                    </ui:Button>
-
-                    <ui:Button Content="Download Rulings"
-                           Command="{Binding DownloadRulingsCommand}"
-                           Margin="0,0,24,0"
-                           ToolTip="Download all card rulings from Scryfall (optional)">
-                        <ui:Button.Icon>
-                            <ui:SymbolIcon Symbol="BookOpen24" />
-                        </ui:Button.Icon>
-                    </ui:Button>
+            <Border Style="{StaticResource BoePanel}">
+                <StackPanel>
+                    <TextBlock Text="Update" Style="{StaticResource BoeSectionTitle}"/>
+                    <TextBlock Style="{StaticResource BoeHint}" Margin="0,0,0,8"
+                               Text="Update Database gets everything: card data, prices, symbols and rulings. The buttons below get one part on its own."/>
+                    <!-- The start buttons are disabled while an update runs; Cancel sits
+                         OUTSIDE that panel (a disabled panel disables everything in it). -->
+                    <WrapPanel>
+                        <WrapPanel IsEnabled="{Binding CanStart}">
+                            <ui:Button Content="Update Database"
+                                       Appearance="Primary"
+                                       Command="{Binding StartFullUpdateWithRulingsCommand}"
+                                       Margin="0,0,8,8"
+                                       ToolTip="Card data, prices, symbols and rulings">
+                                <ui:Button.Icon>
+                                    <ui:SymbolIcon Symbol="ArrowDownload24" />
+                                </ui:Button.Icon>
+                            </ui:Button>
+                            <ui:Button Content="Card Data Only"
+                                       Command="{Binding StartFullUpdateCommand}"
+                                       Margin="0,0,8,8"
+                                       ToolTip="Card data, prices and symbols (no rulings)">
+                                <ui:Button.Icon>
+                                    <ui:SymbolIcon Symbol="ArrowDownload24" />
+                                </ui:Button.Icon>
+                            </ui:Button>
+                            <ui:Button Content="Prices Only"
+                                       Command="{Binding StartPriceUpdateCommand}"
+                                       Margin="0,0,8,8">
+                                <ui:Button.Icon>
+                                    <ui:SymbolIcon Symbol="CurrencyDollarEuro24" />
+                                </ui:Button.Icon>
+                            </ui:Button>
+                            <ui:Button Content="Rulings Only"
+                                       Command="{Binding DownloadRulingsCommand}"
+                                       Margin="0,0,8,8"
+                                       ToolTip="All card rulings from Scryfall">
+                                <ui:Button.Icon>
+                                    <ui:SymbolIcon Symbol="BookOpen24" />
+                                </ui:Button.Icon>
+                            </ui:Button>
+                        </WrapPanel>
+                        <ui:Button Content="Cancel"
+                                   Command="{Binding CancelCommand}"
+                                   IsEnabled="{Binding CanCancel}"
+                                   Margin="0,0,8,8">
+                            <ui:Button.Icon>
+                                <ui:SymbolIcon Symbol="Dismiss24" />
+                            </ui:Button.Icon>
+                        </ui:Button>
+                    </WrapPanel>
                 </StackPanel>
-
-                <ui:Button Content="Cancel"
-                           Command="{Binding CancelCommand}"
-                           IsEnabled="{Binding CanCancel}"
-                           Appearance="Danger">
-                    <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="Dismiss24" />
-                    </ui:Button.Icon>
-                </ui:Button>
-            </StackPanel>
+            </Border>
 
             <!-- ═══ PROGRESS SECTION ═══ -->
-            <ui:Card Margin="0,0,0,16">
-                <StackPanel Margin="16">
-
-                    <!-- Status text -->
-                    <TextBlock Text="{Binding StatusText}"
-                               FontSize="16" FontWeight="Medium"
-                               Margin="0,0,0,8" />
-
-                    <!-- Progress bar -->
+            <Border Style="{StaticResource BoePanel}">
+                <StackPanel>
+                    <TextBlock Text="{Binding StatusText}" Style="{StaticResource BoeSectionTitle}"
+                               TextWrapping="Wrap"/>
                     <ProgressBar Value="{Binding ProgressPercent}"
                                  Minimum="0" Maximum="100"
                                  Height="8"
-                                 Margin="0,0,0,8" />
-
-                    <!-- Detail text (card counts, etc.) -->
-                    <TextBlock Text="{Binding DetailText}"
-                               FontSize="12" Opacity="0.6"
-                               TextWrapping="Wrap" />
-
+                                 Margin="0,4,0,8" />
+                    <TextBlock Text="{Binding DetailText}" Style="{StaticResource BoeHint}"/>
                 </StackPanel>
-            </ui:Card>
+            </Border>
 
             <!-- ═══ SCHEMA WARNING ═══ -->
-            <ui:Card Margin="0,0,0,16"
-                     Visibility="{Binding HasSchemaWarning, 
-                         Converter={StaticResource BoolToVisibilityConverter}}">
-                <StackPanel Margin="16">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                        <ui:SymbolIcon Symbol="Warning24" Foreground="Orange"
+            <Border Style="{StaticResource BoePanel}"
+                    Visibility="{Binding HasSchemaWarning,
+                        Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <ui:SymbolIcon Symbol="Warning24" Foreground="{DynamicResource BoeWarningBrush}"
                                        Margin="0,0,8,0" />
-                        <TextBlock Text="Scryfall Schema Warning"
-                                   FontSize="16" FontWeight="Medium"
-                                   Foreground="Orange" />
+                        <TextBlock Text="Scryfall Schema Warning" Style="{StaticResource BoeSectionTitle}"
+                                   Foreground="{DynamicResource BoeWarningBrush}" Margin="0"/>
                     </StackPanel>
-                    <TextBlock Text="{Binding SchemaWarning}"
-                               TextWrapping="Wrap"
-                               Opacity="0.8" />
+                    <TextBlock Text="{Binding SchemaWarning}" TextWrapping="Wrap" />
                 </StackPanel>
-            </ui:Card>
+            </Border>
 
         </StackPanel>
     </ScrollViewer>

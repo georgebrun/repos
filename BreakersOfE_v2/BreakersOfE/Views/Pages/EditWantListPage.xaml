@@ -4,7 +4,6 @@
       xmlns:ctl="clr-namespace:BreakersOfE.Views.Controls"
       ScrollViewer.VerticalScrollBarVisibility="Disabled"
       Loaded="Page_Loaded"
-      PreviewKeyDown="Page_PreviewKeyDown"
       Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
     <!-- Edit → Lists → Pool → Want List: the card pool on top, the Want List
@@ -71,7 +70,7 @@
                  Act on the rows selected last, in either table. Qty applies to
                  every button (and the keys / right-click). -->
                 <Border DockPanel.Dock="Top" Background="{DynamicResource BoePanelBrush}" CornerRadius="8"
-                    Padding="12,6" Margin="0,0,0,8">
+                    Padding="12,8" Margin="0,0,0,8">
                     <StackPanel>
                         <WrapPanel VerticalAlignment="Center">
                             <TextBlock Text="Qty" VerticalAlignment="Center" Margin="0,0,6,0"
@@ -92,7 +91,7 @@
                             <Button x:Name="BtnRemove" Content="Remove" Padding="10,4" Margin="0,0,18,0"
                                 Click="BtnRemove_Click" ToolTip="Take Qty copies off the Want List (Delete)"/>
 
-                            <Button x:Name="BtnGotIt" Content="Got It" Padding="10,4" Margin="0,0,6,0"
+                            <Button x:Name="BtnGotIt" Content="Got It…" Padding="10,4" Margin="0,0,6,0"
                                 Click="BtnGotIt_Click"
                                 ToolTip="You got Qty copies: they go into your collection (with the language and condition picked here) and come off the Want List"/>
                             <TextBlock Text="as" VerticalAlignment="Center" Margin="0,0,6,0"

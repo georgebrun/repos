@@ -129,9 +129,9 @@ namespace BreakersOfE.Views.Pages
         {
             if (funnelButton.Content is TextBlock icon)
             {
-                icon.Foreground = active
-                    ? new SolidColorBrush(Color.FromRgb(0x4C, 0xA0, 0xFF)) // accent
-                    : new SolidColorBrush(Color.FromRgb(0x9F, 0x9F, 0x9F));
+                // Theme colours (follow Light / Dark / Custom): accent = a filter is on.
+                icon.SetResourceReference(TextBlock.ForegroundProperty,
+                    active ? "AccentTextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush");
                 icon.Text = active ? "\uE71C" : "\uE71C"; // same glyph, color signals state
             }
         }

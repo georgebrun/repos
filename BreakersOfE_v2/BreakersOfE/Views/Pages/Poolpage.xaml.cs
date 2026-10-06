@@ -219,7 +219,11 @@ namespace BreakersOfE.Views.Pages
 
             // Grid / Gallery switch above the left navigation (app-wide).
             // Listen only while this page is on screen.
-            Loaded += (_, _) => Services.CardViewModeService.ModeChanged += OnCardViewModeChanged;
+            Loaded += (_, _) =>
+            {
+                Services.CardViewModeService.ModeChanged -= OnCardViewModeChanged;   // Loaded can come twice
+                Services.CardViewModeService.ModeChanged += OnCardViewModeChanged;
+            };
             Unloaded += (_, _) => Services.CardViewModeService.ModeChanged -= OnCardViewModeChanged;
 
             // Legality columns are built in code (22 formats), then every

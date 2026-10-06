@@ -21,14 +21,18 @@ namespace BreakersOfE.Views.Pages
     internal static class EditPageKit
     {
         // ── Reading row fields by name (rows are several model types) ────
-        public static string Str(object o, string prop) =>
-            o.GetType().GetProperty(prop)?.GetValue(o) as string ?? "";
+        // The property lookup is done once per model type and name (these run
+        // inside loops over whole tables).
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<(Type, string), System.Reflection.PropertyInfo?> _props = new();
 
-        public static int Int(object o, string prop) =>
-            o.GetType().GetProperty(prop)?.GetValue(o) is int i ? i : 0;
+        private static object? Read(object o, string prop) =>
+            _props.GetOrAdd((o.GetType(), prop), k => k.Item1.GetProperty(k.Item2))?.GetValue(o);
 
-        public static bool Bool(object o, string prop) =>
-            o.GetType().GetProperty(prop)?.GetValue(o) is bool b && b;
+        public static string Str(object o, string prop) => Read(o, prop) as string ?? "";
+
+        public static int Int(object o, string prop) => Read(o, prop) is int i ? i : 0;
+
+        public static bool Bool(object o, string prop) => Read(o, prop) is bool b && b;
 
         /// <summary>Menu text: at most 60 characters.</summary>
         public static string Shorten(string s) => s.Length <= 60 ? s : s[..57] + "…";

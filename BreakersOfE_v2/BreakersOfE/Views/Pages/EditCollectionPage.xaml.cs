@@ -126,9 +126,6 @@ namespace BreakersOfE.Views.Pages
             UpdateUndo();
         }
 
-        /// <summary>Pool table tag → its collection table tag.</summary>
-        public static string CollectionTagFor(string poolTag) => CollectionEditService.CollectionTagFor(poolTag);
-
         private static string DisplayName(string poolTag) => poolTag switch
         {
             "ArtSeries" => "Art Series",
@@ -257,9 +254,9 @@ namespace BreakersOfE.Views.Pages
         /// </summary>
         private bool SomeSelectedComesIn(string finish)
         {
-            var rows = _active?.SelectedCards ?? new List<object>();
-            if (rows.Count > MaxRows) return true;            // refused later with a message
-            return rows.Any(r => IsCollectionRow(r) || ComesIn(r, finish));
+            if (_active == null) return false;
+            if (_active.SelectedRowCount > MaxRows) return true;   // refused later with a message
+            return _active.SelectedUnordered.Any(r => IsCollectionRow(r) || ComesIn(r, finish));
         }
 
         /// <summary>Does this pool printing come in this finish (this table's game)?</summary>
@@ -293,7 +290,10 @@ namespace BreakersOfE.Views.Pages
         private string AddLanguage => IsOnline ? "" : LanguageBox.SelectedItem as string ?? CardLanguage.Default;
         private string AddCondition => IsOnline ? "" : ConditionBox.SelectedItem as string ?? CardCondition.Default;
 
-        private void Defaults_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateButtons();
+        private void Defaults_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (IsInitialized) UpdateButtons();          // (also fires while the page is being built)
+        }
 
         // ══════════════════════════════════════════════════════════════════
         // ACTIONS — every gesture ends up here
@@ -405,7 +405,7 @@ namespace BreakersOfE.Views.Pages
                             ? OwnFinishQuestion("Add", qty, plan.Select(p => p.Key.Finish).ToList(), "to")
                             : $"Add {qty} {finishText}{(qty == 1 ? "copy" : "copies")} to each of {plan.Count} {(plan.Count == 1 ? "card" : "cards")}?") +
                          (skipped.Length > 0 ? "\n\n" + skipped : ""),
-                         "Add to several rows"))
+                         "Add to Several Rows"))
                 return;
 
             Run($"Added {qty} {finishText}".TrimEnd(), plan.Select(p => p.Key.ScryfallId), () =>
@@ -457,7 +457,7 @@ namespace BreakersOfE.Views.Pages
                             ? OwnFinishQuestion("Remove", qty, plan.Select(p => p.Key.Finish).ToList(), "from")
                             : $"Remove {qty} {CardFinish.Display(finish)} {(qty == 1 ? "copy" : "copies")} from each of {plan.Count} rows?") +
                          "\n\nCopies used by decks or the Trade Binder are kept.",
-                         "Remove from several rows"))
+                         "Remove from Several Rows"))
                 return;
 
             // From a collection row: exactly that language and condition. From
@@ -481,7 +481,7 @@ namespace BreakersOfE.Views.Pages
                 string of = rows.Count == 1 ? $"{CardText(rows[0])} ({RowText(rows[0])}, {Int(rows[0], "Quantity")} owned)"
                                             : $"each of the {rows.Count} selected rows";
                 if (!Confirm($"Remove {what} of {of}?\n\nCopies used by decks or the Trade Binder are kept.",
-                             all ? "Remove all of the row" : "Remove from several rows"))
+                             all ? "Remove All of the Row" : "Remove from Several Rows"))
                     return;
             }
             Run(all ? "Removed all unused copies" : $"Removed {qty}", rows.Select(r => Str(r, "ScryfallId")), () =>
@@ -534,7 +534,7 @@ namespace BreakersOfE.Views.Pages
             }
             else if (!Confirm($"{what} for the {rows.Count} selected rows?\n\n" +
                               "All unused copies of each row change; copies used by decks stay as they are.",
-                              "Change several rows"))
+                              "Change Several Rows"))
                 return;
 
             Run(what, rows.Select(r => Str(r, "ScryfallId")), () =>

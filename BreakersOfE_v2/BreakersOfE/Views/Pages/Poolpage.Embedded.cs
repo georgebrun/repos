@@ -19,14 +19,14 @@ namespace BreakersOfE.Views.Pages
     {
         // ══════════════════════════════════════════════════════════════════
         // EMBEDDED — the Edit page shows the detail panel itself (this page
-        // hides its own), keeps its own filters (its own view model) and its
-        // own saved layouts and zoom ("Edit:" prefix on the layout key).
+        // hides its own) and keeps its own filters (its own view model).
+        // Column layouts and zoom are shared with View; only the Edit
+        // page's Grid / Gallery choice is kept apart ("Edit:" prefix).
         // ══════════════════════════════════════════════════════════════════
 
-        /// <summary>"" in View; "Edit:" when embedded, so Edit layouts are saved separately.</summary>
+        /// <summary>"" in View; "Edit:" when embedded (the Edit Grid / Gallery choice).</summary>
         private string _layoutPrefix = "";
 
-        /// <summary>The key a table's layout and zoom are saved under.</summary>
         /// <summary>
         /// Column layout and zoom: one per table, shared by View and Edit
         /// (the Collection on View and on Edit look the same).
@@ -77,6 +77,15 @@ namespace BreakersOfE.Views.Pages
                 return list;
             }
         }
+
+        /// <summary>
+        /// The selected rows in no particular order: quick (no walk over the
+        /// whole table). For checks like "can any of them …" on every click.
+        /// </summary>
+        public IReadOnlyList<object> SelectedUnordered => PoolGrid.SelectedItems.Cast<object>().ToList();
+
+        /// <summary>How many rows are selected (no list built).</summary>
+        public int SelectedRowCount => PoolGrid.SelectedItems.Count;
 
         /// <summary>The table shown ("Cards", "Collection", "CollTokens", …).</summary>
         public string CurrentTag => _currentTag;

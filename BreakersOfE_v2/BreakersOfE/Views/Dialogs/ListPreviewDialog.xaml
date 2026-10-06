@@ -14,7 +14,7 @@
 
     <!-- Edit → Decks → Deck → Collection: what a whole-deck action will do, before it's done. -->
     <DockPanel Margin="18,16,18,14">
-        <TextBlock DockPanel.Dock="Top" x:Name="HeaderText" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap"/>
+        <TextBlock DockPanel.Dock="Top" x:Name="HeaderText" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
         <TextBlock DockPanel.Dock="Top" x:Name="NoteText" Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
 

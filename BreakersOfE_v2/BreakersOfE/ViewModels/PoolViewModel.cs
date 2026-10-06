@@ -50,7 +50,7 @@ namespace BreakersOfE.ViewModels
         private string title = "Card Pool";
 
         [ObservableProperty]
-        private string statusText = "Loading...";
+        private string statusText = "Loading…";
 
         [ObservableProperty]
         private bool isLoading;
@@ -74,7 +74,7 @@ namespace BreakersOfE.ViewModels
             IsEmpty = false;
             EmptyMessage = "";
             Title = TitleFor(tag);
-            StatusText = "Loading...";
+            StatusText = "Loading…";
             // Filters are NOT cleared: this table's remembered filters re-apply.
 
             Task.Run(() =>
@@ -179,14 +179,14 @@ namespace BreakersOfE.ViewModels
                             label = "Arena cards"; break;
                         case "MtgoCollection":
                         case "ArenaCollection":
-                            {
-                                string game = tag == "MtgoCollection" ? Models.OnlineGame.Mtgo : Models.OnlineGame.Arena;
-                                using (var cdb = new CollectionDbContext())
-                                    rows = cdb.OnlineCollectionEntries.AsNoTracking().Where(c => c.Game == game)
-                                              .OrderBy(c => c.Name).ThenBy(c => c.SetCode)
-                                              .ToList().Cast<object>().ToList();
-                                label = "collection rows"; break;
-                            }
+                        {
+                            string game = tag == "MtgoCollection" ? Models.OnlineGame.Mtgo : Models.OnlineGame.Arena;
+                            using (var cdb = new CollectionDbContext())
+                                rows = cdb.OnlineCollectionEntries.AsNoTracking().Where(c => c.Game == game)
+                                          .OrderBy(c => c.Name).ThenBy(c => c.SetCode)
+                                          .ToList().Cast<object>().ToList();
+                            label = "collection rows"; break;
+                        }
                         case "Cards":
                         default:
                             rows = db.PoolCards.AsNoTracking()
@@ -293,26 +293,26 @@ namespace BreakersOfE.ViewModels
 
         private static string TitleFor(string tag) => tag switch
         {
-            "Tokens" => "Card Pool — Tokens",
-            "Planes" => "Card Pool — Planes",
-            "Schemes" => "Card Pool — Schemes",
-            "Vanguards" => "Card Pool — Vanguards",
-            "ArtSeries" => "Card Pool — Art Series",
+            "Tokens"       => "Card Pool — Tokens",
+            "Planes"       => "Card Pool — Planes",
+            "Schemes"      => "Card Pool — Schemes",
+            "Vanguards"    => "Card Pool — Vanguards",
+            "ArtSeries"    => "Card Pool — Art Series",
             "Conspiracies" => "Card Pool — Conspiracies",
-            "Collection" => "Collection — Cards",
-            "CollTokens" => "Collection — Tokens",
-            "CollPlanes" => "Collection — Planes",
-            "CollSchemes" => "Collection — Schemes",
-            "CollVanguards" => "Collection — Vanguards",
-            "CollArtSeries" => "Collection — Art Series",
+            "Collection"   => "Collection — Cards",
+            "CollTokens"       => "Collection — Tokens",
+            "CollPlanes"       => "Collection — Planes",
+            "CollSchemes"      => "Collection — Schemes",
+            "CollVanguards"    => "Collection — Vanguards",
+            "CollArtSeries"    => "Collection — Art Series",
             "CollConspiracies" => "Collection — Conspiracies",
-            "TradeBinder" => "Trade Binder",
-            "WantList" => "Want List",
-            "MtgoCards" => "Online — MTGO Cards",
-            "ArenaCards" => "Online — Arena Cards",
-            "MtgoCollection" => "Online — MTGO Collection",
-            "ArenaCollection" => "Online — Arena Collection",
-            _ => "Card Pool — Cards"
+            "TradeBinder"      => "Trade Binder",
+            "WantList"         => "Want List",
+            "MtgoCards"        => "Online — MTGO Cards",
+            "ArenaCards"       => "Online — Arena Cards",
+            "MtgoCollection"   => "Online — MTGO Collection",
+            "ArenaCollection"  => "Online — Arena Collection",
+            _              => "Card Pool — Cards"
         };
     }
 }

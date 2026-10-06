@@ -114,7 +114,7 @@ namespace BreakersOfE.Services
         public static void Save(AppSettings settings)
         {
             _current = settings;
-            try { File.WriteAllText(FilePath, JsonSerializer.Serialize(settings, _json)); }
+            try { SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(settings, _json)); }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Settings save failed: {ex.Message}");

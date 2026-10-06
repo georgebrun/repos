@@ -51,6 +51,8 @@ namespace BreakersOfE.Views
         private void Populate()
         {
             _showingBack = false;
+            BtnFlipFace.Content = "🔄 Show Back Face";      // (kept "Show Front Face" after Prev / Next)
+            _rulingsVersion++;                              // rulings still loading belong to the old card
 
             // Name
             CardName.Text = Get("Name");
@@ -97,17 +99,8 @@ namespace BreakersOfE.Views
             CardNumber.Text = Get("CollectorNumber");
 
             // Mana cost symbols
-            ManaCostPanel.Items.Clear();
-            string manaCost = Get("ManaCost");
-            if (!string.IsNullOrEmpty(manaCost))
-            {
-                var converter = new Services.ManaCostConverter();
-                var symbols = converter.Convert(manaCost, typeof(object), null!,
-                    System.Globalization.CultureInfo.CurrentCulture);
-                if (symbols is System.Collections.IEnumerable items)
-                    foreach (var sym in items)
-                        ManaCostPanel.Items.Add(sym);
-            }
+            // (Was never shown: the converter returns one panel, not a list.)
+            Services.ManaCostConverter.Fill(ManaCostPanel, Get("ManaCost"));
 
             // Prices
             string usd = Get("PriceUsd");
@@ -389,7 +382,24 @@ namespace BreakersOfE.Views
         }
 
         // ── Rulings (fetched on demand) ─────────────────────────────────
+        private int _rulingsVersion;
+
         private async void BtnRulings_Click(object sender, RoutedEventArgs e)
+        {
+            try { await ShowRulingsAsync(); }
+            catch (Exception ex)
+            {
+                RulingsPanel.Children.Clear();
+                RulingsPanel.Children.Add(Themed(new System.Windows.Controls.TextBlock
+                {
+                    Text = $"Couldn't load the rulings: {ex.Message}",
+                    FontSize = 12,
+                    TextWrapping = TextWrapping.Wrap
+                }, "TextFillColorSecondaryBrush"));
+            }
+        }
+
+        private async System.Threading.Tasks.Task ShowRulingsAsync()
         {
             // Toggle if already showing
             if (RulingsBorder.Visibility == Visibility.Visible)
@@ -402,7 +412,7 @@ namespace BreakersOfE.Views
             RulingsPanel.Children.Clear();
             RulingsPanel.Children.Add(Themed(new System.Windows.Controls.TextBlock
             {
-                Text = "Loading rulings...",
+                Text = "Loading rulings…",
                 FontSize = 12
             }, "TextFillColorSecondaryBrush"));
             RulingsHeader.Visibility = Visibility.Visible;
@@ -410,7 +420,9 @@ namespace BreakersOfE.Views
 
             string sid = Get("ScryfallId");
             string oid = Get("OracleId");
+            int version = _rulingsVersion;
             var rulings = await Services.RulingsService.GetRulingsAsync(sid, oid);
+            if (version != _rulingsVersion) return;           // Prev / Next moved on meanwhile
 
             RulingsPanel.Children.Clear();
             if (rulings.Count == 0)
@@ -430,7 +442,7 @@ namespace BreakersOfE.Views
                 sp.Children.Add(Themed(new System.Windows.Controls.TextBlock
                 {
                     Text = date,
-                    FontSize = 10,
+                    FontSize = 12,
                     FontWeight = FontWeights.SemiBold
                 }, "TextFillColorTertiaryBrush"));
                 sp.Children.Add(Themed(new System.Windows.Controls.TextBlock

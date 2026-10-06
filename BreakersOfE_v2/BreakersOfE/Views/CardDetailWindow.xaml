@@ -12,7 +12,7 @@
 
     <ui:FluentWindow.Resources>
         <Style x:Key="SectionHeader" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}"/>
             <Setter Property="Margin" Value="0,12,0,4"/>
@@ -24,7 +24,7 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <Style x:Key="FieldValue" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontSize" Value="14"/>
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
@@ -151,7 +151,7 @@
                             <Button Content="▶" Padding="8,4"
                                 Click="BtnNext_Click" ToolTip="Next card"/>
                         </StackPanel>
-                        <TextBlock x:Name="CardName" FontSize="22" FontWeight="Bold"
+                        <TextBlock x:Name="CardName" FontSize="20" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                TextWrapping="Wrap" VerticalAlignment="Center"/>
                     </DockPanel>
@@ -219,14 +219,14 @@
                     <TextBlock Text="▸ ORACLE TEXT" Style="{StaticResource SectionHeader}"/>
                     <Border Background="{DynamicResource BoePanelBrush}" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
                         <TextBlock x:Name="CardOracle" Style="{StaticResource FieldValue}"
-                               FontSize="13" TextWrapping="Wrap"/>
+                               FontSize="14" TextWrapping="Wrap"/>
                     </Border>
 
                     <!-- ── FLAVOR TEXT ── -->
                     <TextBlock x:Name="FlavorHeader" Text="▸ FLAVOR TEXT" Style="{StaticResource SectionHeader}"/>
                     <Border x:Name="FlavorBorder" Background="{DynamicResource BoePanelBrush}" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
                         <TextBlock x:Name="CardFlavor" Style="{StaticResource FieldValue}"
-                               FontSize="13" FontStyle="Italic" Opacity="0.7"
+                               FontSize="14" FontStyle="Italic" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                TextWrapping="Wrap"/>
                     </Border>
 
@@ -239,7 +239,7 @@
                     </Border>
 
                     <Button Content="Close" HorizontalAlignment="Right"
-                        Margin="0,12,0,0" Padding="16,6"
+                        Margin="0,12,0,0" Padding="16,5"
                         Click="BtnClose_Click"/>
                 </StackPanel>
             </ScrollViewer>
@@ -258,7 +258,7 @@
                                 <TextBlock x:Name="CardSet" Style="{StaticResource FieldValue}"
                                        FontWeight="SemiBold"/>
                             </StackPanel>
-                            <TextBlock x:Name="CardSetDetail" FontSize="11"
+                            <TextBlock x:Name="CardSetDetail" FontSize="12"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
                     </Border>

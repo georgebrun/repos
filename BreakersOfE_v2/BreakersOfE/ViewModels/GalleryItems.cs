@@ -143,6 +143,15 @@ namespace BreakersOfE.ViewModels
                 if (bmp != null) GalleryImageTracker.Track(this);
                 OnPropertyChanged(nameof(Image));
             }
+            catch (Exception ex)
+            {
+                // A damaged picture file (or a disk error) must not take the app down.
+                System.Diagnostics.Debug.WriteLine($"Gallery picture {ScryfallId}: {ex.Message}");
+                IsNotFound = true;
+                _failedAt = DateTime.UtcNow;
+                _image = CardPictures.NotFound;
+                OnPropertyChanged(nameof(Image));
+            }
             finally
             {
                 _loading = false;

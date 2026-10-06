@@ -30,17 +30,38 @@ namespace BreakersOfE.Views.Pages
         private int _layoutVersionSeen;       // the shared layout's version this grid shows
         private bool _savingLayout;           // this grid is saving (don't re-apply our own change)
 
+        private static readonly DependencyPropertyDescriptor? WidthDescriptor =
+            DependencyPropertyDescriptor.FromProperty(DataGridColumn.WidthProperty, typeof(DataGridColumn));
+
+        /// <summary>
+        /// Column width watch, only while the page is on screen: the property
+        /// descriptor keeps its listeners for good, so a page that never
+        /// removed them could never be freed.
+        /// </summary>
+        private void WatchColumnWidths(bool on)
+        {
+            if (WidthDescriptor == null || on == _watchingWidths) return;
+            _watchingWidths = on;
+            foreach (var col in PoolGrid.Columns)
+            {
+                if (on) WidthDescriptor.AddValueChanged(col, ColumnWidthChanged);
+                else WidthDescriptor.RemoveValueChanged(col, ColumnWidthChanged);
+            }
+        }
+
+        private bool _watchingWidths;
+
+        private void ColumnWidthChanged(object? sender, EventArgs e) => RequestColumnLayoutSave();
+
+        private void AppExiting(object? sender, ExitEventArgs e) => SavePendingColumnLayout();
+
         private void InitColumnLayout()
         {
-            var widthDescriptor = DependencyPropertyDescriptor.FromProperty(
-                DataGridColumn.WidthProperty, typeof(DataGridColumn));
-
             foreach (var col in PoolGrid.Columns)
             {
                 // Default position = the column's order in the XAML. (DisplayIndex
                 // is still -1 here: the grid hasn't assigned positions yet.)
                 _defaultColumns[ColumnHeader(col)] = (col.Width, PoolGrid.Columns.IndexOf(col));
-                widthDescriptor?.AddValueChanged(col, (_, _) => RequestColumnLayoutSave());
             }
 
             PoolGrid.ColumnReordered += (_, _) => RequestColumnLayoutSave();
@@ -61,19 +82,25 @@ namespace BreakersOfE.Views.Pages
             Unloaded += (_, _) =>
             {
                 Services.GridLayoutService.Changed -= SharedLayoutChanged;
+                if (Application.Current != null) Application.Current.Exit -= AppExiting;
                 SavePendingColumnLayout();
+                WatchColumnWidths(false);
             };
             Loaded += (_, _) =>
             {
+                WatchColumnWidths(true);
                 Services.GridLayoutService.Changed -= SharedLayoutChanged;
                 Services.GridLayoutService.Changed += SharedLayoutChanged;
+                if (Application.Current != null)
+                {
+                    Application.Current.Exit -= AppExiting;
+                    Application.Current.Exit += AppExiting;
+                }
                 // Changed on the other page (View ↔ Edit) while this one was away?
                 if (!string.IsNullOrEmpty(_layoutTable) &&
                     Services.GridLayoutService.Version(LayoutKey(_layoutTable)) != _layoutVersionSeen)
                     ApplyColumnLayout(_layoutTable);
             };
-            if (Application.Current != null)
-                Application.Current.Exit += (_, _) => SavePendingColumnLayout();
         }
 
         /// <summary>The other page (View ↔ Edit) saved this table's layout: show it here too.</summary>

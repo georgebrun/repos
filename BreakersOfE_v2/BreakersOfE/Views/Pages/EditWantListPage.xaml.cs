@@ -189,9 +189,9 @@ namespace BreakersOfE.Views.Pages
         /// <summary>Several rows selected: want rows add their own finish; pool cards only if they come in it.</summary>
         private bool SomeSelectedComesIn(string finish)
         {
-            var rows = _active?.SelectedCards ?? new List<object>();
-            if (rows.Count > MaxRows) return true;
-            return rows.Any(r => IsWantRow(r) || ComesIn(r, finish));
+            if (_active == null) return false;
+            if (_active.SelectedRowCount > MaxRows) return true;
+            return _active.SelectedUnordered.Any(r => IsWantRow(r) || ComesIn(r, finish));
         }
 
         private static bool ComesIn(object pool, string finish)

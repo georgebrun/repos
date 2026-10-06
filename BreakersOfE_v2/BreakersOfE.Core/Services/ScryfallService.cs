@@ -101,7 +101,7 @@ namespace BreakersOfE.Services
         /// <summary>Copy the real card database to a temp file and point this service at it.</summary>
         private static DatabaseStaging BeginStaging(IProgress<ImportProgress> progress, int pct)
         {
-            Report(progress, "Preparing a working copy of the card database...", pct);
+            Report(progress, "Preparing a working copy of the card database…", pct);
             var stage = DatabaseStaging.Begin(AppFolderService.DatabasePath);
             using (var db = new AppDbContext(stage.WorkingPath))
                 db.EnsureSchema();                         // empty/first run: create tables
@@ -114,7 +114,7 @@ namespace BreakersOfE.Services
         /// <summary>Swap the finished copy in for the real database.</summary>
         private static void CommitStaging(DatabaseStaging stage, IProgress<ImportProgress> progress, int pct)
         {
-            Report(progress, "Saving the updated card database...", pct);
+            Report(progress, "Saving the updated card database…", pct);
             _workingDb = null;
             stage.Commit();
         }
@@ -151,12 +151,12 @@ namespace BreakersOfE.Services
             try
             {
                 // Step 1 — Get bulk data URL
-                Report(progress, "Connecting to Scryfall...", 2);
+                Report(progress, "Connecting to Scryfall…", 2);
                 ct.ThrowIfCancellationRequested();
                 string bulkUrl = await GetBulkDataUrlAsync(ct);
 
                 // Step 2 — Download bulk data (JSONL gzipped)
-                Report(progress, "Downloading card database...", 5);
+                Report(progress, "Downloading card database…", 5);
                 ct.ThrowIfCancellationRequested();
                 string ext = bulkUrl.Contains(".jsonl") ? ".jsonl.gz" : ".json";
                 string tempFile = Path.Combine(
@@ -165,7 +165,7 @@ namespace BreakersOfE.Services
                     bulkUrl, tempFile, progress, 5, 40, ct);
 
                 // Step 3 — Download mana symbols
-                Report(progress, "Downloading mana symbols...", 41);
+                Report(progress, "Downloading mana symbols…", 41);
                 ct.ThrowIfCancellationRequested();
                 result.ManaSymbolsDownloaded =
                     await DownloadManaSymbolsAsync(progress, 41, 50, ct);
@@ -173,7 +173,7 @@ namespace BreakersOfE.Services
                 // Step 4 — Parse and import cards (into a temporary copy)
                 ct.ThrowIfCancellationRequested();
                 stage = BeginStaging(progress, 50);
-                Report(progress, "Importing cards into breakersofe.db...", 51);
+                Report(progress, "Importing cards into breakersofe.db…", 51);
                 ct.ThrowIfCancellationRequested();
                 await ImportCardsAsync(tempFile, result, progress, 51, 80, ct);
 
@@ -185,19 +185,19 @@ namespace BreakersOfE.Services
                     throw new InvalidOperationException("No cards were imported. Your card database was not changed.");
 
                 // Step 5 — Download set symbols
-                Report(progress, "Downloading set symbols...", 81);
+                Report(progress, "Downloading set symbols…", 81);
                 ct.ThrowIfCancellationRequested();
                 result.SetSymbolsDownloaded =
                     await DownloadSetSymbolsAsync(progress, 81, 88, ct);
                 AppFolderService.ClearSetSymbolCache();   // new symbols show without a restart
 
                 // Step 6 — Basic verification
-                Report(progress, "Verifying import...", 89);
+                Report(progress, "Verifying import…", 89);
                 ct.ThrowIfCancellationRequested();
                 BasicVerify(result);
 
                 // Step 7 — Deep verification
-                Report(progress, "Running deep verification...", 90);
+                Report(progress, "Running deep verification…", 90);
                 ct.ThrowIfCancellationRequested();
                 await DeepVerifyAsync(result, progress, 90, 95, ct);
 
@@ -206,7 +206,7 @@ namespace BreakersOfE.Services
                 // after the main update completes (called by the ViewModel)
                 if (!skipKeywords)
                 {
-                    Report(progress, "Updating keyword dictionary...", 96);
+                    Report(progress, "Updating keyword dictionary…", 96);
                     ct.ThrowIfCancellationRequested();
                     await FetchAndMergeKeywordCatalogsAsync(result, progress, ct);
                 }
@@ -218,7 +218,7 @@ namespace BreakersOfE.Services
                 CommitStaging(stage!, progress, 98);
 
                 // Price history: snapshot of the whole pool (never fails the update).
-                Report(progress, "Saving price history...", 99);
+                Report(progress, "Saving price history…", 99);
                 PriceHistoryService.TakeSnapshot();
 
                 Report(progress, "Complete!", 100);
@@ -258,12 +258,12 @@ namespace BreakersOfE.Services
             try
             {
                 // Get bulk data URL
-                Report(progress, "Connecting to Scryfall...", 2);
+                Report(progress, "Connecting to Scryfall…", 2);
                 ct.ThrowIfCancellationRequested();
                 string bulkUrl = await GetBulkDataUrlAsync(ct);
 
                 // Download bulk data (JSONL gzipped)
-                Report(progress, "Downloading price data...", 5);
+                Report(progress, "Downloading price data…", 5);
                 ct.ThrowIfCancellationRequested();
                 string ext = bulkUrl.Contains(".jsonl") ? ".jsonl.gz" : ".json";
                 string tempFile = Path.Combine(
@@ -274,7 +274,7 @@ namespace BreakersOfE.Services
                 // Update prices only (in a temporary copy)
                 ct.ThrowIfCancellationRequested();
                 stage = BeginStaging(progress, 60);
-                Report(progress, "Updating prices...", 61);
+                Report(progress, "Updating prices…", 61);
                 ct.ThrowIfCancellationRequested();
                 await UpdatePricesOnlyAsync(tempFile, progress, 61, 97, ct);
 
@@ -285,7 +285,7 @@ namespace BreakersOfE.Services
                 CommitStaging(stage!, progress, 98);
 
                 // Price history: snapshot of the whole pool (never fails the update).
-                Report(progress, "Saving price history...", 99);
+                Report(progress, "Saving price history…", 99);
                 PriceHistoryService.TakeSnapshot();
 
                 Report(progress, "Prices updated!", 100);
@@ -336,14 +336,23 @@ namespace BreakersOfE.Services
                 priceLookup[id] = prices;
             }
 
-            Report(progress, "Applying price updates to database...",
+            Report(progress, "Applying price updates to database…",
                 startPct + 20, $"{priceLookup.Count:N0} prices loaded");
 
             // Update in batches of 1000
             const int batchSize = 1000;
             using var db = PoolDb();
 
-            var poolCards = db.PoolCards.ToList();
+            // Only the key and Scryfall ID of each card (not every column of
+            // 100k cards); each changed card is written as "these six prices",
+            // and the tracker is emptied after every batch so it stays small.
+            var poolCards = db.PoolCards.AsNoTracking()
+                .Select(c => new { c.PoolId, c.ScryfallId }).ToList();
+            string[] priceColumns =
+            {
+                nameof(PoolCard.PriceUsd), nameof(PoolCard.PriceUsdFoil), nameof(PoolCard.PriceUsdEtched),
+                nameof(PoolCard.PriceEur), nameof(PoolCard.PriceEurFoil), nameof(PoolCard.PriceTix),
+            };
             int i = 0;
 
             foreach (var poolCard in poolCards)
@@ -353,12 +362,17 @@ namespace BreakersOfE.Services
                 if (priceLookup.TryGetValue(poolCard.ScryfallId,
                     out var prices))
                 {
-                    poolCard.PriceUsd = prices.usd;
-                    poolCard.PriceUsdFoil = prices.usdFoil;
-                    poolCard.PriceUsdEtched = prices.usdEtched;
-                    poolCard.PriceEur = prices.eur;
-                    poolCard.PriceEurFoil = prices.eurFoil;
-                    poolCard.PriceTix = prices.tix;
+                    var stub = new PoolCard { PoolId = poolCard.PoolId, ScryfallId = poolCard.ScryfallId };
+                    db.PoolCards.Attach(stub);
+                    stub.PriceUsd = prices.usd;
+                    stub.PriceUsdFoil = prices.usdFoil;
+                    stub.PriceUsdEtched = prices.usdEtched;
+                    stub.PriceEur = prices.eur;
+                    stub.PriceEurFoil = prices.eurFoil;
+                    stub.PriceTix = prices.tix;
+                    var entry = db.Entry(stub);
+                    foreach (string column in priceColumns)
+                        entry.Property(column).IsModified = true;     // written even when a price went away
                     updated++;
                 }
 
@@ -366,15 +380,17 @@ namespace BreakersOfE.Services
                 if (i % batchSize == 0)
                 {
                     await db.SaveChangesAsync(ct);
+                    db.ChangeTracker.Clear();
                     int pct = startPct + 20 +
                         (int)((double)i / poolCards.Count *
                               (endPct - startPct - 20));
-                    Report(progress, "Updating prices...", pct,
+                    Report(progress, "Updating prices…", pct,
                         $"{i:N0} of {poolCards.Count:N0} cards");
                 }
             }
 
             await db.SaveChangesAsync(ct);
+            db.ChangeTracker.Clear();
 
             // Online pool: the same prices (MTGO tickets included).
             using (var odb = OnlineDb())
@@ -521,7 +537,7 @@ namespace BreakersOfE.Services
                     int pct = startPct + (int)(frac * (endPct - startPct));
                     string detail = $"{downloaded / 1_048_576:N0} MB / " +
                                     $"{total.Value / 1_048_576:N0} MB";
-                    Report(progress, "Downloading card database...", pct, detail);
+                    Report(progress, "Downloading card database…", pct, detail);
                 }
 
                 ct.ThrowIfCancellationRequested();
@@ -570,17 +586,18 @@ namespace BreakersOfE.Services
                         {
                             byte[] bytes = await _http.GetByteArrayAsync(
                                 svgUrl, ct);
-                            await File.WriteAllBytesAsync(path, bytes, ct);
+                            await WriteWholeAsync(path, bytes, ct);
                             downloaded++;
                         }
-                        catch { }
+                        catch (OperationCanceledException) { throw; }
+                        catch { /* this symbol only: the next update tries again */ }
                     }
                     else { downloaded++; }
 
                     i++;
                     int pct = startPct +
                         (int)((double)i / total * (endPct - startPct));
-                    Report(progress, "Downloading mana symbols...",
+                    Report(progress, "Downloading mana symbols…",
                         pct, $"{i} of {total}");
                 }
             }
@@ -729,7 +746,7 @@ namespace BreakersOfE.Services
                         $"Schemes: {result.SchemeCardsImported:N0}  " +
                         $"Conspiracy: {result.ConspiracyCardsImported:N0}  " +
                         $"Online: {result.OnlineCardsImported:N0}";
-                    Report(progress, "Importing to card pool database (breakersofe.db)...", pct, detail);
+                    Report(progress, "Importing to card pool database (breakersofe.db)…", pct, detail);
                 }
             }
 
@@ -919,17 +936,18 @@ namespace BreakersOfE.Services
                         string url = $"https://svgs.scryfall.io/sets/" +
                                        $"{code.ToLower()}.svg";
                         byte[] bytes = await _http.GetByteArrayAsync(url, ct);
-                        await File.WriteAllBytesAsync(path, bytes, ct);
+                        await WriteWholeAsync(path, bytes, ct);
                         downloaded++;
                     }
-                    catch { }
+                    catch (OperationCanceledException) { throw; }
+                    catch { /* this set only: the next update tries again */ }
                 }
                 else { downloaded++; }
 
                 i++;
                 int pct = startPct +
                     (int)((double)i / total * (endPct - startPct));
-                Report(progress, "Downloading set symbols...",
+                Report(progress, "Downloading set symbols…",
                     pct, $"{i} of {total} sets");
             }
 
@@ -981,7 +999,7 @@ namespace BreakersOfE.Services
             using var db = PoolDb();
 
             Report(progress,
-                "Deep verification: checking database integrity...",
+                "Deep verification: checking database integrity…",
                 startPct, string.Empty);
 
             result.DuplicateScryfallIds = db.PoolCards
@@ -1442,21 +1460,21 @@ namespace BreakersOfE.Services
 
             try
             {
-                Report(progress, "Updating keyword dictionary...", 96,
-                    "Fetching keyword abilities...");
+                Report(progress, "Updating keyword dictionary…", 96,
+                    "Fetching keyword abilities…");
                 abilities = await FetchCatalogAsync(
                     "https://api.scryfall.com/catalog/keyword-abilities", ct);
                 result.KeywordAbilitiesCount = abilities?.Count ?? 0;
 
-                Report(progress, "Updating keyword dictionary...", 97,
-                    "Fetching keyword actions...");
+                Report(progress, "Updating keyword dictionary…", 97,
+                    "Fetching keyword actions…");
                 await Task.Delay(100, ct);           // Scryfall rate-limit courtesy
                 actions = await FetchCatalogAsync(
                     "https://api.scryfall.com/catalog/keyword-actions", ct);
                 result.KeywordActionsCount = actions?.Count ?? 0;
 
-                Report(progress, "Updating keyword dictionary...", 98,
-                    "Fetching ability words...");
+                Report(progress, "Updating keyword dictionary…", 98,
+                    "Fetching ability words…");
                 await Task.Delay(100, ct);
                 abilityWords = await FetchCatalogAsync(
                     "https://api.scryfall.com/catalog/ability-words", ct);
@@ -1472,8 +1490,8 @@ namespace BreakersOfE.Services
             // Rules). Non-fatal: the dictionary keeps the last good copy.
             try
             {
-                Report(progress, "Updating keyword dictionary...", 99,
-                    "Downloading the Comprehensive Rules...");
+                Report(progress, "Updating keyword dictionary…", 99,
+                    "Downloading the Comprehensive Rules…");
                 await ComprehensiveRulesService.DownloadAsync(ct);
             }
             catch (OperationCanceledException) { throw; }
@@ -1483,8 +1501,8 @@ namespace BreakersOfE.Services
             }
 
             // Merge catalogs + pool-discovered keywords into the dictionary
-            Report(progress, "Updating keyword dictionary...", 99,
-                "Merging keywords...");
+            Report(progress, "Updating keyword dictionary…", 99,
+                "Merging keywords…");
             KeywordIndex.Reset();                    // new cards: rebuilt on next use
             MtgKeywordService.RulesChanged();
             MtgKeywordService.Reset();
@@ -1518,6 +1536,25 @@ namespace BreakersOfE.Services
             return null;
         }
 
+        /// <summary>
+        /// Save a downloaded file whole: write a temporary copy, then swap it in.
+        /// A cancel or failure mid-write leaves no half file behind (a half
+        /// symbol would count as "already downloaded" and never be fixed).
+        /// </summary>
+        private static async Task WriteWholeAsync(string path, byte[] bytes, CancellationToken ct)
+        {
+            string tmp = path + ".part";
+            try
+            {
+                await File.WriteAllBytesAsync(tmp, bytes, ct);
+                File.Move(tmp, path, overwrite: true);
+            }
+            finally
+            {
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+            }
+        }
+
         private static void Report(IProgress<ImportProgress> p,
             string step, int pct, string detail = "")
         {
@@ -1547,7 +1584,7 @@ namespace BreakersOfE.Services
             IProgress<ImportProgress> progress, CancellationToken ct)
         {
             progress.Report(new ImportProgress
-            { Percentage = 5, Step = "Fetching rulings download URL...", Detail = "" });
+            { Percentage = 5, Step = "Fetching rulings download URL…", Detail = "" });
 
             // Get the bulk data URL for rulings — try direct endpoint first,
             // fall back to listing all bulk data types and finding "rulings".
@@ -1615,7 +1652,7 @@ namespace BreakersOfE.Services
             }
 
             // Download the rulings file (may be JSONL gzipped or plain JSON)
-            progress.Report(new ImportProgress { Percentage = 15, Step = "Downloading rulings...", Detail = "" });
+            progress.Report(new ImportProgress { Percentage = 15, Step = "Downloading rulings…", Detail = "" });
             string ext = bulkUrl.Contains(".jsonl") ? ".jsonl.gz" : ".json";
             string tempFile = Path.Combine(Path.GetTempPath(), $"scryfall_rulings{ext}");
             bool isGzip = ext.EndsWith(".gz");
@@ -1633,7 +1670,7 @@ namespace BreakersOfE.Services
 
             // Parse and import into rulings.db using the same JSONL/JSON
             // enumerator that handles card bulk data.
-            progress.Report(new ImportProgress { Percentage = 50, Step = "Importing rulings...", Detail = "" });
+            progress.Report(new ImportProgress { Percentage = 50, Step = "Importing rulings…", Detail = "" });
             int count = 0;
             // Work on a temporary copy of rulings.db; swapped in only when finished.
             var stage = DatabaseStaging.Begin(Data.RulingsDbContext.DefaultPath);
@@ -1679,7 +1716,7 @@ namespace BreakersOfE.Services
                         progress.Report(new ImportProgress
                         {
                             Percentage = 50 + Math.Min(45, count / 500),
-                            Step = "Importing rulings...",
+                            Step = "Importing rulings…",
                             Detail = $"{count:N0} rulings imported"
                         });
                     }
@@ -1697,7 +1734,7 @@ namespace BreakersOfE.Services
                     throw new InvalidOperationException("No rulings were imported. Your rulings were not changed.");
 
                 ct.ThrowIfCancellationRequested();
-                progress.Report(new ImportProgress { Percentage = 98, Step = "Saving rulings...", Detail = $"{count:N0} rulings imported" });
+                progress.Report(new ImportProgress { Percentage = 98, Step = "Saving rulings…", Detail = $"{count:N0} rulings imported" });
                 stage.Commit();
             }
             finally

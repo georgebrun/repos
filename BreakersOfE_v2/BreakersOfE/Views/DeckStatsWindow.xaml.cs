@@ -109,15 +109,10 @@ namespace BreakersOfE.Views
                 summary.Insert(1, new("Sideboard", Qty(_side).ToString("N0")));
             SummaryList.ItemsSource = summary;
 
-            string[] colorOrder = { "White", "Blue", "Black", "Red", "Green", "Multicolor", "Colorless", "Land" };
-            ColorBars.ItemsSource = Bars(_main, ColorBucket, colorOrder, withValue: true);
-
-            string[] typeOrder = { "Creature", "Planeswalker", "Battle", "Instant", "Sorcery",
-                                   "Artifact", "Enchantment", "Land", "Other" };
-            TypeBars.ItemsSource = Bars(_main, c => TypeBucket(c.TypeLine), typeOrder, withValue: true);
-
-            string[] rarityOrder = { "Common", "Uncommon", "Rare", "Mythic", "Special", "Other" };
-            RarityBars.ItemsSource = Bars(_main, c => RarityBucket(c.Rarity), rarityOrder, withValue: true);
+            // Same groups as Collection Statistics (StatBuckets).
+            ColorBars.ItemsSource = Bars(_main, c => StatBuckets.Color(c.TypeLine, c.ColorDisplay), StatBuckets.ColorOrder, withValue: true);
+            TypeBars.ItemsSource = Bars(_main, c => StatBuckets.Type(c.TypeLine), StatBuckets.TypeOrder, withValue: true);
+            RarityBars.ItemsSource = Bars(_main, c => StatBuckets.Rarity(c.Rarity), StatBuckets.RarityOrder, withValue: true);
 
             var editions = _main
                 .GroupBy(c => string.IsNullOrWhiteSpace(c.SetName) ? c.SetCode : c.SetName)
@@ -585,7 +580,7 @@ namespace BreakersOfE.Views
             if (landDenial.Count > 0)
                 reasonText += $" If the {landDenial.Count} possible land-denial card(s) really are mass land denial, it's Bracket 4 or higher.";
             if (gameChangers.Count == 0 && !_main.Any(c => c.IsGameChanger) && GameChangerDataMissing())
-                reasonText += " (No Game Changer data found — run a Full Database Update so the pool has Scryfall's Game Changer flags.)";
+                reasonText += " (No Game Changer data found — run Update Database so the pool has Scryfall's Game Changer flags.)";
             BracketReason.Text = reasonText;
         }
 
@@ -643,35 +638,9 @@ namespace BreakersOfE.Views
                 .ToList();
         }
 
-
         // ══════════════════════════════════════════════════════════════════
-        // Buckets + bars (same rules as the collection statistics)
+        // Bars (the groups themselves: StatBuckets, shared with the collection statistics)
         // ══════════════════════════════════════════════════════════════════
-        private static string ColorBucket(DeckCard c)
-        {
-            if (c.IsLand) return "Land";
-            return c.ColorDisplay switch
-            {
-                "W" => "White", "U" => "Blue", "B" => "Black", "R" => "Red", "G" => "Green",
-                "M" => "Multicolor", _ => "Colorless",
-            };
-        }
-
-        private static string RarityBucket(string? rarity) => (rarity ?? "").ToLowerInvariant() switch
-        {
-            "common" => "Common", "uncommon" => "Uncommon", "rare" => "Rare",
-            "mythic" => "Mythic", "special" => "Special", _ => "Other",
-        };
-
-        private static string TypeBucket(string? typeLine)
-        {
-            string t = typeLine ?? "";
-            foreach (var type in new[] { "Creature", "Planeswalker", "Battle", "Instant", "Sorcery",
-                                         "Artifact", "Enchantment", "Land" })
-                if (t.Contains(type, StringComparison.OrdinalIgnoreCase)) return type;
-            return "Other";
-        }
-
         private static List<StatBar> Bars(List<DeckCard> cards, Func<DeckCard, string> bucket,
                                           string[] order, bool withValue)
         {

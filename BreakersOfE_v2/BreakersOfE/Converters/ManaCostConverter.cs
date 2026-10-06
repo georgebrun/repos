@@ -16,6 +16,22 @@ namespace BreakersOfE.Services
     {
         private static string ManaFolder => AppFolderService.ManaSymbolsFolder;
 
+        /// <summary>
+        /// Card detail views: put a mana cost's symbols into an ItemsControl
+        /// (the converter builds one panel; its pieces move into the list).
+        /// </summary>
+        public static void Fill(ItemsControl target, string? manaCost)
+        {
+            target.Items.Clear();
+            if (string.IsNullOrEmpty(manaCost)) return;
+            if (new ManaCostConverter().Convert(manaCost, typeof(object), null!, CultureInfo.CurrentCulture) is not Panel panel)
+                return;
+            var pieces = new List<UIElement>();
+            foreach (UIElement child in panel.Children) pieces.Add(child);
+            panel.Children.Clear();                                // a piece can only have one parent
+            foreach (var piece in pieces) target.Items.Add(piece);
+        }
+
         public object? Convert(object value, Type targetType,
             object parameter, CultureInfo culture)
         {
@@ -36,21 +52,8 @@ namespace BreakersOfE.Services
                     .Replace("/", "-");
                 string path = Path.Combine(ManaFolder, $"{key}.png");
 
-                if (!File.Exists(path))
-                {
-                    // Show text fallback
-                    panel.Children.Add(new TextBlock
-                    {
-                        Text = token,
-                        FontSize = 10,
-                        Margin = new Thickness(1, 0, 1, 0),
-                        VerticalAlignment = VerticalAlignment.Center,
-                        Foreground = Brushes.Gray
-                    });
-                    continue;
-                }
-
-                var source = LoadImageSource(path);
+                // No symbol file (or it can't be drawn): the symbol as text, e.g. "{W/P}".
+                var source = File.Exists(path) ? CachedSymbol(path) : null;
                 if (source != null)
                 {
                     panel.Children.Add(new Image
@@ -102,6 +105,25 @@ namespace BreakersOfE.Services
                 i++;
             }
             return list;
+        }
+
+        // Each symbol is read and drawn once, then shared by every row (the grid
+        // asks for every visible row on each scroll). Misses aren't kept, so a
+        // symbol downloaded later shows up.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, ImageSource> _symbols =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Forget the drawn symbols (after Update Database downloads new ones).</summary>
+        public static void ClearCache() => _symbols.Clear();
+
+        private static ImageSource? CachedSymbol(string path)
+        {
+            if (_symbols.TryGetValue(path, out var hit)) return hit;
+            var source = LoadImageSource(path);
+            if (source == null) return null;
+            if (source.CanFreeze && !source.IsFrozen) source.Freeze();   // shareable between rows and threads
+            _symbols[path] = source;
+            return source;
         }
 
         private static ImageSource? LoadImageSource(string path)

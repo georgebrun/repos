@@ -11,7 +11,7 @@
          your collection. -->
     <Page.Resources>
         <Style x:Key="SectionHeader" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,16,0,6"/>
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
@@ -32,9 +32,9 @@
 
     <DockPanel Margin="16">
         <!-- Official rules: when they were downloaded, and a button to get them now -->
-        <Border DockPanel.Dock="Top" Background="{DynamicResource BoePanelBrush}" CornerRadius="8" Padding="12,8" Margin="0,0,0,10">
+        <Border DockPanel.Dock="Top" Background="{DynamicResource BoePanelBrush}" CornerRadius="8" Padding="12,8" Margin="0,0,0,8">
             <DockPanel>
-                <Button x:Name="BtnGetRules" DockPanel.Dock="Right" Content="Get the Official Rules" Padding="12,4"
+                <Button x:Name="BtnGetRules" DockPanel.Dock="Right" Content="Get the Official Rules" Padding="10,4"
                         Click="BtnGetRules_Click"
                         ToolTip="Download Wizards' Comprehensive Rules now (Update Database also does this)"/>
                 <TextBlock x:Name="RulesStatus" VerticalAlignment="Center" TextWrapping="Wrap" FontSize="12" Margin="0,0,12,0"
@@ -65,7 +65,7 @@
                         <GroupStyle>
                             <GroupStyle.HeaderTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" Margin="4,10,0,4"
+                                    <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" Margin="4,10,0,4"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                 </DataTemplate>
                             </GroupStyle.HeaderTemplate>
@@ -87,13 +87,13 @@
             <!-- ═══ RIGHT: the keyword ═══ -->
             <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
                 <StackPanel x:Name="Detail" Margin="0,0,12,16">
-                    <TextBlock x:Name="KwName" FontSize="28" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                    <TextBlock x:Name="KwMeta" Margin="0,4,0,0" FontSize="13" TextWrapping="Wrap"
+                    <TextBlock x:Name="KwName" FontSize="24" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="KwMeta" Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                     <WrapPanel x:Name="ShowButtons" Margin="0,12,0,0">
-                        <Button x:Name="BtnShowPool" Content="Show in Pool" Padding="12,4" Margin="0,0,8,0"
+                        <Button x:Name="BtnShowPool" Content="Show in Pool" Padding="10,4" Margin="0,0,8,0"
                                 Click="BtnShowPool_Click" ToolTip="Card Pool → Cards, filtered to this keyword"/>
-                        <Button x:Name="BtnShowCollection" Content="Show in My Collection" Padding="12,4"
+                        <Button x:Name="BtnShowCollection" Content="Show in My Collection" Padding="10,4"
                                 Click="BtnShowCollection_Click" ToolTip="Collection → Cards, filtered to this keyword"/>
                     </WrapPanel>
 
@@ -104,7 +104,7 @@
 
                     <StackPanel x:Name="RulesPart">
                         <TextBlock x:Name="RulesHeader" Text="OFFICIAL RULES" Style="{StaticResource SectionHeader}"/>
-                        <TextBox x:Name="RulesText" Style="{StaticResource Reading}" FontSize="13"/>
+                        <TextBox x:Name="RulesText" Style="{StaticResource Reading}"/>
                     </StackPanel>
 
                     <StackPanel x:Name="ExamplePart">
@@ -112,12 +112,12 @@
                         <TextBlock x:Name="ExampleName" FontWeight="SemiBold" TextWrapping="Wrap"/>
                         <TextBlock x:Name="ExampleType" FontSize="12" Margin="0,2,0,6" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                        <TextBox x:Name="ExampleText" Style="{StaticResource Reading}" FontSize="13"/>
+                        <TextBox x:Name="ExampleText" Style="{StaticResource Reading}"/>
                     </StackPanel>
 
                     <StackPanel x:Name="CardsPart">
                         <TextBlock x:Name="CardsHeader" Text="CARDS WITH IT" Style="{StaticResource SectionHeader}"/>
-                        <TextBox x:Name="CardsText" Style="{StaticResource Reading}" FontSize="13"/>
+                        <TextBox x:Name="CardsText" Style="{StaticResource Reading}"/>
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>

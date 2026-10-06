@@ -40,21 +40,6 @@ namespace BreakersOfE.Validation
         };
 
         /// <summary>
-        /// Fields we use but that aren't on every card (DFCs, tokens, etc.).
-        /// Missing these is a warning, not a blocker.
-        /// </summary>
-        private static readonly HashSet<string> OptionalFields = new()
-        {
-            "oracle_text",         // Not on vanilla creatures or some tokens
-            "image_uris",          // Not on DFCs (they use card_faces)
-            "card_faces",          // Only on DFCs
-            "power",               // Only on creatures
-            "toughness",           // Only on creatures
-            "loyalty",             // Only on planeswalkers
-            "keywords",            // May be empty array
-        };
-
-        /// <summary>
         /// Validates a single card element from the bulk data.
         /// Returns whether it's valid and which required fields are missing.
         /// </summary>
@@ -65,52 +50,6 @@ namespace BreakersOfE.Validation
                 .ToList();
 
             return (missing.Count == 0, missing);
-        }
-
-        /// <summary>
-        /// Checks optional fields and returns which ones are missing.
-        /// These are warnings, not errors — the import can proceed.
-        /// </summary>
-        public static List<string> CheckOptionalFields(JsonElement card)
-        {
-            return OptionalFields
-                .Where(f => !card.TryGetProperty(f, out _))
-                .ToList();
-        }
-
-        /// <summary>
-        /// Builds a human-readable report of schema validation results.
-        /// </summary>
-        public static string BuildReport(
-            bool isValid,
-            List<string> missingRequired,
-            List<string> missingOptional)
-        {
-            if (isValid && missingOptional.Count == 0)
-                return "Schema validation passed — all fields present.";
-
-            var lines = new List<string>();
-
-            if (!isValid)
-            {
-                lines.Add("⚠ SCHEMA VALIDATION FAILED — Import blocked.");
-                lines.Add($"Missing required fields: {string.Join(", ", missingRequired)}");
-                lines.Add("");
-                lines.Add("Scryfall may have changed their data format.");
-                lines.Add("Check scryfall.com/blog for announcements.");
-            }
-            else
-            {
-                lines.Add("Schema validation passed (with warnings).");
-            }
-
-            if (missingOptional.Count > 0)
-            {
-                lines.Add($"Missing optional fields: {string.Join(", ", missingOptional)}");
-                lines.Add("These fields aren't on every card — this is usually fine.");
-            }
-
-            return string.Join(Environment.NewLine, lines);
         }
     }
 }

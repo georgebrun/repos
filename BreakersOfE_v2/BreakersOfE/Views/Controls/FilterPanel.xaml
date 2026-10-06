@@ -14,7 +14,7 @@
             <Setter Property="Margin" Value="0,0,8,8"/>
         </Style>
         <Style x:Key="GroupHeader" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,0,0,6"/>
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
@@ -32,7 +32,7 @@
             <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" LastChildFill="False">
                 <TextBlock x:Name="ActiveText" DockPanel.Dock="Left" VerticalAlignment="Center" FontSize="12"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                <Button DockPanel.Dock="Right" Content="Clear panel" Padding="10,3"
+                <Button DockPanel.Dock="Right" Content="Clear Panel" Padding="10,4"
                         Click="BtnClear_Click" ToolTip="Clear every filter in this panel"/>
             </DockPanel>
 
@@ -120,7 +120,7 @@
                                 <DockPanel>
                                     <TextBox x:Name="KeywordSearch" DockPanel.Dock="Top" Margin="0,0,0,6"
                                              TextChanged="KeywordSearch_TextChanged" ToolTip="Type to find a keyword"/>
-                                    <TextBlock x:Name="KeywordPickHint" DockPanel.Dock="Bottom" Margin="0,6,0,0" FontSize="11"
+                                    <TextBlock x:Name="KeywordPickHint" DockPanel.Dock="Bottom" Margin="0,6,0,0" FontSize="12"
                                                TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                     <ListBox x:Name="KeywordList" Height="320">
                                         <ListBox.ItemTemplate>

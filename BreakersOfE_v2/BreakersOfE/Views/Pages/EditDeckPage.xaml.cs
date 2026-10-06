@@ -552,7 +552,7 @@ namespace BreakersOfE.Views.Pages
             string rowFin = row ? RowFinish(_current!) : "";
             bool rowFree = row && FreeOf(_current!) > 0;
             // Several rows: a finish is on only if one of them can add it (collection rows add their own).
-            bool Some(string fin) => (_active?.SelectedCards ?? new List<object>()).Take(MaxRows + 1)
+            bool Some(string fin) => (_active?.SelectedUnordered ?? new List<object>()).Take(MaxRows + 1)
                 .Any(r => IsCollectionRow(r) || (TemplateFor(r) is { } t && DeckEditService.HasFinish(t, fin)));
             BtnAddNonFoil.IsEnabled = haveDeck && (many ? Some(CardFinish.NonFoil) : (row ? rowFree && rowFin == CardFinish.NonFoil : tmpl?.IsNonFoil == true));
             BtnAddFoil.IsEnabled = haveDeck && (many ? Some(CardFinish.Foil) : (row ? rowFree && rowFin == CardFinish.Foil : tmpl?.IsFoil == true));
@@ -944,7 +944,7 @@ namespace BreakersOfE.Views.Pages
                             ? OwnFinishQuestion("Add", qty, plan.Select(p => p.Finish).ToList(), $"to {_deck!.Name} from")
                             : $"Add {qty} {finishText}{(qty == 1 ? "copy" : "copies")} of each of {plan.Count} {(plan.Count == 1 ? "card" : "cards")} to {_deck!.Name}?") +
                          (skipped.Length > 0 ? "\n\n" + skipped : ""),
-                         "Add several cards"))
+                         "Add Several Cards"))
                 return;
 
             Edit($"Added {qty} {finishText}".TrimEnd(), () =>
@@ -1050,7 +1050,7 @@ namespace BreakersOfE.Views.Pages
             // Why the list is empty (shown instead of the list).
             string empty =
                 makers.Count == 0 ? "This deck has no cards yet." :
-                noData ? "The card pool doesn't have token links yet. Run a Full Database Update once, then try again." :
+                noData ? "The card pool doesn't have token links yet. Run Update Database once, then try again." :
                 selectedOnly && makers.Count == 1 ? $"{makers[0].Name} makes no tokens that Scryfall links. {anyToken}" :
                 selectedOnly ? $"None of the {makers.Count} selected cards make tokens that Scryfall links. {anyToken}" :
                 $"None of this deck's cards make tokens (as far as Scryfall links them). {anyToken}";
@@ -1127,7 +1127,7 @@ namespace BreakersOfE.Views.Pages
                 !Confirm($"Add {needs.Sum(n => n.Needed)} new copies to your collection as {AddLanguage} · {AddCondition}?\n\n" +
                          string.Join("\n", needs.Take(12).Select(n => $"{n.Needed} × {n.Text}")) +
                          (needs.Count > 12 ? $"\n… and {needs.Count - 12} more" : ""),
-                         "Add as new copies"))
+                         "Add as New Copies"))
                 return;
             RunClaims(useOwned, needs);
         }
@@ -1246,7 +1246,7 @@ namespace BreakersOfE.Views.Pages
                 ? $"The {claimed} claimed {(claimed == 1 ? "copy goes" : "copies go")} back to Available in your collection, and the deck is deleted."
                 : "The deck is deleted (none of its copies are claimed from your collection).";
             if (!Confirm($"Tear down \"{_deck.Name}\"?\n\n{what}\n\nThe deck file is moved to the \"Deleted Decks\" folder, " +
-                         "so it can be recovered by hand. This can't be undone here.", "Tear down deck"))
+                         "so it can be recovered by hand. This can't be undone here.", "Tear Down Deck"))
                 return;
 
             string name = _deck.Name, path = _deckPath;
@@ -1361,7 +1361,7 @@ namespace BreakersOfE.Views.Pages
             if (plan.Count == 0) { AfterEdit(Combine("Removed", missing)); return; }
             if (plan.Count > 1 &&
                 !Confirm($"Remove {qty} {(qty == 1 ? "copy" : "copies")} of each of {plan.Count} cards from {_deck!.Name}?",
-                         "Remove several cards"))
+                         "Remove Several Cards"))
                 return;
 
             Edit($"Removed {qty}", () =>
@@ -1377,7 +1377,7 @@ namespace BreakersOfE.Views.Pages
             var keys = rows.Select(r => LineFor(r, null)).Where(l => l != null)
                            .Select(l => DeckLineKey.Of(l!)).Distinct().ToList();
             if (keys.Count == 0) { ShowStatus("Those cards aren't in this deck.", true); return; }
-            if (keys.Count > 1 && !Confirm($"Take {keys.Count} cards out of {_deck!.Name} (every copy of each)?", "Remove cards"))
+            if (keys.Count > 1 && !Confirm($"Take {keys.Count} cards out of {_deck!.Name} (every copy of each)?", "Remove Cards"))
                 return;
             Edit("Removed", () => keys.Select(k => DeckEditService.RemoveLine(_deck!, k)).ToList());
         }

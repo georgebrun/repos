@@ -48,9 +48,9 @@
                                 <ComboBox x:Name="ConditionBox" Width="180" Margin="0,0,24,0" VerticalAlignment="Center"
                                           SelectionChanged="Defaults_SelectionChanged"
                                           ToolTip="Condition for lines without one"/>
-                                <Button x:Name="BtnOpen" Content="Open File…" Padding="12,4" Margin="0,0,6,0" Click="BtnOpen_Click"
+                                <Button x:Name="BtnOpen" Content="Open File…" Padding="10,4" Margin="0,0,6,0" Click="BtnOpen_Click"
                                         ToolTip="A .csv or .txt card list from BoE or another app"/>
-                                <Button x:Name="BtnPaste" Content="Paste Text…" Padding="12,4" Margin="0,0,12,0" Click="BtnPaste_Click"
+                                <Button x:Name="BtnPaste" Content="Paste Text" Padding="10,4" Margin="0,0,12,0" Click="BtnPaste_Click"
                                         ToolTip="Paste a list, e.g. a deck an AI or a website gave you"/>
                                 <TextBlock x:Name="SourceText" VerticalAlignment="Center" FontSize="12" TextTrimming="CharacterEllipsis" MaxWidth="520"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
@@ -58,8 +58,8 @@
                             <!-- Pasted text -->
                             <DockPanel x:Name="PastePanel" Margin="0,8,0,0" Visibility="Collapsed">
                                 <StackPanel DockPanel.Dock="Right" Margin="8,0,0,0">
-                                    <Button x:Name="BtnReadPasted" Content="Read Pasted Text" Padding="12,4" Margin="0,0,0,6" Click="BtnReadPasted_Click"/>
-                                    <Button Content="Clear" Padding="12,4" Click="BtnClearPasted_Click"/>
+                                    <Button x:Name="BtnReadPasted" Content="Read Pasted Text" Padding="10,4" Margin="0,0,0,6" Click="BtnReadPasted_Click"/>
+                                    <Button Content="Clear" Padding="10,4" Click="BtnClearPasted_Click"/>
                                 </StackPanel>
                                 <TextBox x:Name="PasteBox" Height="140" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
                                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
@@ -73,8 +73,8 @@
                     <Border DockPanel.Dock="Bottom" Background="{DynamicResource BoePanelBrush}" CornerRadius="8" Padding="12,8" Margin="0,8,0,0">
                         <StackPanel>
                             <WrapPanel VerticalAlignment="Center">
-                                <Button x:Name="BtnApply" Content="Import" Padding="16,5" Margin="0,0,8,0" IsEnabled="False" Click="BtnApply_Click"/>
-                                <Button x:Name="BtnUndo" Content="Undo Last Import" Padding="12,5" Margin="0,0,16,0" IsEnabled="False" Click="BtnUndo_Click"/>
+                                <Button x:Name="BtnApply" Content="Import" Padding="10,4" Margin="0,0,8,0" IsEnabled="False" Click="BtnApply_Click"/>
+                                <Button x:Name="BtnUndo" Content="Undo Last Import" Padding="10,4" Margin="0,0,16,0" IsEnabled="False" Click="BtnUndo_Click"/>
                                 <CheckBox x:Name="OnlyAttention" Content="Show only lines that need attention" VerticalAlignment="Center"
                                           Checked="OnlyAttention_Changed" Unchecked="OnlyAttention_Changed"/>
                             </WrapPanel>
@@ -84,7 +84,7 @@
                     </Border>
 
                     <!-- Summary of the preview -->
-                    <TextBlock x:Name="SummaryText" DockPanel.Dock="Top" Margin="2,0,0,6" FontSize="13" TextWrapping="Wrap"
+                    <TextBlock x:Name="SummaryText" DockPanel.Dock="Top" Margin="2,0,0,6" FontSize="12" TextWrapping="Wrap"
                                Text="Open a file or paste a list to see what would be imported. Nothing changes until you press Import."/>
 
                     <!-- Preview -->
@@ -166,9 +166,9 @@
                     <Border DockPanel.Dock="Bottom" Background="{DynamicResource BoePanelBrush}" CornerRadius="8" Padding="12,8" Margin="0,8,0,0">
                         <StackPanel>
                             <WrapPanel VerticalAlignment="Center">
-                                <Button x:Name="BtnExportCopy" Content="Copy to Clipboard" Padding="14,5" Margin="0,0,8,0" IsEnabled="False"
+                                <Button x:Name="BtnExportCopy" Content="Copy to Clipboard" Padding="10,4" Margin="0,0,8,0" IsEnabled="False"
                                         Click="BtnExportCopy_Click" ToolTip="Then paste it into the website (e.g. MTG Deck Tools)"/>
-                                <Button x:Name="BtnExportSave" Content="Save File…" Padding="14,5" Margin="0,0,16,0" IsEnabled="False"
+                                <Button x:Name="BtnExportSave" Content="Save File…" Padding="10,4" Margin="0,0,16,0" IsEnabled="False"
                                         Click="BtnExportSave_Click"/>
                                 <TextBlock x:Name="ExportSummary" VerticalAlignment="Center" FontSize="12" TextWrapping="Wrap" MaxWidth="900"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>

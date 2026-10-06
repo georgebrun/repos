@@ -28,9 +28,9 @@
         <Border Grid.Row="0" BorderThickness="0,0,0,1"
                 BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" Padding="6,6,6,3">
             <StackPanel Orientation="Horizontal">
-                <ui:Button Content="Sort A → Z" FontSize="11" Padding="6,2" Margin="0,0,4,0"
+                <ui:Button Content="Sort A → Z" FontSize="12" Padding="6,2" Margin="0,0,4,0"
                         Click="BtnSortAsc_Click"/>
-                <ui:Button Content="Sort Z → A" FontSize="11" Padding="6,2"
+                <ui:Button Content="Sort Z → A" FontSize="12" Padding="6,2"
                         Click="BtnSortDesc_Click"/>
             </StackPanel>
         </Border>
@@ -51,7 +51,7 @@
                             BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" Padding="4">
                         <ui:TextBox Name="ValueSearchBox"
                                  FontSize="12"
-                                 PlaceholderText="Search values..."
+                                 PlaceholderText="Search values…"
                                  TextChanged="ValueSearchBox_TextChanged"/>
                     </Border>
 
@@ -104,7 +104,7 @@
 
                     <ui:TextBox Name="TextFilterBox" Grid.Row="1"
                              FontSize="12"
-                             PlaceholderText="Filter text..."
+                             PlaceholderText="Filter text…"
                              KeyDown="TextFilterBox_KeyDown"/>
 
                     <StackPanel Grid.Row="2" Orientation="Vertical" Margin="0,8,0,0">
@@ -112,7 +112,7 @@
                                 HorizontalAlignment="Left"
                                 MinWidth="70" Click="BtnApplyText_Click"/>
                         <TextBlock Name="TextHint" Margin="0,6,0,0"
-                                   FontSize="11" TextWrapping="Wrap"
+                                   FontSize="12" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    Text="Checks matching values on the Values tab."/>
                     </StackPanel>

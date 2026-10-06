@@ -4,7 +4,6 @@
       xmlns:ctl="clr-namespace:BreakersOfE.Views.Controls"
       ScrollViewer.VerticalScrollBarVisibility="Disabled"
       Loaded="Page_Loaded"
-      PreviewKeyDown="Page_PreviewKeyDown"
       Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
     <!-- Edit → Decks: Pool → Deck and Collection → Deck (the source on top,
@@ -70,7 +69,7 @@
             <DockPanel Grid.Row="2">
                 <!-- ═══ DECK + BUTTONS ═══ -->
                 <Border DockPanel.Dock="Top" Background="{DynamicResource BoePanelBrush}" CornerRadius="8"
-                    Padding="12,6" Margin="0,0,0,8">
+                    Padding="12,8" Margin="0,0,0,8">
                     <StackPanel>
                         <!-- Which deck -->
                         <WrapPanel VerticalAlignment="Center" Margin="0,0,0,6">

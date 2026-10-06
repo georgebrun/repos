@@ -5,7 +5,6 @@
       ScrollViewer.VerticalScrollBarVisibility="Disabled"
       Loaded="Page_Loaded"
       Unloaded="Page_Unloaded"
-      PreviewKeyDown="Page_PreviewKeyDown"
       Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
     <!-- Edit → Lists → Collection → Trade Binder: your card collection on top,
@@ -69,7 +68,7 @@
                  Act on the rows selected last, in either table. Qty applies to
                  every button (and the keys / right-click). -->
             <Border DockPanel.Dock="Top" Background="{DynamicResource BoePanelBrush}" CornerRadius="8"
-                    Padding="12,6" Margin="0,0,0,8">
+                    Padding="12,8" Margin="0,0,0,8">
                 <StackPanel>
                     <WrapPanel VerticalAlignment="Center">
                         <TextBlock Text="Qty" VerticalAlignment="Center" Margin="0,0,6,0"
@@ -81,14 +80,14 @@
                                  GotKeyboardFocus="QtyBox_GotKeyboardFocus"
                                  ToolTip="How many copies each button moves (Ctrl+Q). Enter puts them in the binder."/>
 
-                        <Button x:Name="BtnAdd" Content="Add to Binder" Padding="10,4" Margin="0,0,6,0"
+                        <Button x:Name="BtnAdd" Content="Add to Trade Binder" Padding="10,4" Margin="0,0,6,0"
                                 Click="BtnAdd_Click"
                                 ToolTip="Put Qty free copies of the selected collection rows in the Trade Binder (Enter). They count as Used, so no deck can take them."/>
-                        <Button x:Name="BtnRemove" Content="Remove from Binder" Padding="10,4" Margin="0,0,18,0"
+                        <Button x:Name="BtnRemove" Content="Remove from Trade Binder" Padding="10,4" Margin="0,0,18,0"
                                 Click="BtnRemove_Click"
                                 ToolTip="Take Qty copies out of the Trade Binder — back to Available in your collection (Delete)"/>
 
-                        <Button x:Name="BtnTraded" Content="Traded / Sold" Padding="10,4" Margin="0,0,18,0"
+                        <Button x:Name="BtnTraded" Content="Traded / Sold…" Padding="10,4" Margin="0,0,18,0"
                                 Click="BtnTraded_Click"
                                 ToolTip="Qty copies are gone: out of the Trade Binder AND your collection (asks first)"/>
 

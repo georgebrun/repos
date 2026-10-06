@@ -34,7 +34,9 @@ namespace BreakersOfE.Services
     {
         private static readonly HttpClient _http = CreateClient();
         private static readonly SemaphoreSlim _gate = new(6);
-        private static readonly ConcurrentDictionary<string, Task<string?>> _inFlight = new();
+        // One download per card / link at a time: Lazy makes sure only one starts
+        // (GetOrAdd alone can start two), and whoever awaits it removes it after.
+        private static readonly ConcurrentDictionary<string, Lazy<Task<string?>>> _inFlight = new();
         private static int _pending;
 
         /// <summary>Raised (on a background thread) when the pending count changes.</summary>
@@ -82,28 +84,31 @@ namespace BreakersOfE.Services
             return bytes == null ? null : await Task.Run(() => LoadBitmap(bytes, decodePixelWidth)).ConfigureAwait(false);
         }
 
-        private static readonly ConcurrentDictionary<string, Task<byte[]?>> _fetching = new();
+        private static readonly ConcurrentDictionary<string, Lazy<Task<byte[]?>>> _fetching = new();
 
         /// <summary>Download a picture into memory only (not saved). Null when offline / failed.</summary>
-        private static Task<byte[]?> FetchAsync(string? url)
+        private static async Task<byte[]?> FetchAsync(string? url)
         {
-            if (string.IsNullOrWhiteSpace(url)) return Task.FromResult<byte[]?>(null);
-            return _fetching.GetOrAdd(url, async u =>
+            if (string.IsNullOrWhiteSpace(url)) return null;
+            var shared = _fetching.GetOrAdd(url, u => new Lazy<Task<byte[]?>>(() => FetchCoreAsync(u)));
+            try { return await shared.Value.ConfigureAwait(false); }
+            finally { _fetching.TryRemove(new KeyValuePair<string, Lazy<Task<byte[]?>>>(url, shared)); }
+        }
+
+        private static async Task<byte[]?> FetchCoreAsync(string url)
+        {
+            PendingChanged?.Invoke(Interlocked.Increment(ref _pending));
+            try
             {
-                PendingChanged?.Invoke(Interlocked.Increment(ref _pending));
-                try
-                {
-                    await _gate.WaitAsync().ConfigureAwait(false);
-                    try { return await _http.GetByteArrayAsync(u).ConfigureAwait(false); }
-                    finally { _gate.Release(); }
-                }
-                catch { return null; }
-                finally
-                {
-                    _fetching.TryRemove(u, out _);
-                    PendingChanged?.Invoke(Interlocked.Decrement(ref _pending));
-                }
-            });
+                await _gate.WaitAsync().ConfigureAwait(false);
+                try { return await _http.GetByteArrayAsync(url).ConfigureAwait(false); }
+                finally { _gate.Release(); }
+            }
+            catch { return null; }
+            finally
+            {
+                PendingChanged?.Invoke(Interlocked.Decrement(ref _pending));
+            }
         }
 
         /// <summary>Space the kept pictures take, and how many there are.</summary>
@@ -136,22 +141,21 @@ namespace BreakersOfE.Services
         /// Concurrent requests for the same card share one download.
         /// Returns null if there's no URL or the download fails (e.g. offline).
         /// </summary>
-        public static Task<string?> EnsureCachedAsync(string? scryfallId, string? url)
+        public static async Task<string?> EnsureCachedAsync(string? scryfallId, string? url)
         {
-            if (string.IsNullOrWhiteSpace(scryfallId))
-                return Task.FromResult<string?>(null);
+            if (string.IsNullOrWhiteSpace(scryfallId)) return null;
 
             string path = CachePathFor(scryfallId);
-            if (File.Exists(path))
-                return Task.FromResult<string?>(path);
+            if (File.Exists(path)) return path;
+            if (string.IsNullOrWhiteSpace(url)) return null;
+            string link = url;
 
-            if (string.IsNullOrWhiteSpace(url))
-                return Task.FromResult<string?>(null);
-
-            return _inFlight.GetOrAdd(scryfallId, _ => DownloadAsync(scryfallId, url, path));
+            var shared = _inFlight.GetOrAdd(scryfallId, _ => new Lazy<Task<string?>>(() => DownloadAsync(link, path)));
+            try { return await shared.Value.ConfigureAwait(false); }
+            finally { _inFlight.TryRemove(new KeyValuePair<string, Lazy<Task<string?>>>(scryfallId, shared)); }
         }
 
-        private static async Task<string?> DownloadAsync(string scryfallId, string url, string path)
+        private static async Task<string?> DownloadAsync(string url, string path)
         {
             PendingChanged?.Invoke(Interlocked.Increment(ref _pending));
             try
@@ -160,9 +164,16 @@ namespace BreakersOfE.Services
                 try
                 {
                     byte[] bytes = await _http.GetByteArrayAsync(url).ConfigureAwait(false);
-                    string tmp = path + ".tmp";
-                    await File.WriteAllBytesAsync(tmp, bytes).ConfigureAwait(false);
-                    File.Move(tmp, path, overwrite: true);
+                    string tmp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";   // its own name: never clashes
+                    try
+                    {
+                        await File.WriteAllBytesAsync(tmp, bytes).ConfigureAwait(false);
+                        File.Move(tmp, path, overwrite: true);
+                    }
+                    finally
+                    {
+                        try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                    }
                     return path;
                 }
                 finally
@@ -176,7 +187,6 @@ namespace BreakersOfE.Services
             }
             finally
             {
-                _inFlight.TryRemove(scryfallId, out _);
                 PendingChanged?.Invoke(Interlocked.Decrement(ref _pending));
             }
         }

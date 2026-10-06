@@ -108,6 +108,45 @@
             <Style TargetType="ScrollBar" BasedOn="{StaticResource BoeScrollBar}"/>
             <Style TargetType="ui:DynamicScrollBar" BasedOn="{StaticResource BoeScrollBar}"/>
 
+            <!-- Scroll areas: the bars get their own strip beside / below the content.
+                 (Wpf.Ui lays its thin, hiding bars over the content; ours are wide and
+                 always shown, so they covered the right-hand text.) -->
+            <Style TargetType="ScrollViewer" BasedOn="{StaticResource {x:Type ScrollViewer}}">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollViewer">
+                            <Grid Background="{TemplateBinding Background}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                                        Margin="{TemplateBinding Padding}"
+                                                        CanContentScroll="{TemplateBinding CanContentScroll}"
+                                                        Content="{TemplateBinding Content}"
+                                                        ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                                <ScrollBar x:Name="PART_VerticalScrollBar" Grid.Column="1" Margin="4,0,0,0"
+                                           Cursor="Arrow"
+                                           Maximum="{TemplateBinding ScrollableHeight}"
+                                           ViewportSize="{TemplateBinding ViewportHeight}"
+                                           Value="{Binding VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                           Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+                                <ScrollBar x:Name="PART_HorizontalScrollBar" Grid.Row="1" Margin="0,4,0,0"
+                                           Orientation="Horizontal" Cursor="Arrow"
+                                           Maximum="{TemplateBinding ScrollableWidth}"
+                                           ViewportSize="{TemplateBinding ViewportWidth}"
+                                           Value="{Binding HorizontalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                           Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}"/>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- BoE's theme colours (Settings → Appearance swaps them; these are Dark's). -->
             <SolidColorBrush x:Key="BoeGoldBrush" Color="#FFC000"/>
             <SolidColorBrush x:Key="BoePanelBrush" Color="#15808080"/>
@@ -115,6 +154,36 @@
             <SolidColorBrush x:Key="BoeScrollThumbBrush" Color="#909A9A9A"/>
             <SolidColorBrush x:Key="BoeScrollThumbHoverBrush" Color="#D0C0C0C0"/>
             <SolidColorBrush x:Key="BoeScrollThumbDragBrush" Color="#F0E0E0E0"/>
+
+            <!-- ═══ BoE's shared look (Polish): one set of sizes and boxes for every page ═══
+                 Page title 24 · section title 16 · body 14 · hints / status 12 in the
+                 secondary text colour · panels: rounded 8, padding 12,8 · buttons 10,4. -->
+            <Style x:Key="BoePageTitle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="24"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Margin" Value="0,0,0,4"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style x:Key="BoeSectionTitle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="16"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Margin" Value="0,0,0,4"/>
+            </Style>
+            <Style x:Key="BoeHint" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+            </Style>
+            <Style x:Key="BoeLabel" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style x:Key="BoePanel" TargetType="Border">
+                <Setter Property="Background" Value="{DynamicResource BoePanelBrush}"/>
+                <Setter Property="CornerRadius" Value="8"/>
+                <Setter Property="Padding" Value="12,8"/>
+                <Setter Property="Margin" Value="0,0,0,8"/>
+            </Style>
 
             <!-- Global value converters — available to all XAML pages -->
             <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />

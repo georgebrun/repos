@@ -11,7 +11,7 @@
 
     <ui:FluentWindow.Resources>
         <Style x:Key="SectionHeader" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontSize" Value="16"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,0,0,8"/>
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
@@ -53,7 +53,7 @@
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                 <Border Grid.Column="1" Height="14" Background="#20808080" CornerRadius="3"
                         VerticalAlignment="Center" Margin="0,0,8,0" ClipToBounds="True">
-                    <Border HorizontalAlignment="Left" CornerRadius="3" Background="#4CA0FF"
+                    <Border HorizontalAlignment="Left" CornerRadius="3" Background="{DynamicResource AccentFillColorDefaultBrush}"
                             Width="{Binding BarWidth}"/>
                 </Border>
                 <TextBlock Grid.Column="2" Text="{Binding CountText}" TextAlignment="Right"
@@ -81,12 +81,12 @@
                 <StackPanel Grid.Column="1">
                     <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                    <TextBlock Text="{Binding Summary}" FontSize="13" Margin="0,2,0,0" TextWrapping="Wrap"
+                    <TextBlock Text="{Binding Summary}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                     <ItemsControl ItemsSource="{Binding Details}" Margin="12,4,0,0">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <TextBlock Text="{Binding StringFormat='• {0}'}" FontSize="13"
+                                <TextBlock Text="{Binding StringFormat='• {0}'}" FontSize="12"
                                            TextWrapping="Wrap"
                                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             </DataTemplate>
@@ -110,7 +110,7 @@
         <StackPanel Grid.Row="1" Margin="16,0,16,8">
             <TextBlock x:Name="DeckNameText" FontSize="20" FontWeight="SemiBold"
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-            <TextBlock x:Name="ScopeText" FontSize="13" Margin="0,2,0,0"
+            <TextBlock x:Name="ScopeText" FontSize="12" Margin="0,2,0,0"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
         </StackPanel>
 
@@ -122,7 +122,7 @@
                     <StackPanel>
                         <!-- Color identity as mana symbols -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                            <TextBlock x:Name="IdentityLabel" Text="Color identity" FontSize="15" FontWeight="SemiBold"
+                            <TextBlock x:Name="IdentityLabel" Text="Color identity" FontSize="16" FontWeight="SemiBold"
                                        VerticalAlignment="Center" Margin="0,0,12,0"
                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <ContentPresenter x:Name="IdentitySymbols" VerticalAlignment="Center">
@@ -247,9 +247,9 @@
                     <DockPanel Grid.Column="0">
                         <TextBlock DockPanel.Dock="Top" Text="Cards to look for" Style="{StaticResource SectionHeader}"/>
                         <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                            <Button Content="All lands" Padding="10,3" Margin="0,0,6,0" Click="OddsPickLands_Click"/>
-                            <Button Content="All creatures" Padding="10,3" Margin="0,0,6,0" Click="OddsPickCreatures_Click"/>
-                            <Button Content="Clear" Padding="10,3" Click="OddsClear_Click"/>
+                            <Button Content="All Lands" Padding="10,4" Margin="0,0,6,0" Click="OddsPickLands_Click"/>
+                            <Button Content="All Creatures" Padding="10,4" Margin="0,0,6,0" Click="OddsPickCreatures_Click"/>
+                            <Button Content="Clear" Padding="10,4" Click="OddsClear_Click"/>
                         </WrapPanel>
                         <TextBlock x:Name="OddsSelectedText" DockPanel.Dock="Bottom" Margin="0,6,0,0" FontSize="12"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
@@ -291,10 +291,10 @@
             <TabItem Header="Sample Hand">
                 <DockPanel Margin="0,12,0,0">
                     <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                        <Button Content="New hand" Padding="12,4" Margin="0,0,8,0" Click="HandNew_Click"/>
-                        <Button x:Name="BtnMulligan" Content="Mulligan" Padding="12,4" Margin="0,0,8,0" Click="HandMulligan_Click"/>
-                        <Button x:Name="BtnDraw" Content="Draw a card" Padding="12,4" Margin="0,0,16,0" Click="HandDraw_Click"/>
-                        <TextBlock x:Name="HandInfo" VerticalAlignment="Center" FontSize="13"
+                        <Button Content="New Hand" Padding="10,4" Margin="0,0,8,0" Click="HandNew_Click"/>
+                        <Button x:Name="BtnMulligan" Content="Mulligan" Padding="10,4" Margin="0,0,8,0" Click="HandMulligan_Click"/>
+                        <Button x:Name="BtnDraw" Content="Draw a Card" Padding="10,4" Margin="0,0,16,0" Click="HandDraw_Click"/>
+                        <TextBlock x:Name="HandInfo" VerticalAlignment="Center" FontSize="12"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                     </WrapPanel>
                     <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Note}"
@@ -330,17 +330,17 @@
             <TabItem Header="Bracket" x:Name="BracketTab">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,8,0">
                     <StackPanel>
-                        <Border CornerRadius="8" Padding="14,10" Margin="0,0,0,16" Background="{DynamicResource BoePanelBrush}">
+                        <Border CornerRadius="8" Padding="12,8" Margin="0,0,0,8" Background="{DynamicResource BoePanelBrush}">
                             <StackPanel>
                                 <TextBlock x:Name="BracketHeadline" FontSize="20" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                <TextBlock x:Name="BracketReason" FontSize="13" Margin="0,4,0,0" TextWrapping="Wrap"
+                                <TextBlock x:Name="BracketReason" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                             </StackPanel>
                         </Border>
                         <ItemsControl x:Name="BracketChecks" ItemTemplate="{StaticResource CheckRow}"/>
                         <TextBlock Style="{StaticResource Note}"
-                                   Text="Based on the Commander Brackets (beta): Bracket 1–2 no Game Changers; Bracket 3 up to 3; Bracket 4–5 any, plus mass land denial. Game Changers come from Scryfall (run a Full Database Update to refresh them). Extra turns and land denial are read from rules text; land denial is a best guess, so check the cards listed. Two-card combos aren't checked yet. 1 vs 2 and 4 vs 5 depend on how the deck is meant to play, which cards can't tell."/>
+                                   Text="Based on the Commander Brackets (beta): Bracket 1–2 no Game Changers; Bracket 3 up to 3; Bracket 4–5 any, plus mass land denial. Game Changers come from Scryfall (run Update Database to refresh them). Extra turns and land denial are read from rules text; land denial is a best guess, so check the cards listed. Two-card combos aren't checked yet. 1 vs 2 and 4 vs 5 depend on how the deck is meant to play, which cards can't tell."/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

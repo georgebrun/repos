@@ -44,8 +44,25 @@ namespace BreakersOfE.Services
             object parameter, CultureInfo culture)
             => throw new NotImplementedException();
 
-        // ── Core rendering ──────────────────────────────────────────────
+        // ── Cache: each symbol (file + rarity tint + theme) is drawn once and
+        //    shared by every row. Misses aren't kept (a later download shows). ──
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, ImageSource> _drawn =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Forget drawn symbols (after Update Database downloads new ones).</summary>
+        public static void ClearCache() => _drawn.Clear();
+
         private static ImageSource? LoadImage(string path, string? rarity)
+        {
+            string key = $"{path}|{rarity}|{ThemeService.CurrentTheme}";
+            if (_drawn.TryGetValue(key, out var hit)) return hit;
+            var img = Render(path, rarity);
+            if (img != null) _drawn[key] = img;
+            return img;
+        }
+
+        // ── Core rendering ──────────────────────────────────────────────
+        private static ImageSource? Render(string path, string? rarity)
         {
             try
             {

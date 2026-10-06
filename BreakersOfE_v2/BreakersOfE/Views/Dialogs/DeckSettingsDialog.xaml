@@ -14,7 +14,7 @@
 
     <!-- Edit → Decks: a new deck, or an open deck's name, type and format. -->
     <StackPanel Margin="18,16,18,14">
-        <TextBlock x:Name="HeaderText" Text="New Deck" FontSize="15" FontWeight="SemiBold"/>
+        <TextBlock x:Name="HeaderText" Text="New Deck" FontSize="16" FontWeight="SemiBold"/>
 
         <Grid Margin="0,14,0,0">
             <Grid.ColumnDefinitions>

@@ -6,22 +6,11 @@
 
     <!-- Settings: saved as you change them (Documents\BoE_V2\Settings.json). -->
     <Page.Resources>
-        <Style x:Key="Section" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource BoePanelBrush}"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="16,12"/>
-            <Setter Property="Margin" Value="0,0,0,12"/>
-        </Style>
-        <Style x:Key="SectionTitle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="16"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Margin" Value="0,0,0,4"/>
-        </Style>
-        <Style x:Key="Hint" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="TextWrapping" Value="Wrap"/>
-            <Setter Property="Margin" Value="0,0,0,10"/>
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        <!-- The app's shared styles (App.xaml), with this page's spacing. -->
+        <Style x:Key="Section" TargetType="Border" BasedOn="{StaticResource BoePanel}"/>
+        <Style x:Key="SectionTitle" TargetType="TextBlock" BasedOn="{StaticResource BoeSectionTitle}"/>
+        <Style x:Key="Hint" TargetType="TextBlock" BasedOn="{StaticResource BoeHint}">
+            <Setter Property="Margin" Value="0,0,0,8"/>
         </Style>
         <Style x:Key="Label" TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Center"/>
@@ -31,7 +20,7 @@
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="16" MaxWidth="900" HorizontalAlignment="Left">
-            <TextBlock Text="Settings" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <TextBlock Text="Settings" Style="{StaticResource BoePageTitle}"/>
             <TextBlock Text="Changes are saved as you make them." Style="{StaticResource Hint}"/>
 
             <!-- ═══ APPEARANCE ═══ -->
@@ -39,23 +28,23 @@
                 <StackPanel>
                     <TextBlock Text="Appearance" Style="{StaticResource SectionTitle}"/>
                     <TextBlock Style="{StaticResource Hint}"
-                               Text="The app's colours. Changes right away. The card tables keep their light rows (text in the card's colour) in every theme, Custom too."/>
+                               Text="The app's colors. Changes right away. The card tables keep their light rows (text in the card's color) in every theme, Custom too."/>
                     <RadioButton x:Name="ThemeDark" GroupName="Theme" Content="Dark" Margin="0,0,0,4" Checked="Theme_Checked"/>
                     <RadioButton x:Name="ThemeLight" GroupName="Theme" Content="Light" Margin="0,0,0,4" Checked="Theme_Checked"/>
                     <RadioButton x:Name="ThemeSystem" GroupName="Theme" Content="Follow Windows" Checked="Theme_Checked"
                                  ToolTip="Light or Dark as Windows' app mode is set (Windows Settings → Personalization → Colors); switches when Windows does"/>
                     <TextBlock x:Name="ThemeNote" Style="{StaticResource Hint}" Margin="28,2,0,0"/>
-                    <RadioButton x:Name="ThemeCustom" GroupName="Theme" Content="Custom colours" Checked="Theme_Checked"
-                                 ToolTip="Light or Dark with your own colours; keep several sets as presets"/>
+                    <RadioButton x:Name="ThemeCustom" GroupName="Theme" Content="Custom Colors" Checked="Theme_Checked"
+                                 ToolTip="Light or Dark with your own colors; keep several sets as presets"/>
 
                     <!-- Custom: the preset and its colours (shown when Custom is picked) -->
                     <StackPanel x:Name="CustomPanel" Margin="28,10,0,0" Visibility="Collapsed">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <TextBlock Text="Preset" Style="{StaticResource Label}"/>
                             <ComboBox x:Name="PresetBox" Width="220" SelectionChanged="PresetBox_SelectionChanged"/>
-                            <Button Content="New Preset" Padding="12,4" Margin="8,0,0,0" Click="BtnNewPreset_Click"
+                            <Button Content="New Preset" Padding="10,4" Margin="8,0,0,0" Click="BtnNewPreset_Click"
                                     ToolTip="A copy of this preset under a new name"/>
-                            <Button x:Name="BtnDeletePreset" Content="Delete…" Padding="12,4" Margin="8,0,0,0" Click="BtnDeletePreset_Click"/>
+                            <Button x:Name="BtnDeletePreset" Content="Delete…" Padding="10,4" Margin="8,0,0,0" Click="BtnDeletePreset_Click"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <TextBlock Text="Name" Style="{StaticResource Label}"/>
@@ -71,8 +60,8 @@
                         <StackPanel x:Name="ColorRows"/>
                         <TextBlock x:Name="ContrastText" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
                                    Foreground="{DynamicResource BoeWarningBrush}" Visibility="Collapsed"/>
-                        <Button Content="Reset All Colours" Padding="12,4" Margin="0,10,0,0" HorizontalAlignment="Left"
-                                Click="BtnResetColours_Click" ToolTip="Every colour of this preset back to its Light / Dark default"/>
+                        <Button Content="Reset All Colors" Padding="10,4" Margin="0,10,0,0" HorizontalAlignment="Left"
+                                Click="BtnResetColors_Click" ToolTip="Every color of this preset back to its Light / Dark default"/>
                     </StackPanel>
 
                     <Popup x:Name="PalettePopup" StaysOpen="False" Placement="Bottom" AllowsTransparency="True">
@@ -123,13 +112,13 @@
                     <TextBlock x:Name="SyncText" Style="{StaticResource Hint}" Margin="0,0,0,6"/>
                     <TextBlock x:Name="CacheText" Style="{StaticResource Hint}"/>
                     <WrapPanel>
-                        <Button x:Name="BtnSyncNow" Content="Get My Cards' Pictures Now" Padding="12,4" Margin="0,0,8,0"
+                        <Button x:Name="BtnSyncNow" Content="Get My Cards' Pictures Now" Padding="10,4" Margin="0,0,8,0"
                                 Click="BtnSyncNow_Click" ToolTip="Download the missing pictures of your cards right away"/>
-                        <Button x:Name="BtnDownloadAll" Content="Download All Pictures…" Padding="12,4" Margin="0,0,8,0"
+                        <Button x:Name="BtnDownloadAll" Content="Download All Pictures…" Padding="10,4" Margin="0,0,8,0"
                                 Click="BtnDownloadAll_Click" ToolTip="Every card's picture, for using the whole Pool offline (asks first: it's a lot of data)"/>
-                        <Button x:Name="BtnStopDownload" Content="Stop" Padding="12,4" Margin="0,0,8,0" Visibility="Collapsed"
+                        <Button x:Name="BtnStopDownload" Content="Stop" Padding="10,4" Margin="0,0,8,0" Visibility="Collapsed"
                                 Click="BtnStopDownload_Click" ToolTip="Stop downloading (what's saved stays; Download All continues from here next time)"/>
-                        <Button x:Name="BtnClearPictures" Content="Delete Kept Pictures…" Padding="12,4"
+                        <Button x:Name="BtnClearPictures" Content="Delete Kept Pictures…" Padding="10,4"
                                 Click="BtnClearPictures_Click" ToolTip="Free the space (your cards' pictures download again in the background)"/>
                     </WrapPanel>
                     <ProgressBar x:Name="DownloadBar" Height="6" Margin="0,10,0,0" Visibility="Collapsed"/>
@@ -164,9 +153,9 @@
                     <TextBlock x:Name="FolderSizeText" Style="{StaticResource Hint}"/>
                     <TextBlock x:Name="FolderProblem" TextWrapping="Wrap" Margin="0,0,0,8" Foreground="{DynamicResource BoeWarningBrush}" Visibility="Collapsed"/>
                     <WrapPanel>
-                        <Button x:Name="BtnOpenFolder" Content="Open Folder" Padding="12,4" Margin="0,0,8,0" Click="BtnOpenFolder_Click"/>
-                        <Button x:Name="BtnMoveFolder" Content="Move…" Padding="12,4" Margin="0,0,8,0" Click="BtnMoveFolder_Click"/>
-                        <Button x:Name="BtnDefaultFolder" Content="Use Documents\BoE_V2 Again" Padding="12,4" Click="BtnDefaultFolder_Click"
+                        <Button x:Name="BtnOpenFolder" Content="Open Folder" Padding="10,4" Margin="0,0,8,0" Click="BtnOpenFolder_Click"/>
+                        <Button x:Name="BtnMoveFolder" Content="Move…" Padding="10,4" Margin="0,0,8,0" Click="BtnMoveFolder_Click"/>
+                        <Button x:Name="BtnDefaultFolder" Content="Use Documents\BoE_V2 Again" Padding="10,4" Click="BtnDefaultFolder_Click"
                                 ToolTip="Go back to the default folder (its data as it is there — nothing is copied)"/>
                     </WrapPanel>
                     <ProgressBar x:Name="MoveBar" Height="6" Margin="0,10,0,0" Visibility="Collapsed"/>

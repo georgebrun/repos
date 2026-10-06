@@ -102,25 +102,10 @@ namespace BreakersOfE.Views.Pages
 
         private void PoolPage_Loaded(object sender, RoutedEventArgs e)
         {
-            DisableParentScrollViewers();
+            // NavigationView wraps pages in a ScrollViewer → infinite height →
+            // virtualization defeated → freeze. Turn it off (shared with the Edit pages).
+            EditPageKit.DisableHostScroll(this);
             RestoreDetailWidth();
-        }
-
-        // NavigationView wraps pages in a ScrollViewer → infinite height →
-        // virtualization defeated → freeze. Kill it.
-        private void DisableParentScrollViewers()
-        {
-            DependencyObject current = this;
-            while (current != null)
-            {
-                current = VisualTreeHelper.GetParent(current);
-                if (current is ScrollViewer sv)
-                {
-                    sv.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
-                    sv.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
-                    break;
-                }
-            }
         }
     }
 }

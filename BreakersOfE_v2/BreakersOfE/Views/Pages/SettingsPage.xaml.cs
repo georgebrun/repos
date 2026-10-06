@@ -158,16 +158,16 @@ namespace BreakersOfE.Views.Pages
                 row.Children.Add(new TextBlock { Text = label, Width = 190, VerticalAlignment = VerticalAlignment.Center, ToolTip = hint });
                 var swatch = new Border { Width = 40, Height = 22, CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1) };
                 swatch.SetResourceReference(Border.BorderBrushProperty, "ControlStrokeColorDefaultBrush");
-                var pick = new Button { Content = swatch, Padding = new Thickness(3), Tag = key, ToolTip = "Pick a colour" };
+                var pick = new Button { Content = swatch, Padding = new Thickness(3), Tag = key, ToolTip = "Pick a color" };
                 pick.Click += Swatch_Click;
                 row.Children.Add(pick);
                 var hex = new TextBox { Width = 96, Margin = new Thickness(8, 0, 0, 0), Tag = key, VerticalContentAlignment = VerticalAlignment.Center,
-                                        ToolTip = "Type a colour as #RRGGBB, then Enter" };
+                                        ToolTip = "Type a color as #RRGGBB, then Enter" };
                 hex.LostFocus += (_, _) => HexEntered(hex);
                 hex.KeyDown += (_, e) => { if (e.Key == Key.Enter) HexEntered(hex); };
                 row.Children.Add(hex);
-                var def = new Button { Content = "Default", Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(8, 0, 0, 0), Tag = key,
-                                       ToolTip = "Back to the Light / Dark colour" };
+                var def = new Button { Content = "Default", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(8, 0, 0, 0), Tag = key,
+                                       ToolTip = "Back to the Light / Dark color" };
                 def.Click += (_, _) => SetColor(key, "");
                 row.Children.Add(def);
                 var note = new TextBlock { Text = hint, FontSize = 12, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -285,7 +285,7 @@ namespace BreakersOfE.Views.Pages
             SetColor(key, hex);
         }
 
-        private void BtnResetColours_Click(object sender, RoutedEventArgs e)
+        private void BtnResetColors_Click(object sender, RoutedEventArgs e)
         {
             var s = AppSettingsService.Current;
             var p = s.ActivePreset();
@@ -334,7 +334,7 @@ namespace BreakersOfE.Views.Pages
             var s = AppSettingsService.Current;
             if (s.Presets.Count < 2) return;
             var p = s.ActivePreset();
-            if (MessageBox.Show(Window.GetWindow(this), $"Delete the preset \"{p.Name}\"?", "Custom Colours",
+            if (MessageBox.Show(Window.GetWindow(this), $"Delete the preset \"{p.Name}\"?", "Custom Colors",
                     MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
             s.Presets.Remove(p);
             s.CustomPreset = s.Presets[0].Name;

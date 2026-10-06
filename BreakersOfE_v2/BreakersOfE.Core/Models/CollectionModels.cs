@@ -90,7 +90,6 @@ namespace BreakersOfE.Models
 
         // ── Display-only (not stored): lets the shared grid, gallery, and
         //    detail panel show collection rows exactly like pool rows. ──────
-        [NotMapped] public int RowIndex { get; set; }
 
         [NotMapped] public bool IsFoil => IsFoilAvailable;       // finishes the printing exists in
         [NotMapped] public bool IsNonFoil => IsNonFoilAvailable;
@@ -199,10 +198,6 @@ namespace BreakersOfE.Models
         public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground(
                 Colors, ColorIdentity, TypeLine);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
-            BreakersOfE.Services.CardColorService.GetBackground(
-                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
 
     // ── Token Collection ────────────────────────────────────────────────────
@@ -268,7 +263,6 @@ namespace BreakersOfE.Models
 
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
-        [NotMapped] public int RowIndex { get; set; }
         /// <summary>Filled from the pool on load: the printing exists as etched /
         /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
         [NotMapped] public bool IsEtched { get; set; }
@@ -327,10 +321,6 @@ namespace BreakersOfE.Models
         [NotMapped]
         public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
-            BreakersOfE.Services.CardColorService.GetBackground(
-                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
 
     // ── Planar Collection ───────────────────────────────────────────────────
@@ -392,7 +382,6 @@ namespace BreakersOfE.Models
 
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
-        [NotMapped] public int RowIndex { get; set; }
         /// <summary>Filled from the pool on load: the printing exists as etched /
         /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
         [NotMapped] public bool IsEtched { get; set; }
@@ -436,10 +425,6 @@ namespace BreakersOfE.Models
         [NotMapped]
         public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground("", "", TypeLine);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
-            BreakersOfE.Services.CardColorService.GetBackground(
-                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
 
     // ── Scheme Collection ───────────────────────────────────────────────────
@@ -501,7 +486,6 @@ namespace BreakersOfE.Models
 
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
-        [NotMapped] public int RowIndex { get; set; }
         /// <summary>Filled from the pool on load: the printing exists as etched /
         /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
         [NotMapped] public bool IsEtched { get; set; }
@@ -545,10 +529,6 @@ namespace BreakersOfE.Models
         [NotMapped]
         public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground("", "", TypeLine);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
-            BreakersOfE.Services.CardColorService.GetBackground(
-                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
 
     // ── Vanguard Collection ─────────────────────────────────────────────────
@@ -612,7 +592,6 @@ namespace BreakersOfE.Models
 
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
-        [NotMapped] public int RowIndex { get; set; }
         /// <summary>Filled from the pool on load: the printing exists as etched /
         /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
         [NotMapped] public bool IsEtched { get; set; }
@@ -656,10 +635,6 @@ namespace BreakersOfE.Models
         [NotMapped]
         public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground("", "", TypeLine);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
-            BreakersOfE.Services.CardColorService.GetBackground(
-                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
 
     // ── Conspiracy Collection ───────────────────────────────────────────────
@@ -710,7 +685,6 @@ namespace BreakersOfE.Models
 
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
-        [NotMapped] public int RowIndex { get; set; }
         /// <summary>Filled from the pool on load: the printing exists as etched /
         /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
         [NotMapped] public bool IsEtched { get; set; }
@@ -761,10 +735,6 @@ namespace BreakersOfE.Models
         [NotMapped]
         public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
-            BreakersOfE.Services.CardColorService.GetBackground(
-                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
 
     // ── Art Series Collection ───────────────────────────────────────────────
@@ -825,7 +795,6 @@ namespace BreakersOfE.Models
 
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
-        [NotMapped] public int RowIndex { get; set; }
         /// <summary>Filled from the pool on load: the printing exists as etched /
         /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
         [NotMapped] public bool IsEtched { get; set; }
@@ -869,10 +838,6 @@ namespace BreakersOfE.Models
         [NotMapped]
         public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground("", "", TypeLine);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
-            BreakersOfE.Services.CardColorService.GetBackground(
-                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.Collection);
     }
 
     // ── Trade Binder — Have list (cards you own and want to trade away) ────
@@ -924,7 +889,6 @@ namespace BreakersOfE.Models
 
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
-        [NotMapped] public int RowIndex { get; set; }
         /// <summary>Filled from the pool on load: the printing exists as etched /
         /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
         [NotMapped] public bool IsEtched { get; set; }
@@ -983,10 +947,6 @@ namespace BreakersOfE.Models
         [NotMapped]
         public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
-            BreakersOfE.Services.CardColorService.GetBackground(
-                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.TradeBinder);
     }
 
     // ── Want List — Want list (cards you are looking to acquire) ──────────────
@@ -1034,7 +994,6 @@ namespace BreakersOfE.Models
 
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
-        [NotMapped] public int RowIndex { get; set; }
         /// <summary>Filled from the pool on load: the printing exists as etched /
         /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
         [NotMapped] public bool IsEtched { get; set; }
@@ -1090,10 +1049,6 @@ namespace BreakersOfE.Models
         [NotMapped]
         public System.Windows.Media.Brush RowForegroundBrush =>
             BreakersOfE.Services.CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
-        [NotMapped]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
-            BreakersOfE.Services.CardColorService.GetBackground(
-                Finish != CardFinish.NonFoil, RowIndex, BreakersOfE.Services.TableType.WantList);
     }
 
     /// <summary>A collection-type row whose finish display depends on the pool printing.</summary>

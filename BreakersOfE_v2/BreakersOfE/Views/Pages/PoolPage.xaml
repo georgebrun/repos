@@ -51,7 +51,7 @@
                                Text="&#xE71C;"
                                FontFamily="Segoe MDL2 Assets"
                                FontSize="11"
-                               Foreground="#9F9F9F"/>
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 </Button>
             </Grid>
         </DataTemplate>
@@ -111,7 +111,7 @@
                              Visibility="Collapsed"/>
 
                 <TextBlock Grid.Column="0" Text="{Binding Title}"
-                       FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center"
+                       Style="{StaticResource BoePageTitle}" Margin="0" VerticalAlignment="Center"
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal"
@@ -157,7 +157,7 @@
                     <Button x:Name="BtnLegality" Content="Legality" Padding="10,4" Margin="0,0,8,0"
                         Visibility="Collapsed"
                         Click="BtnLegality_Click"
-                        ToolTip="Show or hide format legality columns — saved per table."/>
+                        ToolTip="Show or hide format legality columns — saved per table"/>
                     <!-- Set checklist: only while viewing a set's cards -->
                     <ToggleButton x:Name="BtnMissingOnly" Content="Missing Only"
                               Padding="10,4" Margin="0,0,8,0"
@@ -554,7 +554,7 @@
                                                             <Setter Property="Background" Value="#30808080"/>
                                                         </Trigger>
                                                         <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
-                                                            <Setter Property="BorderBrush" Value="#4CA0FF"/>
+                                                            <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -656,7 +656,7 @@
                                                             <Setter Property="Background" Value="#30808080"/>
                                                         </Trigger>
                                                         <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
-                                                            <Setter Property="BorderBrush" Value="#4CA0FF"/>
+                                                            <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -672,7 +672,7 @@
                                                     <TextBlock Text="{Binding CountText}" FontSize="18" FontWeight="SemiBold"
                                                            HorizontalAlignment="Center"
                                                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                                    <TextBlock Text="cards" FontSize="11" HorizontalAlignment="Center"
+                                                    <TextBlock Text="cards" FontSize="12" HorizontalAlignment="Center"
                                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" VerticalAlignment="Center"
@@ -706,7 +706,7 @@
             <Border Grid.Row="1" Background="#20000000" CornerRadius="8"
                 Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibilityConverter}}">
                 <TextBlock Text="{Binding EmptyMessage}" TextAlignment="Center" TextWrapping="Wrap"
-                       MaxWidth="420" Opacity="0.8"
+                       MaxWidth="420" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        VerticalAlignment="Center" HorizontalAlignment="Center"/>
             </Border>
 
@@ -715,7 +715,7 @@
                 Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}">
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                     <ui:ProgressRing IsIndeterminate="True" Width="48" Height="48"/>
-                    <TextBlock Text="Loading pool..." Margin="0,12,0,0" HorizontalAlignment="Center"
+                    <TextBlock Text="Loading pool…" Margin="0,12,0,0" HorizontalAlignment="Center"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 </StackPanel>
             </Border>
@@ -755,7 +755,7 @@
                  decks can be checked as another format. Decks only. -->
                 <StackPanel x:Name="DeckRulesPanel" DockPanel.Dock="Right" Orientation="Horizontal"
                         VerticalAlignment="Center" Visibility="Collapsed">
-                    <TextBlock x:Name="DeckRulesText" VerticalAlignment="Center" FontSize="13"
+                    <TextBlock x:Name="DeckRulesText" VerticalAlignment="Center" FontSize="12"
                            TextTrimming="CharacterEllipsis" MaxWidth="620" Margin="0,0,12,0"
                            ToolTipService.ShowDuration="60000"/>
                     <TextBlock x:Name="CheckAsLabel" Text="Check as" VerticalAlignment="Center" Margin="0,0,6,0"
@@ -765,7 +765,7 @@
                           ToolTip="Check this Constructed deck against another format's card list. Only changes what's shown — the deck isn't changed."/>
                 </StackPanel>
                 <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
-                       FontSize="13" Opacity="0.7"
+                       FontSize="12"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             </DockPanel>
         </Grid>

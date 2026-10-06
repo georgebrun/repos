@@ -95,7 +95,7 @@ namespace BreakersOfE.Services
         {
             try
             {
-                File.WriteAllText(FilePath, JsonSerializer.Serialize(All, _json));
+                SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(All, _json));
             }
             catch (Exception ex)
             {
@@ -165,7 +165,7 @@ namespace BreakersOfE.Services
         public static void SetEditGallery(string table, bool gallery)
         {
             EditViews[table] = gallery;
-            try { File.WriteAllText(EditViewsPath, JsonSerializer.Serialize(EditViews, _json)); }
+            try { SafeFile.WriteAllText(EditViewsPath, JsonSerializer.Serialize(EditViews, _json)); }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"EditViews save failed: {ex.Message}");
@@ -180,7 +180,7 @@ namespace BreakersOfE.Services
         public static void SetNumber(string key, double value)
         {
             Zooms["n:" + key] = value;
-            try { File.WriteAllText(ZoomPath, JsonSerializer.Serialize(Zooms, _json)); }
+            try { SafeFile.WriteAllText(ZoomPath, JsonSerializer.Serialize(Zooms, _json)); }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Layout number save failed: {ex.Message}");
@@ -196,7 +196,7 @@ namespace BreakersOfE.Services
         {
             if (Math.Abs(zoom - 1.0) < 0.001) Zooms.Remove(table);
             else Zooms[table] = zoom;
-            try { File.WriteAllText(ZoomPath, JsonSerializer.Serialize(Zooms, _json)); }
+            try { SafeFile.WriteAllText(ZoomPath, JsonSerializer.Serialize(Zooms, _json)); }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"GridZoom save failed: {ex.Message}");

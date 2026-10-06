@@ -470,6 +470,8 @@ namespace BreakersOfE.Services
                 var converted = v1.Select(sid => (Table: CardsTable, Sid: sid)).ToList();
                 var claims = db.DeckUsages.Where(u => u.DeckId == deck.DeckId).ToList();
                 if (claims.Count == 0) return 0;
+                // Claims and Used counts change together, or not at all.
+                using var tx = db.Database.BeginTransaction();
 
                 var demand = new Dictionary<(string, string, string), int>();
                 foreach (var c in deck.Cards)
@@ -519,6 +521,7 @@ namespace BreakersOfE.Services
                 foreach (var t in touched.Concat(converted).GroupBy(t => t.Table))
                     Recompute(db, t.Key, t.Select(x => x.Sid).Distinct(), cache);
                 db.SaveChanges();
+                tx.Commit();
                 return freed;
             }
             catch (Exception ex)
@@ -541,12 +544,15 @@ namespace BreakersOfE.Services
                 if (claims.Count == 0) return 0;
                 int freed = claims.Sum(u => u.EnteredNonFoil + u.EnteredFoil + u.EnteredEtched);
                 var touched = claims.Select(u => (Table: TableOf(u), u.ScryfallId)).Distinct().ToList();
+                // Freeing the claims and fixing Used happen together, or not at all.
+                using var tx = db.Database.BeginTransaction();
                 db.DeckUsages.RemoveRange(claims);
                 db.SaveChanges();
                 var cache = new Dictionary<string, bool>(StringComparer.Ordinal);
                 foreach (var t in touched.GroupBy(t => t.Table))
                     Recompute(db, t.Key, t.Select(x => x.ScryfallId), cache);
                 db.SaveChanges();
+                tx.Commit();
                 return freed;
             }
             catch (Exception ex)

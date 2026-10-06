@@ -2,8 +2,6 @@
 
 namespace BreakersOfE.Services
 {
-    public enum TableType { Pool, Collection, Deck, TradeBinder, WantList }
-
     /// <summary>
     /// Card-table colours (v1's light rows). The tables keep this look in
     /// every app theme (Light, Dark, Follow Windows), so nothing here depends
@@ -38,7 +36,6 @@ namespace BreakersOfE.Services
         private static readonly Brush PoolTint = Frozen(0xFF, 0xED, 0xED);       // faded red
         private static readonly Brush DeckTint = Frozen(0xED, 0xFF, 0xED);       // faded green
         private static readonly Brush CollectionTint = Frozen(0xEE, 0xF2, 0xF7); // faded blue
-        private static readonly Brush CellBorder = Frozen(0x00, 0x00, 0x00);
 
         // ════════════════════════════════════════════════════════════════════
         // TEXT — the card's colour
@@ -126,8 +123,8 @@ namespace BreakersOfE.Services
             bool tinted = alternation % 2 == 1;
             switch (item)
             {
-                case Models.DeckCard d when d.IsFooter || d.IsCommander:
-                    return d.RowBackgroundBrush;
+                case Models.DeckCard { SpecialRowBackground: { } special }:
+                    return special;
                 case Models.DeckCard:
                     return tinted ? DeckTint : RowWhite;
                 case Models.IOwnedCard:                                   // the Pool's card kinds
@@ -136,20 +133,5 @@ namespace BreakersOfE.Services
                     return tinted ? CollectionTint : RowWhite;
             }
         }
-
-        /// <summary>A row's fill by its number (older bindings; the tables use <see cref="RowBackground"/>).</summary>
-        public static Brush GetBackground(bool isFoil, int rowIndex,
-            TableType tableType = TableType.Collection)
-        {
-            if (rowIndex % 2 == 0) return RowWhite;
-            return tableType switch
-            {
-                TableType.Pool => PoolTint,
-                TableType.Deck => DeckTint,
-                _ => CollectionTint,
-            };
-        }
-
-        public static Brush GetCellBorderBrush() => CellBorder;
     }
 }

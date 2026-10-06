@@ -44,9 +44,9 @@ namespace BreakersOfE.Models
         [NotMapped] public string FinishPill => CardFinish.PoolPill(IsNonFoil, IsFoil, IsEtched);
 
         // ── Owned (from the matching collection table; filled when the pool loads) ──
-        [NotMapped] public int OwnedNonFoil { get => _ownedNonFoil; set { _ownedNonFoil = value; OwnedChanged(); } }
-        [NotMapped] public int OwnedFoil { get => _ownedFoil; set { _ownedFoil = value; OwnedChanged(); } }
-        [NotMapped] public int OwnedEtched { get => _ownedEtched; set { _ownedEtched = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedNonFoil { get => _ownedNonFoil; set { if (_ownedNonFoil == value) return; _ownedNonFoil = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedFoil { get => _ownedFoil; set { if (_ownedFoil == value) return; _ownedFoil = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedEtched { get => _ownedEtched; set { if (_ownedEtched == value) return; _ownedEtched = value; OwnedChanged(); } }
         private int _ownedNonFoil, _ownedFoil, _ownedEtched;
 
         /// <summary>Owned counts change live while editing (Edit → Pool → Collection).</summary>
@@ -108,27 +108,13 @@ namespace BreakersOfE.Models
         // Keep raw JSON as backup
         public string PricesJson { get; set; } = string.Empty;
 
-        // ── Row index for alternating colors ─────────────────────────────────
-        [NotMapped] public int RowIndex { get; set; }
-
-        /// <summary>Returns Keywords as a split list for easy searching.</summary>
-        [NotMapped]
-        public IReadOnlyList<string> KeywordList =>
-            string.IsNullOrEmpty(Keywords)
-                ? Array.Empty<string>()
-                : Keywords.Split('|',
-                    System.StringSplitOptions.RemoveEmptyEntries);
-
         // ── Computed display ─────────────────────────────────────────────────
         [NotMapped]
         public string PowerToughness =>
             !string.IsNullOrWhiteSpace(Power) &&
             !string.IsNullOrWhiteSpace(Toughness)
                 ? $"{Power}/{Toughness}" : string.Empty;
-        // ── Numeric sort helpers (extracts number from strings like "3", "X", "123a") ──
-        public double PowerSort => double.TryParse(Power, out var v) ? v : -1;
-        public double ToughnessSort => double.TryParse(Toughness, out var v) ? v : -1;
-        public double PowerToughnessSort => PowerSort;
+        // ── Numeric sort helper (collector numbers like "123a") ──
         public double CollectorNumberSort
         {
             get
@@ -197,67 +183,10 @@ namespace BreakersOfE.Models
         public LegalityAccessor Legality =>
             _legality ??= new LegalityAccessor(() => LegalitiesJson);
 
-        // ── Legality columns ─────────────────────────────────────────────────
-        [NotMapped] public string LegalityStandard => GetLegality("standard");
-        [NotMapped] public string LegalityPioneer => GetLegality("pioneer");
-        [NotMapped] public string LegalityModern => GetLegality("modern");
-        [NotMapped] public string LegalityLegacy => GetLegality("legacy");
-        [NotMapped] public string LegalityVintage => GetLegality("vintage");
-        [NotMapped] public string LegalityCommander => GetLegality("commander");
-        [NotMapped] public string LegalityPauper => GetLegality("pauper");
-
-        // S=Standard M=Modern P=Pioneer L=Legacy V=Vintage — true = legal
-        [NotMapped] public bool IsLegalStandard => GetLegalityRaw("standard") == "legal";
-        [NotMapped] public bool IsLegalModern => GetLegalityRaw("modern") == "legal";
-        [NotMapped] public bool IsLegalPioneer => GetLegalityRaw("pioneer") == "legal";
-        [NotMapped] public bool IsLegalLegacy => GetLegalityRaw("legacy") == "legal";
-        [NotMapped] public bool IsLegalVintage => GetLegalityRaw("vintage") == "legal";
-
-        private string GetLegalityRaw(string format)
-        {
-            if (string.IsNullOrWhiteSpace(LegalitiesJson)) return string.Empty;
-            try
-            {
-                using var doc = System.Text.Json.JsonDocument.Parse(LegalitiesJson);
-                if (doc.RootElement.TryGetProperty(format, out var v))
-                    return v.GetString()?.ToLower() ?? string.Empty;
-            }
-            catch { }
-            return string.Empty;
-        }
-
-        private string GetLegality(string format)
-        {
-            if (string.IsNullOrWhiteSpace(LegalitiesJson))
-                return string.Empty;
-            try
-            {
-                using var doc = System.Text.Json.JsonDocument
-                    .Parse(LegalitiesJson);
-                if (doc.RootElement.TryGetProperty(format, out var v))
-                    return v.GetString()?.ToLower() switch
-                    {
-                        "legal" => "✅",
-                        "restricted" => "🔵",
-                        _ => "❌"
-                    };
-            }
-            catch { }
-            return string.Empty;
-        }
-
         // ── Theme-aware colors ───────────────────────────────────────────────
         [NotMapped]
         public Brush RowForegroundBrush =>
             CardColorService.GetForeground(
                 Colors, ColorIdentity, TypeLine);
-
-        [NotMapped]
-        public Brush RowBackgroundBrush =>
-            CardColorService.GetBackground(IsFoil, RowIndex, TableType.Pool);
-
-        [NotMapped]
-        public Brush CellBorderBrush =>
-            CardColorService.GetCellBorderBrush();
     }
 }

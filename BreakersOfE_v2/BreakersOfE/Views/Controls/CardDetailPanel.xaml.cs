@@ -102,17 +102,8 @@ namespace BreakersOfE.Views.Controls
             }
 
             // Mana cost symbols
-            DetailManaCost.Items.Clear();
-            string manaCost = Get("ManaCost");
-            if (!string.IsNullOrEmpty(manaCost))
-            {
-                var converter = new Services.ManaCostConverter();
-                var symbols = converter.Convert(manaCost, typeof(object), null!,
-                    System.Globalization.CultureInfo.CurrentCulture);
-                if (symbols is System.Collections.IEnumerable items)
-                    foreach (var sym in items)
-                        DetailManaCost.Items.Add(sym);
-            }
+            // (Was never shown: the converter returns one panel, not a list.)
+            Services.ManaCostConverter.Fill(DetailManaCost, Get("ManaCost"));
 
             // Set symbol (rarity-tinted)
             string setSymbolPath = Get("SetSymbolPath");

@@ -92,7 +92,7 @@
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding IsSelected}" Value="True">
                                                 <Setter Property="BorderBrush"
-                                                        Value="#4CA0FF"/>
+                                                        Value="{DynamicResource AccentFillColorDefaultBrush}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -207,7 +207,7 @@
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right"
                     Margin="0,6,0,0">
             <TextBlock Text="Card size" VerticalAlignment="Center" Margin="0,0,8,0"
-                       FontSize="13" Opacity="0.7"
+                       FontSize="12"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             <Slider x:Name="GallerySizeSlider" Width="220" VerticalAlignment="Center"
                     Minimum="120" Maximum="340" Value="180"

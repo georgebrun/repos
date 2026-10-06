@@ -191,10 +191,11 @@ namespace BreakersOfE.Views.Pages
         private static List<(RowKey Key, string Name)> KeysOf(IEnumerable<object> rows)
         {
             var list = new List<(RowKey, string)>();
+            var seen = new HashSet<RowKey>();
             foreach (var r in rows)
             {
                 var k = KeyOf(r);
-                if (!list.Any(p => p.Item1 == k)) list.Add((k, Str(r, "Name")));
+                if (seen.Add(k)) list.Add((k, Str(r, "Name")));
             }
             return list;
         }

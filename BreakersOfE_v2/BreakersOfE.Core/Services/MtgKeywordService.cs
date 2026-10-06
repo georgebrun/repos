@@ -947,7 +947,7 @@ namespace BreakersOfE.Services
             {
                 var json = JsonSerializer.Serialize(MergedCopy(),
                     new JsonSerializerOptions { WriteIndented = false });
-                File.WriteAllText(AppFolderService.KeywordCachePath, json);
+                SafeFile.WriteAllText(AppFolderService.KeywordCachePath, json);
             }
             catch { /* Non-fatal */ }
         }
@@ -1217,69 +1217,9 @@ namespace BreakersOfE.Services
                 .ToList()
                 .AsReadOnly();
 
-        /// <summary>All keywords grouped by category for UI display.</summary>
-        public static IReadOnlyDictionary<string, IReadOnlyList<MtgKeyword>> ByCategory =>
-            All.GroupBy(k => k.CategoryName)
-               .OrderBy(g => g.Key)
-               .ToDictionary(
-                   g => g.Key,
-                   g => (IReadOnlyList<MtgKeyword>)g.OrderBy(k => k.Name).ToList())
-               as IReadOnlyDictionary<string, IReadOnlyList<MtgKeyword>>;
-
         /// <summary>Look up a keyword definition by name (case-insensitive).</summary>
         public static MtgKeyword? Find(string name) =>
             All.FirstOrDefault(k =>
                 k.Name.Equals(name, System.StringComparison.OrdinalIgnoreCase));
-
-        /// <summary>
-        /// Returns all keywords whose names appear in the card's stored Keywords string.
-        /// Matches both Scryfall keywords and oracle text mentions.
-        /// </summary>
-        public static IEnumerable<string> GetCardKeywords(
-            string storedKeywords, string oracleText)
-        {
-            var found = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
-
-            // Primary: Scryfall keywords array (pipe-separated)
-            if (!string.IsNullOrEmpty(storedKeywords))
-                foreach (var kw in storedKeywords.Split('|',
-                    System.StringSplitOptions.RemoveEmptyEntries))
-                    found.Add(kw.Trim());
-
-            // Fallback: scan oracle text for known keywords
-            if (!string.IsNullOrEmpty(oracleText))
-                foreach (var kw in All)
-                    if (oracleText.Contains(kw.Name,
-                        System.StringComparison.OrdinalIgnoreCase))
-                        found.Add(kw.Name);
-
-            return found.OrderBy(k => k);
-        }
-
-        /// <summary>
-        /// Returns all unique keyword names found across the entire card pool,
-        /// sorted alphabetically. Used to build the filter checklist.
-        /// </summary>
-        public static IReadOnlyList<string> GetAllPoolKeywords(
-            System.Collections.Generic.IEnumerable<BreakersOfE.Models.PoolCard> pool)
-        {
-            var found = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
-            foreach (var card in pool)
-                foreach (var kw in card.KeywordList)
-                    if (!string.IsNullOrWhiteSpace(kw))
-                        found.Add(kw.Trim());
-            return found.OrderBy(k => k).ToList().AsReadOnly();
-        }
-
-        /// <summary>
-        /// Search the keyword dictionary by partial name or definition text.
-        /// </summary>
-        public static IEnumerable<MtgKeyword> Search(string query)
-        {
-            if (string.IsNullOrWhiteSpace(query)) return All;
-            return All.Where(k =>
-                k.Name.Contains(query, System.StringComparison.OrdinalIgnoreCase) ||
-                k.Definition.Contains(query, System.StringComparison.OrdinalIgnoreCase));
-        }
     }
 }

@@ -17,12 +17,12 @@
          on their own (some cards are for the collection, not for play).
          (2) What's still missing → the Want List (ticked). -->
     <DockPanel Margin="18,16,18,14">
-        <TextBlock DockPanel.Dock="Top" x:Name="HeaderText" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap"/>
+        <TextBlock DockPanel.Dock="Top" x:Name="HeaderText" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
         <TextBlock DockPanel.Dock="Top" x:Name="NoteText" Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
 
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-            <ui:Button x:Name="BtnApply" Content="Apply ticked" Appearance="Primary" MinWidth="110" Margin="0,0,8,0"
+            <ui:Button x:Name="BtnApply" Content="Apply Ticked" Appearance="Primary" MinWidth="110" Margin="0,0,8,0"
                        IsDefault="True" Click="Apply_Click"/>
             <ui:Button x:Name="BtnCancel" Content="Cancel" MinWidth="72" IsCancel="True"/>
         </StackPanel>

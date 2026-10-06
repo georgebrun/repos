@@ -13,7 +13,7 @@
     <ui:FluentWindow.Resources>
         <!-- Section heading -->
         <Style x:Key="SectionHeader" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontSize" Value="16"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,0,0,8"/>
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
@@ -50,7 +50,7 @@
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                 <Border Grid.Column="2" Height="14" Background="#20808080" CornerRadius="3"
                         VerticalAlignment="Center" Margin="0,0,8,0" ClipToBounds="True">
-                    <Border HorizontalAlignment="Left" CornerRadius="3" Background="#4CA0FF"
+                    <Border HorizontalAlignment="Left" CornerRadius="3" Background="{DynamicResource AccentFillColorDefaultBrush}"
                             Width="{Binding BarWidth}"/>
                 </Border>
                 <TextBlock Grid.Column="3" Text="{Binding CountText}" TextAlignment="Right"
@@ -75,7 +75,7 @@
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="16,4,16,0">
             <StackPanel>
-                <TextBlock x:Name="ScopeText" FontSize="13" Margin="0,0,0,10"
+                <TextBlock x:Name="ScopeText" FontSize="12" Margin="0,0,0,10"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
 
                 <!-- Summary numbers -->
@@ -91,7 +91,7 @@
                      Update Database). Always the whole collection, not the filter. -->
                 <TextBlock Text="Collection value over time" Style="{StaticResource SectionHeader}"
                            Margin="0,10,0,4"/>
-                <TextBlock x:Name="ValueHistoryText" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,6"
+                <TextBlock x:Name="ValueHistoryText" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 <ctl:MiniLineChart x:Name="ValueChart" Height="200" Margin="0,0,0,10"/>
 
@@ -156,7 +156,7 @@
 
         <DockPanel Grid.Row="2" Margin="16,8,16,16" LastChildFill="True">
             <Button DockPanel.Dock="Right" Content="Close" Padding="16,5" Click="BtnClose_Click"/>
-            <TextBlock FontSize="12" Opacity="0.7" VerticalAlignment="Center" TextWrapping="Wrap"
+            <TextBlock FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"
                        Margin="0,0,12,0"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        Text="Bars show card counts; the right-hand number is value (price × quantity). Lands count under Land, not their color. A card counts once in Type (Artifact Creature → Creature)."/>

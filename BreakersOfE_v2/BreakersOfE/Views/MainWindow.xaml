@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:pages="clr-namespace:BreakersOfE.Views.Pages"
-        Title="Breakers of E  —  v2.0"
+        Title="Breakers of E — v2.0"
         Width="1400" Height="900"
         MinWidth="1000" MinHeight="600"
         WindowState="Maximized"

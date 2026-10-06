@@ -37,9 +37,9 @@ namespace BreakersOfE.Models
         [NotMapped] public string FinishPill => CardFinish.PoolPill(IsNonFoil, IsFoil, IsEtched);
 
         // ── Owned (from the matching collection table; filled when the pool loads) ──
-        [NotMapped] public int OwnedNonFoil { get => _ownedNonFoil; set { _ownedNonFoil = value; OwnedChanged(); } }
-        [NotMapped] public int OwnedFoil { get => _ownedFoil; set { _ownedFoil = value; OwnedChanged(); } }
-        [NotMapped] public int OwnedEtched { get => _ownedEtched; set { _ownedEtched = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedNonFoil { get => _ownedNonFoil; set { if (_ownedNonFoil == value) return; _ownedNonFoil = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedFoil { get => _ownedFoil; set { if (_ownedFoil == value) return; _ownedFoil = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedEtched { get => _ownedEtched; set { if (_ownedEtched == value) return; _ownedEtched = value; OwnedChanged(); } }
         private int _ownedNonFoil, _ownedFoil, _ownedEtched;
 
         /// <summary>Owned counts change live while editing (Edit → Pool → Collection).</summary>
@@ -60,7 +60,6 @@ namespace BreakersOfE.Models
         public string LocalImagePath { get; set; } = string.Empty;
         public bool IsFavorite { get; set; }
 
-        [NotMapped] public int RowIndex { get; set; }
         [NotMapped] public string ManaCost => string.Empty;
         [NotMapped] public double ManaValue => 0;
         [NotMapped] public string Power => string.Empty;
@@ -90,14 +89,6 @@ namespace BreakersOfE.Models
         [NotMapped]
         public Brush RowForegroundBrush =>
             CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
-
-        [NotMapped]
-        public Brush RowBackgroundBrush =>
-            CardColorService.GetBackground(IsFoil, RowIndex, TableType.Pool);
-
-        [NotMapped]
-        public Brush CellBorderBrush =>
-            CardColorService.GetCellBorderBrush();
     }
 
     // ── Archenemy Schemes ────────────────────────────────────────────────────
@@ -128,9 +119,9 @@ namespace BreakersOfE.Models
         [NotMapped] public string FinishPill => CardFinish.PoolPill(IsNonFoil, IsFoil, IsEtched);
 
         // ── Owned (from the matching collection table; filled when the pool loads) ──
-        [NotMapped] public int OwnedNonFoil { get => _ownedNonFoil; set { _ownedNonFoil = value; OwnedChanged(); } }
-        [NotMapped] public int OwnedFoil { get => _ownedFoil; set { _ownedFoil = value; OwnedChanged(); } }
-        [NotMapped] public int OwnedEtched { get => _ownedEtched; set { _ownedEtched = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedNonFoil { get => _ownedNonFoil; set { if (_ownedNonFoil == value) return; _ownedNonFoil = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedFoil { get => _ownedFoil; set { if (_ownedFoil == value) return; _ownedFoil = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedEtched { get => _ownedEtched; set { if (_ownedEtched == value) return; _ownedEtched = value; OwnedChanged(); } }
         private int _ownedNonFoil, _ownedFoil, _ownedEtched;
 
         /// <summary>Owned counts change live while editing (Edit → Pool → Collection).</summary>
@@ -151,7 +142,6 @@ namespace BreakersOfE.Models
         public string LocalImagePath { get; set; } = string.Empty;
         public bool IsFavorite { get; set; }
 
-        [NotMapped] public int RowIndex { get; set; }
         [NotMapped] public string ManaCost => string.Empty;
         [NotMapped] public double ManaValue => 0;
         [NotMapped] public string Power => string.Empty;
@@ -181,14 +171,6 @@ namespace BreakersOfE.Models
         [NotMapped]
         public Brush RowForegroundBrush =>
             CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
-
-        [NotMapped]
-        public Brush RowBackgroundBrush =>
-            CardColorService.GetBackground(IsFoil, RowIndex, TableType.Pool);
-
-        [NotMapped]
-        public Brush CellBorderBrush =>
-            CardColorService.GetCellBorderBrush();
     }
 
     // ── Vanguard ─────────────────────────────────────────────────────────────
@@ -219,9 +201,9 @@ namespace BreakersOfE.Models
         [NotMapped] public string FinishPill => CardFinish.PoolPill(IsNonFoil, IsFoil, IsEtched);
 
         // ── Owned (from the matching collection table; filled when the pool loads) ──
-        [NotMapped] public int OwnedNonFoil { get => _ownedNonFoil; set { _ownedNonFoil = value; OwnedChanged(); } }
-        [NotMapped] public int OwnedFoil { get => _ownedFoil; set { _ownedFoil = value; OwnedChanged(); } }
-        [NotMapped] public int OwnedEtched { get => _ownedEtched; set { _ownedEtched = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedNonFoil { get => _ownedNonFoil; set { if (_ownedNonFoil == value) return; _ownedNonFoil = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedFoil { get => _ownedFoil; set { if (_ownedFoil == value) return; _ownedFoil = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedEtched { get => _ownedEtched; set { if (_ownedEtched == value) return; _ownedEtched = value; OwnedChanged(); } }
         private int _ownedNonFoil, _ownedFoil, _ownedEtched;
 
         /// <summary>Owned counts change live while editing (Edit → Pool → Collection).</summary>
@@ -244,7 +226,6 @@ namespace BreakersOfE.Models
         public string HandModifier { get; set; } = string.Empty;
         public string LifeModifier { get; set; } = string.Empty;
 
-        [NotMapped] public int RowIndex { get; set; }
         [NotMapped] public string ManaCost => string.Empty;
         [NotMapped] public double ManaValue => 0;
         [NotMapped] public string Power => string.Empty;
@@ -274,14 +255,6 @@ namespace BreakersOfE.Models
         [NotMapped]
         public Brush RowForegroundBrush =>
             CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
-
-        [NotMapped]
-        public Brush RowBackgroundBrush =>
-            CardColorService.GetBackground(IsFoil, RowIndex, TableType.Pool);
-
-        [NotMapped]
-        public Brush CellBorderBrush =>
-            CardColorService.GetCellBorderBrush();
     }
 
     // ── Art Series ───────────────────────────────────────────────────────────
@@ -311,9 +284,9 @@ namespace BreakersOfE.Models
         [NotMapped] public string FinishPill => CardFinish.PoolPill(IsNonFoil, IsFoil, IsEtched);
 
         // ── Owned (from the matching collection table; filled when the pool loads) ──
-        [NotMapped] public int OwnedNonFoil { get => _ownedNonFoil; set { _ownedNonFoil = value; OwnedChanged(); } }
-        [NotMapped] public int OwnedFoil { get => _ownedFoil; set { _ownedFoil = value; OwnedChanged(); } }
-        [NotMapped] public int OwnedEtched { get => _ownedEtched; set { _ownedEtched = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedNonFoil { get => _ownedNonFoil; set { if (_ownedNonFoil == value) return; _ownedNonFoil = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedFoil { get => _ownedFoil; set { if (_ownedFoil == value) return; _ownedFoil = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedEtched { get => _ownedEtched; set { if (_ownedEtched == value) return; _ownedEtched = value; OwnedChanged(); } }
         private int _ownedNonFoil, _ownedFoil, _ownedEtched;
 
         /// <summary>Owned counts change live while editing (Edit → Pool → Collection).</summary>
@@ -334,7 +307,6 @@ namespace BreakersOfE.Models
         public string LocalImagePath { get; set; } = string.Empty;
         public bool IsFavorite { get; set; }
 
-        [NotMapped] public int RowIndex { get; set; }
         [NotMapped] public string ManaCost => string.Empty;
         [NotMapped] public double ManaValue => 0;
         [NotMapped] public string Power => string.Empty;
@@ -365,14 +337,6 @@ namespace BreakersOfE.Models
         [NotMapped]
         public Brush RowForegroundBrush =>
             CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
-
-        [NotMapped]
-        public Brush RowBackgroundBrush =>
-            CardColorService.GetBackground(IsFoil, RowIndex, TableType.Pool);
-
-        [NotMapped]
-        public Brush CellBorderBrush =>
-            CardColorService.GetCellBorderBrush();
     }
 
     // ── Conspiracy Card ────────────────────────────────────────────────────────
@@ -409,9 +373,9 @@ namespace BreakersOfE.Models
         [NotMapped] public string FinishPill => CardFinish.PoolPill(IsNonFoil, IsFoil, IsEtched);
 
         // ── Owned (from the matching collection table; filled when the pool loads) ──
-        [NotMapped] public int OwnedNonFoil { get => _ownedNonFoil; set { _ownedNonFoil = value; OwnedChanged(); } }
-        [NotMapped] public int OwnedFoil { get => _ownedFoil; set { _ownedFoil = value; OwnedChanged(); } }
-        [NotMapped] public int OwnedEtched { get => _ownedEtched; set { _ownedEtched = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedNonFoil { get => _ownedNonFoil; set { if (_ownedNonFoil == value) return; _ownedNonFoil = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedFoil { get => _ownedFoil; set { if (_ownedFoil == value) return; _ownedFoil = value; OwnedChanged(); } }
+        [NotMapped] public int OwnedEtched { get => _ownedEtched; set { if (_ownedEtched == value) return; _ownedEtched = value; OwnedChanged(); } }
         private int _ownedNonFoil, _ownedFoil, _ownedEtched;
 
         /// <summary>Owned counts change live while editing (Edit → Pool → Collection).</summary>
@@ -432,7 +396,6 @@ namespace BreakersOfE.Models
         public string LocalImagePath { get; set; } = string.Empty;
         public bool IsFavorite { get; set; }
 
-        [NotMapped] public int RowIndex { get; set; }
         [NotMapped] public string Power => string.Empty;
         [NotMapped] public string Toughness => string.Empty;
         [NotMapped] public string PowerToughness => string.Empty;
@@ -443,13 +406,5 @@ namespace BreakersOfE.Models
         [NotMapped]
         public Brush RowForegroundBrush =>
             CardColorService.GetForeground(Colors, ColorIdentity, TypeLine);
-
-        [NotMapped]
-        public Brush RowBackgroundBrush =>
-            CardColorService.GetBackground(IsFoil, RowIndex, TableType.Pool);
-
-        [NotMapped]
-        public Brush CellBorderBrush =>
-            CardColorService.GetCellBorderBrush();
     }
 }

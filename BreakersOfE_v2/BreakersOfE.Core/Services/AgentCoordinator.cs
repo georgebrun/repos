@@ -57,7 +57,7 @@ namespace BreakersOfE.Services
                     Directory.CreateDirectory(dir);
 
                 string json = JsonSerializer.Serialize(status, _jsonOptions);
-                File.WriteAllText(StatusFilePath, json);
+                SafeFile.WriteAllText(StatusFilePath, json);
             }
             catch
             {
@@ -127,16 +127,6 @@ namespace BreakersOfE.Services
             var status = ReadStatus();
             status.Status = "idle";
             status.LastPriceUpdate = DateTime.UtcNow;
-            WriteStatus(status);
-        }
-
-        /// <summary>
-        /// Record that a backup completed.
-        /// </summary>
-        public void RecordBackup()
-        {
-            var status = ReadStatus();
-            status.LastBackup = DateTime.UtcNow;
             WriteStatus(status);
         }
 

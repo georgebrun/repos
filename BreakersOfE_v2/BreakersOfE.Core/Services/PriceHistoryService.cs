@@ -144,7 +144,7 @@ namespace BreakersOfE.Services
                 }
 
                 var now = DateTime.Now;
-                string day = now.ToString("yyyy-MM-dd");
+                string day = now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
                 using var con = Open();
                 using var tx = con.BeginTransaction();
@@ -167,7 +167,7 @@ namespace BreakersOfE.Services
                             UPDATE Snapshots SET TakenAt = $t, CollectionCents = $v, CollectionCards = $c
                             WHERE SnapshotId = $s;";
                         upd.Parameters.AddWithValue("$s", snapId);
-                        upd.Parameters.AddWithValue("$t", now.ToString("yyyy-MM-dd HH:mm:ss"));
+                        upd.Parameters.AddWithValue("$t", now.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture));
                         upd.Parameters.AddWithValue("$v", valueCents);
                         upd.Parameters.AddWithValue("$c", cards);
                         upd.ExecuteNonQuery();
@@ -180,7 +180,7 @@ namespace BreakersOfE.Services
                             INSERT INTO Snapshots (TakenAt, Day, CollectionCents, CollectionCards)
                             VALUES ($t, $d, $v, $c);
                             SELECT last_insert_rowid();";
-                        ins.Parameters.AddWithValue("$t", now.ToString("yyyy-MM-dd HH:mm:ss"));
+                        ins.Parameters.AddWithValue("$t", now.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture));
                         ins.Parameters.AddWithValue("$d", day);
                         ins.Parameters.AddWithValue("$v", valueCents);
                         ins.Parameters.AddWithValue("$c", cards);
@@ -272,7 +272,7 @@ namespace BreakersOfE.Services
                     using var r = s.ExecuteReader();
                     while (r.Read())
                     {
-                        DateTime.TryParse(r.GetString(1), out var at);
+                        DateTime.TryParse(r.GetString(1), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var at);
                         snaps.Add((r.GetInt64(0), at));
                     }
                 }
@@ -322,7 +322,7 @@ namespace BreakersOfE.Services
                 using var r = cmd.ExecuteReader();
                 while (r.Read())
                 {
-                    DateTime.TryParse(r.GetString(0), out var at);
+                    DateTime.TryParse(r.GetString(0), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var at);
                     points.Add(new CollectionValuePoint
                     {
                         Date = at,

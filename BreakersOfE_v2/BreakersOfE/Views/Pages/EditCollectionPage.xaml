@@ -4,7 +4,6 @@
       xmlns:ctl="clr-namespace:BreakersOfE.Views.Controls"
       ScrollViewer.VerticalScrollBarVisibility="Disabled"
       Loaded="Page_Loaded"
-      PreviewKeyDown="Page_PreviewKeyDown"
       Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
     <!-- Edit → Pool → Collection: the pool table on top, the matching
@@ -71,7 +70,7 @@
                  Act on the card selected last, in either table. Qty applies to
                  every Add and Remove button (and the keys / right-click). -->
                 <Border DockPanel.Dock="Top" Background="{DynamicResource BoePanelBrush}" CornerRadius="8"
-                    Padding="12,6" Margin="0,0,0,8">
+                    Padding="12,8" Margin="0,0,0,8">
                     <StackPanel>
                         <WrapPanel VerticalAlignment="Center">
                             <TextBlock Text="Add/Remove Qty" VerticalAlignment="Center" Margin="0,0,6,0"
@@ -109,7 +108,7 @@
                                 Click="BtnRemoveFoil_Click" ToolTip="Remove Qty foil copies (copies used in decks stay)"/>
                             <Button x:Name="BtnRemoveEtched" Content="Remove Etched" Padding="10,4" Margin="0,0,6,0"
                                 Click="BtnRemoveEtched_Click" ToolTip="Remove Qty etched copies (copies used in decks stay)"/>
-                            <Button x:Name="BtnRemoveAll" Content="Remove All" Padding="10,4" Margin="0,0,18,0"
+                            <Button x:Name="BtnRemoveAll" Content="Remove All…" Padding="10,4" Margin="0,0,18,0"
                                 Click="BtnRemoveAll_Click" ToolTip="Remove every unused copy of this printing: all finishes, languages and conditions"/>
 
                             <Button x:Name="BtnUndo" Content="Undo" Padding="10,4"

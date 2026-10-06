@@ -15,7 +15,7 @@
     <!-- Edit → Decks: the tokens the deck's cards make (Scryfall's links).
          Tick the ones to add to the deck's Tokens part. -->
     <DockPanel Margin="18,16,18,14">
-        <TextBlock DockPanel.Dock="Top" x:Name="HeaderText" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap"/>
+        <TextBlock DockPanel.Dock="Top" x:Name="HeaderText" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
         <TextBlock DockPanel.Dock="Top" x:Name="NoteText" Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
 
@@ -31,7 +31,7 @@
                         ToolTip="Tick only the tokens in your token collection that the deck doesn't have yet"/>
             </StackPanel>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <ui:Button x:Name="BtnAdd" Content="Add ticked" Appearance="Primary" MinWidth="96" Margin="0,0,8,0"
+                <ui:Button x:Name="BtnAdd" Content="Add Ticked" Appearance="Primary" MinWidth="96" Margin="0,0,8,0"
                            IsDefault="True" Click="Add_Click"/>
                 <ui:Button x:Name="BtnCancel" Content="Cancel" MinWidth="72" IsCancel="True"/>
             </StackPanel>

@@ -71,22 +71,33 @@ namespace BreakersOfE.Models
         };
 
         // ── Chip colors (same as v1) ───────────────────────────────────────
+        // Made once and shared (every legality cell on screen asks for these).
+        private static readonly Brush LegalBack = Frozen(0xC0, 0xDD, 0x97);       // green
+        private static readonly Brush RestrictedBack = Frozen(0xB5, 0xD4, 0xF4);  // blue
+        private static readonly Brush BannedBack = Frozen(0xFA, 0xC7, 0x75);      // amber
+        private static readonly Brush NotLegalBack = Frozen(0xF7, 0xC1, 0xC1);    // red
+        private static readonly Brush LegalText = Frozen(0x17, 0x34, 0x04);
+        private static readonly Brush RestrictedText = Frozen(0x04, 0x2C, 0x53);
+        private static readonly Brush BannedText = Frozen(0x41, 0x24, 0x02);
+        private static readonly Brush NotLegalText = Frozen(0x50, 0x13, 0x13);
+        private static readonly Brush OtherText = Frozen(0x88, 0x87, 0x80);
+
         public static Brush BackgroundBrush(string status) => status switch
         {
-            "legal" => Frozen(0xC0, 0xDD, 0x97),      // green
-            "restricted" => Frozen(0xB5, 0xD4, 0xF4), // blue
-            "banned" => Frozen(0xFA, 0xC7, 0x75),     // amber
-            "not_legal" => Frozen(0xF7, 0xC1, 0xC1),  // red
+            "legal" => LegalBack,
+            "restricted" => RestrictedBack,
+            "banned" => BannedBack,
+            "not_legal" => NotLegalBack,
             _ => Brushes.Transparent
         };
 
         public static Brush ForegroundBrush(string status) => status switch
         {
-            "legal" => Frozen(0x17, 0x34, 0x04),
-            "restricted" => Frozen(0x04, 0x2C, 0x53),
-            "banned" => Frozen(0x41, 0x24, 0x02),
-            "not_legal" => Frozen(0x50, 0x13, 0x13),
-            _ => Frozen(0x88, 0x87, 0x80)
+            "legal" => LegalText,
+            "restricted" => RestrictedText,
+            "banned" => BannedText,
+            "not_legal" => NotLegalText,
+            _ => OtherText
         };
 
         private static SolidColorBrush Frozen(byte r, byte g, byte b)

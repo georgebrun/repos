@@ -73,30 +73,6 @@ namespace BreakersOfE.Models
         // ── Legality ──────────────────────────────────────────────────────────
         public string LegalitiesJson { get; set; } = string.Empty;
 
-        [JsonIgnore]
-        public bool IsLegalStandard => GetLegalityRaw("standard") == "legal";
-        [JsonIgnore]
-        public bool IsLegalModern => GetLegalityRaw("modern") == "legal";
-        [JsonIgnore]
-        public bool IsLegalPioneer => GetLegalityRaw("pioneer") == "legal";
-        [JsonIgnore]
-        public bool IsLegalLegacy => GetLegalityRaw("legacy") == "legal";
-        [JsonIgnore]
-        public bool IsLegalVintage => GetLegalityRaw("vintage") == "legal";
-
-        private string GetLegalityRaw(string format)
-        {
-            if (string.IsNullOrWhiteSpace(LegalitiesJson)) return string.Empty;
-            try
-            {
-                using var doc = System.Text.Json.JsonDocument.Parse(LegalitiesJson);
-                if (doc.RootElement.TryGetProperty(format, out var v))
-                    return v.GetString()?.ToLower() ?? string.Empty;
-            }
-            catch { }
-            return string.Empty;
-        }
-
         // ── Deck vs. collection (filled when the deck opens; not saved) ──────
         /// <summary>Copies of this exact printing in the collection (all finishes).</summary>
         [JsonIgnore] public int CollectionOwned { get; set; }
@@ -145,8 +121,6 @@ namespace BreakersOfE.Models
         [JsonIgnore]
         public bool IsTokenLine => Category == DeckCardCategory.Tokens;
 
-        // ── Row index ─────────────────────────────────────────────────────────
-        public int RowIndex { get; set; }
         public bool IsFoil { get; set; }
         public bool IsNonFoil { get; set; }
         public string ImageNormalUrl { get; set; } = string.Empty;
@@ -189,10 +163,7 @@ namespace BreakersOfE.Models
             !string.IsNullOrWhiteSpace(Power) &&
             !string.IsNullOrWhiteSpace(Toughness)
                 ? $"{Power}/{Toughness}" : string.Empty;
-        // ── Numeric sort helpers (extracts number from strings like "3", "X", "123a") ──
-        public double PowerSort => double.TryParse(Power, out var v) ? v : -1;
-        public double ToughnessSort => double.TryParse(Toughness, out var v) ? v : -1;
-        public double PowerToughnessSort => PowerSort;
+        // ── Numeric sort helper (collector numbers like "123a") ──
         public double CollectorNumberSort
         {
             get
@@ -303,26 +274,6 @@ namespace BreakersOfE.Models
                 StringComparison.OrdinalIgnoreCase);
 
         [JsonIgnore]
-        public bool IsArtifact =>
-            TypeLine.Contains("Artifact",
-                StringComparison.OrdinalIgnoreCase);
-
-        [JsonIgnore]
-        public bool IsEnchantment =>
-            TypeLine.Contains("Enchantment",
-                StringComparison.OrdinalIgnoreCase);
-
-        [JsonIgnore]
-        public bool IsPlaneswalker =>
-            TypeLine.Contains("Planeswalker",
-                StringComparison.OrdinalIgnoreCase);
-
-        [JsonIgnore]
-        public bool IsBattle =>
-            TypeLine.Contains("Battle",
-                StringComparison.OrdinalIgnoreCase);
-
-        [JsonIgnore]
         public bool IsBasicLand =>
             TypeLine.Contains("Basic Land",
                 StringComparison.OrdinalIgnoreCase);
@@ -344,20 +295,19 @@ namespace BreakersOfE.Models
                     : Services.CardColorService.GetForegroundFromCost(
                         ManaCost, ColorIdentity, TypeLine);
 
-        [JsonIgnore]
-        public System.Windows.Media.Brush RowBackgroundBrush =>
-            IsFooter
-                ? new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(0xD6, 0xE8, 0xD6))
-                : IsCommander
-                    ? new System.Windows.Media.SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(0x00, 0x78, 0xD4))
-                    : Services.CardColorService.GetBackground(false, RowIndex,
-                        Services.TableType.Deck);
+        private static System.Windows.Media.Brush FrozenBrush(byte r, byte g, byte b)
+        {
+            var brush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(r, g, b));
+            brush.Freeze();
+            return brush;
+        }
+        private static readonly System.Windows.Media.Brush FooterBack = FrozenBrush(0xD6, 0xE8, 0xD6);
+        private static readonly System.Windows.Media.Brush CommanderBack = FrozenBrush(0x00, 0x78, 0xD4);
 
+        /// <summary>The footer's and the commander's own row fill (other rows alternate; see CardColorService.RowBackground).</summary>
         [JsonIgnore]
-        public System.Windows.Media.Brush CellBorderBrush =>
-            Services.CardColorService.GetCellBorderBrush();
+        public System.Windows.Media.Brush? SpecialRowBackground =>
+            IsFooter ? FooterBack : IsCommander ? CommanderBack : null;
     }
 
     // ── Complete deck ─────────────────────────────────────────────────────────
@@ -392,32 +342,6 @@ namespace BreakersOfE.Models
         [JsonIgnore]
         public bool IsModified { get; set; } = false;
 
-        // ── Card groupings ────────────────────────────────────────────────────
-        [JsonIgnore]
-        public List<DeckCard> CommanderCards =>
-            Cards.Where(c => c.Category ==
-                DeckCardCategory.Commander).ToList();
-
-        [JsonIgnore]
-        public List<DeckCard> MainboardCards =>
-            Cards.Where(c => c.Category ==
-                DeckCardCategory.Mainboard).ToList();
-
-        [JsonIgnore]
-        public List<DeckCard> SideboardCards =>
-            Cards.Where(c => c.Category ==
-                DeckCardCategory.Sideboard).ToList();
-
-        // ── Counts ────────────────────────────────────────────────────────────
-        [JsonIgnore]
-        public int MainboardCount =>
-            MainboardCards.Sum(c => c.TotalQuantity) +
-            CommanderCards.Sum(c => c.TotalQuantity);
-
-        [JsonIgnore]
-        public int SideboardCount =>
-            SideboardCards.Sum(c => c.TotalQuantity);
-
         /// <summary>Deck lines that are part of the deck (not the Tokens part).</summary>
         [JsonIgnore]
         public List<DeckCard> PlayCards => Cards.Where(c => !c.IsTokenLine).ToList();
@@ -427,34 +351,6 @@ namespace BreakersOfE.Models
             PlayCards.Where(c => c.IsLand &&
                 c.Category != DeckCardCategory.Sideboard)
                 .Sum(c => c.TotalQuantity);
-
-        [JsonIgnore]
-        public int CreatureCount =>
-            PlayCards.Where(c => c.IsCreature &&
-                c.Category != DeckCardCategory.Sideboard)
-                .Sum(c => c.TotalQuantity);
-
-        // ── Color identity ────────────────────────────────────────────────────
-        [JsonIgnore]
-        public string DeckColorIdentity
-        {
-            get
-            {
-                var colors = new System.Collections.Generic.HashSet<char>();
-                foreach (var card in PlayCards)
-                    foreach (char c in card.ColorIdentity)
-                        if ("WUBRG".Contains(c))
-                            colors.Add(c);
-
-                string result = string.Empty;
-                if (colors.Contains('W')) result += "W";
-                if (colors.Contains('U')) result += "U";
-                if (colors.Contains('B')) result += "B";
-                if (colors.Contains('R')) result += "R";
-                if (colors.Contains('G')) result += "G";
-                return result;
-            }
-        }
 
         // ── Collection value ──────────────────────────────────────────────────
         [JsonIgnore]

@@ -55,8 +55,8 @@ namespace BreakersOfE.Views
                     new Controls.ChartSeries
                     {
                         Name = "Value",
-                        Stroke = new System.Windows.Media.SolidColorBrush(
-                            System.Windows.Media.Color.FromRgb(0x4C, 0xA0, 0xFF)),
+                        Stroke = TryFindResource("AccentFillColorDefaultBrush") as System.Windows.Media.Brush
+                                 ?? System.Windows.Media.Brushes.DodgerBlue,
                         Values = points.Select(p => (decimal?)p.Value).ToList(),
                     },
                 });
@@ -104,17 +104,12 @@ namespace BreakersOfE.Views
             };
 
             // By color: lands are their own bucket; otherwise the card's colors.
-            string[] colorOrder = { "White", "Blue", "Black", "Red", "Green", "Multicolor", "Colorless", "Land" };
-            var colorBars = Bars(rows, ColorBucket, colorOrder);
+            var colorBars = Bars(rows, r => StatBuckets.Color(r.TypeLine, r.ColorDisplay), StatBuckets.ColorOrder);
             foreach (var bar in colorBars) bar.Symbols = ColorSymbols(bar.Label);
             ColorBars.ItemsSource = colorBars;
 
-            string[] rarityOrder = { "Common", "Uncommon", "Rare", "Mythic", "Special", "Bonus", "Other" };
-            RarityBars.ItemsSource = Bars(rows, r => RarityBucket(r.Rarity), rarityOrder);
-
-            string[] typeOrder = { "Creature", "Planeswalker", "Battle", "Instant", "Sorcery",
-                                   "Artifact", "Enchantment", "Land", "Other" };
-            TypeBars.ItemsSource = Bars(rows, r => TypeBucket(r.TypeLine), typeOrder);
+            RarityBars.ItemsSource = Bars(rows, r => StatBuckets.Rarity(r.Rarity), StatBuckets.RarityOrder);
+            TypeBars.ItemsSource = Bars(rows, r => StatBuckets.Type(r.TypeLine), StatBuckets.TypeOrder);
 
             // Top 10 sets by value (bars still show card counts).
             var sets = rows.GroupBy(r => string.IsNullOrWhiteSpace(r.SetName) ? r.SetCode : r.SetName)
@@ -133,22 +128,7 @@ namespace BreakersOfE.Views
                 .ToList();
         }
 
-        // ── Buckets ───────────────────────────────────────────────────────
-        private static string ColorBucket(CollectionEntry r)
-        {
-            if (r.TypeLine.Contains("Land", StringComparison.OrdinalIgnoreCase)) return "Land";
-            return r.ColorDisplay switch
-            {
-                "W" => "White",
-                "U" => "Blue",
-                "B" => "Black",
-                "R" => "Red",
-                "G" => "Green",
-                "M" => "Multicolor",
-                _ => "Colorless",
-            };
-        }
-
+        // ── Color symbols (the groups themselves: StatBuckets) ──────────
         /// <summary>Mana symbols shown before a "By color" label (none for Land).</summary>
         private static object? ColorSymbols(string bucket)
         {
@@ -168,27 +148,6 @@ namespace BreakersOfE.Views
                 cost, typeof(object), null!, System.Globalization.CultureInfo.CurrentCulture);
             if (symbols is FrameworkElement fe) fe.Margin = new Thickness(0, 0, 6, 0);
             return symbols;
-        }
-
-        private static string RarityBucket(string? rarity) => (rarity ?? "").ToLowerInvariant() switch
-        {
-            "common" => "Common",
-            "uncommon" => "Uncommon",
-            "rare" => "Rare",
-            "mythic" => "Mythic",
-            "special" => "Special",
-            "bonus" => "Bonus",
-            _ => "Other",
-        };
-
-        /// <summary>First matching type, so each card counts once.</summary>
-        private static string TypeBucket(string? typeLine)
-        {
-            string t = typeLine ?? "";
-            foreach (var type in new[] { "Creature", "Planeswalker", "Battle", "Instant", "Sorcery",
-                                         "Artifact", "Enchantment", "Land" })
-                if (t.Contains(type, StringComparison.OrdinalIgnoreCase)) return type;
-            return "Other";
         }
 
         // ── Bars ──────────────────────────────────────────────────────────
