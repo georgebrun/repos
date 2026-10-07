@@ -23,7 +23,6 @@
         <!-- Drag to widen or narrow the card panel -->
         <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                       ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
-                      DragCompleted="DetailSplitter_DragCompleted"
                       Background="Transparent" Cursor="SizeWE" Margin="0,0,4,0"
                       ToolTip="Drag to resize the card panel">
             <GridSplitter.Template>
@@ -51,7 +50,6 @@
             <GridSplitter Grid.Row="1" x:Name="TableSplitter" Height="12" HorizontalAlignment="Stretch"
                           ResizeDirection="Rows" ResizeBehavior="PreviousAndNext"
                           Background="Transparent" Cursor="SizeNS" Margin="0,2,0,2"
-                          DragCompleted="TableSplitter_DragCompleted"
                           ToolTip="Drag to resize the tables">
                 <GridSplitter.Template>
                     <ControlTemplate TargetType="GridSplitter">
@@ -75,9 +73,6 @@
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                         <TextBox x:Name="QtyBox" Text="1" Width="56" Margin="0,0,14,0"
                                  VerticalAlignment="Center" TextAlignment="Center"
-                                 PreviewTextInput="QtyBox_PreviewTextInput"
-                                 PreviewKeyDown="QtyBox_PreviewKeyDown"
-                                 GotKeyboardFocus="QtyBox_GotKeyboardFocus"
                                  ToolTip="How many copies each button moves (Ctrl+Q). Enter puts them in the binder."/>
 
                         <Button x:Name="BtnAdd" Content="Add to Trade Binder" Padding="10,4" Margin="0,0,6,0"

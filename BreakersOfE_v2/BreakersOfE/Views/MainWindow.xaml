@@ -132,6 +132,26 @@
                                         Converter={StaticResource BoolToVisibilityConverter},
                                         ConverterParameter=Invert}"/>
 
+                    <!-- Help: its own window, so it can stay open beside the app -->
+                    <ui:Button x:Name="BtnHelp" Content="Help"
+                           Icon="{ui:SymbolIcon QuestionCircle24}"
+                           Appearance="Transparent"
+                           HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                           Margin="4,4,8,0"
+                           Click="BtnHelp_Click"
+                           ToolTip="How BoE works, step-by-step how-tos, and keyboard shortcuts"
+                           Visibility="{Binding IsPaneOpen, ElementName=RootNavigation,
+                                        Converter={StaticResource BoolToVisibilityConverter}}"/>
+                    <ui:Button Width="36" Height="36" Padding="0"
+                           HorizontalAlignment="Left" Margin="6,4,0,0"
+                           Appearance="Transparent"
+                           Icon="{ui:SymbolIcon QuestionCircle24}"
+                           Click="BtnHelp_Click"
+                           ToolTip="Help"
+                           Visibility="{Binding IsPaneOpen, ElementName=RootNavigation,
+                                        Converter={StaticResource BoolToVisibilityConverter},
+                                        ConverterParameter=Invert}"/>
+
                     <!-- Settings -->
                     <ui:Button x:Name="BtnSettings" Content="Settings"
                            Icon="{ui:SymbolIcon Settings24}"

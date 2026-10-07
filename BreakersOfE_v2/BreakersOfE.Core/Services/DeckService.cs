@@ -101,7 +101,8 @@ namespace BreakersOfE.Services
                 var map = pdb.PoolCards.AsNoTracking()
                     .Where(p => scryfallIds.Contains(p.ScryfallId))
                     .Select(p => new { p.ScryfallId, p.PoolId, p.LegalitiesJson, p.IsGameChanger,
-                                       p.IsNonFoil, p.IsFoil, p.IsEtched, p.PriceUsd, p.PriceUsdFoil, p.PriceUsdEtched })
+                                       p.IsNonFoil, p.IsFoil, p.IsEtched, p.PriceUsd, p.PriceUsdFoil, p.PriceUsdEtched,
+                                       p.ManaCost, p.OracleText, p.FlavorText, p.Power, p.Toughness })
                     .ToList()
                     .GroupBy(p => p.ScryfallId)
                     .ToDictionary(g => g.Key, g => g.First());
@@ -117,6 +118,13 @@ namespace BreakersOfE.Services
                     if (string.IsNullOrWhiteSpace(card.LegalitiesJson))
                         card.LegalitiesJson = pc.LegalitiesJson ?? string.Empty;
                     card.IsGameChanger = pc.IsGameChanger;   // for Commander brackets
+                    // Card text from the pool: decks saved before two-sided cards
+                    // were read per side have it blank ("1 // 5" power, both sides' text).
+                    if (!string.IsNullOrEmpty(pc.OracleText)) card.OracleText = pc.OracleText;
+                    if (!string.IsNullOrEmpty(pc.FlavorText)) card.FlavorText = pc.FlavorText;
+                    if (!string.IsNullOrEmpty(pc.ManaCost)) card.ManaCost = pc.ManaCost;
+                    if (!string.IsNullOrEmpty(pc.Power)) card.Power = pc.Power;
+                    if (!string.IsNullOrEmpty(pc.Toughness)) card.Toughness = pc.Toughness;
                     // Finishes: the pool says which the printing has (deck
                     // files from imports or older versions may not).
                     card.IsNonFoil = pc.IsNonFoil;

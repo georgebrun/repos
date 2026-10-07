@@ -1033,14 +1033,14 @@ namespace BreakersOfE.Services
                 ScryfallId = GetString(c, "id"),
                 OracleId = GetString(c, "oracle_id"),
                 Name = GetString(c, "name"),
-                ManaCost = GetString(c, "mana_cost"),
+                ManaCost = SidesCost(c),
                 ManaValue = GetDouble(c, "cmc"),
                 TypeLine = GetString(c, "type_line"),
-                OracleText = GetString(c, "oracle_text"),
-                FlavorText = GetString(c, "flavor_text"),
-                Power = GetString(c, "power"),
-                Toughness = GetString(c, "toughness"),
-                LoyaltyOrDefense = GetString(c, "loyalty"),
+                OracleText = SidesText(c, "oracle_text"),
+                FlavorText = SidesText(c, "flavor_text"),
+                Power = SidesValue(c, "power"),
+                Toughness = SidesValue(c, "toughness"),
+                LoyaltyOrDefense = LoyaltyOrDefense(c),
                 Colors = GetStringArray(c, "colors"),
                 ColorIdentity = GetStringArray(c, "color_identity"),
                 SetCode = GetString(c, "set").ToUpper(),
@@ -1079,10 +1079,10 @@ namespace BreakersOfE.Services
             OracleId = GetString(c, "oracle_id"),
             Name = GetString(c, "name"),
             TypeLine = GetString(c, "type_line"),
-            OracleText = GetString(c, "oracle_text"),
-            FlavorText = GetString(c, "flavor_text"),
-            Power = GetString(c, "power"),
-            Toughness = GetString(c, "toughness"),
+            OracleText = SidesText(c, "oracle_text"),
+            FlavorText = SidesText(c, "flavor_text"),
+            Power = SidesValue(c, "power"),
+            Toughness = SidesValue(c, "toughness"),
             Colors = GetStringArray(c, "colors"),
             ColorIdentity = GetStringArray(c, "color_identity"),
             SetCode = GetString(c, "set").ToUpper(),
@@ -1107,8 +1107,8 @@ namespace BreakersOfE.Services
             OracleId = GetString(c, "oracle_id"),
             Name = GetString(c, "name"),
             TypeLine = GetString(c, "type_line"),
-            OracleText = GetString(c, "oracle_text"),
-            FlavorText = GetString(c, "flavor_text"),
+            OracleText = SidesText(c, "oracle_text"),
+            FlavorText = SidesText(c, "flavor_text"),
             SetCode = GetString(c, "set").ToUpper(),
             SetName = GetString(c, "set_name"),
             SetType = GetString(c, "set_type"),
@@ -1131,8 +1131,8 @@ namespace BreakersOfE.Services
             OracleId = GetString(c, "oracle_id"),
             Name = GetString(c, "name"),
             TypeLine = GetString(c, "type_line"),
-            OracleText = GetString(c, "oracle_text"),
-            FlavorText = GetString(c, "flavor_text"),
+            OracleText = SidesText(c, "oracle_text"),
+            FlavorText = SidesText(c, "flavor_text"),
             SetCode = GetString(c, "set").ToUpper(),
             SetName = GetString(c, "set_name"),
             SetType = GetString(c, "set_type"),
@@ -1155,8 +1155,8 @@ namespace BreakersOfE.Services
             OracleId = GetString(c, "oracle_id"),
             Name = GetString(c, "name"),
             TypeLine = GetString(c, "type_line"),
-            OracleText = GetString(c, "oracle_text"),
-            FlavorText = GetString(c, "flavor_text"),
+            OracleText = SidesText(c, "oracle_text"),
+            FlavorText = SidesText(c, "flavor_text"),
             SetCode = GetString(c, "set").ToUpper(),
             SetName = GetString(c, "set_name"),
             SetType = GetString(c, "set_type"),
@@ -1181,7 +1181,7 @@ namespace BreakersOfE.Services
             OracleId = GetString(c, "oracle_id"),
             Name = GetString(c, "name"),
             TypeLine = GetString(c, "type_line"),
-            FlavorText = GetString(c, "flavor_text"),
+            FlavorText = SidesText(c, "flavor_text"),
             SetCode = GetString(c, "set").ToUpper(),
             SetName = GetString(c, "set_name"),
             SetType = GetString(c, "set_type"),
@@ -1204,8 +1204,8 @@ namespace BreakersOfE.Services
             OracleId = GetString(c, "oracle_id"),
             Name = GetString(c, "name"),
             TypeLine = GetString(c, "type_line"),
-            OracleText = GetString(c, "oracle_text"),
-            FlavorText = GetString(c, "flavor_text"),
+            OracleText = SidesText(c, "oracle_text"),
+            FlavorText = SidesText(c, "flavor_text"),
             SetCode = GetString(c, "set").ToUpper(),
             SetName = GetString(c, "set_name"),
             SetType = GetString(c, "set_type"),
@@ -1326,6 +1326,71 @@ namespace BreakersOfE.Services
                 v.ValueKind == JsonValueKind.String)
                 return v.GetString() ?? string.Empty;
             return string.Empty;
+        }
+
+        // ── Two-sided cards (double-faced, adventure, split, flip) ──────────
+        // Scryfall keeps their text, cost and power per side ("card_faces")
+        // and leaves the card-level field out. These read the card-level value
+        // when there is one, else join the sides with " // " like the type
+        // line ("Creature // Land"). Power, toughness and loyalty keep a "—"
+        // for a side without one (a creature // land card: "6 // —").
+
+        /// <summary>The card's sides, or nothing for a one-sided card.</summary>
+        private static IEnumerable<JsonElement> Sides(JsonElement c)
+        {
+            if (c.TryGetProperty("card_faces", out var faces) && faces.ValueKind == JsonValueKind.Array)
+                foreach (var face in faces.EnumerateArray()) yield return face;
+        }
+
+        /// <summary>
+        /// Rules or flavor text: front side, a "//" line, back side. A side
+        /// without text keeps its place (empty), so the detail views can show
+        /// each side's own text when the card is flipped.
+        /// </summary>
+        private static string SidesText(JsonElement c, string prop)
+        {
+            if (c.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String)
+                return v.GetString() ?? string.Empty;
+            var sides = Sides(c).Select(f => GetString(f, prop)).ToList();
+            return sides.All(s => s.Length == 0) ? string.Empty : string.Join(CardFaces.TextSeparator, sides);
+        }
+
+        /// <summary>Mana cost: "{1}{W} // {3}{W}"; a side with no cost (a land back, a transformed side) is left out.</summary>
+        private static string SidesCost(JsonElement c)
+        {
+            string top = GetString(c, "mana_cost");
+            if (top.Length > 0) return top;
+            return string.Join(CardFaces.Separator, Sides(c).Select(f => GetString(f, "mana_cost")).Where(s => s.Length > 0));
+        }
+
+        /// <summary>Power or toughness: "1 // 5", "6 // —"; empty when no side has one.</summary>
+        private static string SidesValue(JsonElement c, string prop)
+        {
+            string top = GetString(c, prop);
+            if (top.Length > 0) return top;
+            return JoinSides(Sides(c).Select(f => GetString(f, prop)));
+        }
+
+        /// <summary>A planeswalker's loyalty or a Battle's defense, per side the same way.</summary>
+        private static string LoyaltyOrDefense(JsonElement c)
+        {
+            static string Of(JsonElement e)
+            {
+                string l = GetString(e, "loyalty");
+                return l.Length > 0 ? l : GetString(e, "defense");
+            }
+            string top = Of(c);
+            if (top.Length > 0) return top;
+            return JoinSides(Sides(c).Select(Of));
+        }
+
+        /// <summary>Per-side values joined ("—" for a side without one); empty when no side has one.</summary>
+        private static string JoinSides(IEnumerable<string> values)
+        {
+            var list = values.ToList();
+            if (list.All(s => s.Length == 0)) return string.Empty;
+            if (list.Count < 2) return list[0];
+            return string.Join(CardFaces.Separator, list.Select(s => s.Length > 0 ? s : CardFaces.None));
         }
 
         private static double GetDouble(JsonElement el, string prop)

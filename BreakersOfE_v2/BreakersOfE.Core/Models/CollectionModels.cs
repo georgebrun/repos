@@ -95,9 +95,7 @@ namespace BreakersOfE.Models
         [NotMapped] public bool IsNonFoil => IsNonFoilAvailable;
 
         [NotMapped]
-        public string PowerToughness =>
-            !string.IsNullOrWhiteSpace(Power) && !string.IsNullOrWhiteSpace(Toughness)
-                ? $"{Power}/{Toughness}" : string.Empty;
+        public string PowerToughness => CardFaces.PowerToughness(Power, Toughness);
 
         [NotMapped]
         public double CollectorNumberSort
@@ -301,9 +299,7 @@ namespace BreakersOfE.Models
         [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
         [NotMapped] public int AvailableCount => Math.Max(0, Quantity - UsedCount);
         [NotMapped]
-        public string PowerToughness =>
-            !string.IsNullOrWhiteSpace(Power) && !string.IsNullOrWhiteSpace(Toughness)
-                ? $"{Power}/{Toughness}" : string.Empty;
+        public string PowerToughness => CardFaces.PowerToughness(Power, Toughness);
         [NotMapped] public string BuyAtDisplay => BuyAt.HasValue ? $"${BuyAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtDisplay => SellAt.HasValue ? $"${SellAt.Value:F2}" : string.Empty;
         [NotMapped] public string SellAtValueDisplay => SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
@@ -924,9 +920,7 @@ namespace BreakersOfE.Models
         }
         [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
         [NotMapped]
-        public string PowerToughness =>
-            !string.IsNullOrWhiteSpace(Power) && !string.IsNullOrWhiteSpace(Toughness)
-                ? $"{Power}/{Toughness}" : string.Empty;
+        public string PowerToughness => CardFaces.PowerToughness(Power, Toughness);
         [NotMapped] public string AskingPriceDisplay => AskingPrice.HasValue ? $"${AskingPrice.Value:F2}" : string.Empty;
         /// <summary>Market price × Trade % (Settings): the least a fair shop should give per copy.</summary>
         [NotMapped]
@@ -1029,9 +1023,7 @@ namespace BreakersOfE.Models
         }
         [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
         [NotMapped]
-        public string PowerToughness =>
-            !string.IsNullOrWhiteSpace(Power) && !string.IsNullOrWhiteSpace(Toughness)
-                ? $"{Power}/{Toughness}" : string.Empty;
+        public string PowerToughness => CardFaces.PowerToughness(Power, Toughness);
         [NotMapped] public string OfferPriceDisplay => OfferPrice.HasValue ? $"${OfferPrice.Value:F2}" : string.Empty;
         /// <summary>Your offer is above the market price (shown in amber so you notice before you overpay).</summary>
         [NotMapped] public bool IsOfferOverMarket => OfferPrice.HasValue && Price.HasValue && OfferPrice.Value > Price.Value;

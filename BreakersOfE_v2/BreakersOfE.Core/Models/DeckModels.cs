@@ -159,10 +159,7 @@ namespace BreakersOfE.Models
 
         // ── Computed display ──────────────────────────────────────────────────
         [JsonIgnore]
-        public string PowerToughness =>
-            !string.IsNullOrWhiteSpace(Power) &&
-            !string.IsNullOrWhiteSpace(Toughness)
-                ? $"{Power}/{Toughness}" : string.Empty;
+        public string PowerToughness => CardFaces.PowerToughness(Power, Toughness);
         // ── Numeric sort helper (collector numbers like "123a") ──
         public double CollectorNumberSort
         {

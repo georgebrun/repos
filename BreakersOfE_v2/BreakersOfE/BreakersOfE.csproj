@@ -20,6 +20,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Help topics: plain text files, built into the app (see Resources\Help\index.txt) -->
+    <EmbeddedResource Include="Resources\Help\*.md;Resources\Help\index.txt" LogicalName="Help.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Reference the shared Core library -->
     <ProjectReference Include="..\BreakersOfE.Core\BreakersOfE.Core.csproj" />
   </ItemGroup>

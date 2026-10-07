@@ -67,10 +67,7 @@ namespace BreakersOfE.Models
         [NotMapped] public string PriceUsdFoilDisplay => string.Empty;
 
         [NotMapped]
-        public string PowerToughness =>
-            !string.IsNullOrWhiteSpace(Power) &&
-            !string.IsNullOrWhiteSpace(Toughness)
-                ? $"{Power}/{Toughness}" : string.Empty;
+        public string PowerToughness => CardFaces.PowerToughness(Power, Toughness);
 
         [NotMapped]
         public string RarityCode => Rarity?.ToLower() switch

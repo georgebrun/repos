@@ -1,10 +1,7 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 
 namespace BreakersOfE.Views.Controls
 {
@@ -28,72 +25,34 @@ namespace BreakersOfE.Views.Controls
             InitializeComponent();
         }
 
-        private string Get(string prop) =>
-            _card?.GetType().GetProperty(prop)?.GetValue(_card)?.ToString() ?? "";
+        private string Get(string prop) => CardDetailText.Get(_card, prop);
 
         /// <summary>Show a card, or clear the panel when card is null.</summary>
         public void ShowCard(object? card)
         {
             _card = card;
             _showingBack = false;
-            BtnShowBackFace.Content = "🔄 Show Back Face";
+            BtnShowBackFace.Content = CardDetailText.ShowBack;
             if (card == null) { Clear(); return; }
 
-            DetailName.Text = Get("Name");
-            DetailType.Text = Get("TypeLine");
             DetailSet.Text = $"{Get("SetName")} ({Get("SetCode")})";
             DetailCollectorNumber.Text = Get("CollectorNumber");
             DetailRarity.Text = Get("Rarity");
             DetailArtist.Text = Get("Artist");
 
-            // Oracle + flavor
-            DetailOracle.Text = Get("OracleText");
-            DetailFlavor.Text = Get("FlavorText");
+            // Name, type, cost, stats and text: the front side of a double-faced card
+            ShowSide(CardDetailText.FirstSide(card));
 
-            // P/T or Loyalty
-            string p = Get("Power"), t = Get("Toughness"), loy = Get("LoyaltyOrDefense");
-            if (!string.IsNullOrEmpty(p) && !string.IsNullOrEmpty(t))
-            {
-                DetailPTLabel.Text = "POWER / TOUGHNESS";
-                DetailPT.Text = $"{p}/{t}";
-                DetailPTLabel.Visibility = Visibility.Visible;
-                DetailPT.Visibility = Visibility.Visible;
-            }
-            else if (!string.IsNullOrEmpty(loy))
-            {
-                DetailPTLabel.Text = "LOYALTY / DEFENSE";
-                DetailPT.Text = loy;
-                DetailPTLabel.Visibility = Visibility.Visible;
-                DetailPT.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                DetailPTLabel.Visibility = Visibility.Collapsed;
-                DetailPT.Visibility = Visibility.Collapsed;
-            }
-
-            // Finishes the printing exists in (Scryfall "finishes")
-            bool isFoil = bool.TryParse(Get("IsFoil"), out var f) && f;
-            bool isNonFoil = bool.TryParse(Get("IsNonFoil"), out var nf) && nf;
-            bool isEtched = bool.TryParse(Get("IsEtched"), out var et) && et;
-            DetailFinishes.Text = Models.CardFinish.AvailableText(isNonFoil, isFoil, isEtched);
-
-            // Prices, one per finish
-            string usd = Get("PriceUsd") is string pu && !string.IsNullOrEmpty(pu) ? $"USD:  ${pu}" : "";
-            string foilP = Get("PriceUsdFoil") is string pf && !string.IsNullOrEmpty(pf) ? $"USD Foil: ${pf}" : "";
-            string etchedP = Get("PriceUsdEtched") is string pe && !string.IsNullOrEmpty(pe) ? $"USD Etched: ${pe}" : "";
-            // Online (MTGO pool / collection): the price in event tickets.
-            string tixP = Get("IsOnMtgo") == "True" && Get("PriceTix") is string pt && !string.IsNullOrEmpty(pt)
-                ? $"MTGO: {pt} tix" : "";
-            DetailPrices.Text = string.Join("\n",
-                new[] { usd, foilP, etchedP, tixP }.Where(s => !string.IsNullOrEmpty(s)));
+            // Finishes and prices, one line per finish
+            DetailFinishes.Text = CardDetailText.Finishes(card);
+            DetailPrices.Text = string.Join("\n", CardDetailText.Prices(card));
 
             // Your decks with this card, any printing (the deck files, cached).
             try
             {
                 var uses = Services.DeckIndexService.DecksUsing(Get("Name"));
                 DetailInDecks.Text = uses.Count == 0
-                    ? "Not in any of your decks"
+                    ? CardDetailText.NotInDecks(otherDecksOnly: false)
                     : string.Join("\n", uses.Select(u => u.Text));
             }
             catch
@@ -101,35 +60,27 @@ namespace BreakersOfE.Views.Controls
                 DetailInDecks.Text = "";
             }
 
-            // Mana cost symbols
-            // (Was never shown: the converter returns one panel, not a list.)
-            Services.ManaCostConverter.Fill(DetailManaCost, Get("ManaCost"));
-
             // Set symbol (rarity-tinted)
-            string setSymbolPath = Get("SetSymbolPath");
-            string rarity = Get("Rarity");
-            if (!string.IsNullOrEmpty(setSymbolPath))
-            {
-                var converter = new Services.ImageSourceConverter();
-                var img = converter.Convert(
-                    // Common's black symbol is for the light table rows; here it sits on the window.
-                    new object[] { setSymbolPath, string.Equals(rarity, "common", StringComparison.OrdinalIgnoreCase) ? "ondark" : rarity },
-                    typeof(ImageSource), null!,
-                    System.Globalization.CultureInfo.CurrentCulture);
-                DetailSetSymbol.Source = img as ImageSource;
-            }
-            else
-            {
-                DetailSetSymbol.Source = null;
-            }
+            DetailSetSymbol.Source = CardDetailText.SetSymbol(card);
 
-            // Card image (shared ScryfallId cache first)
+            // Card image (shared ScryfallId cache first) and the back face button
             ShowPicture(back: false);
+            BtnShowBackFace.Visibility = CardDetailText.HasBack(card) ? Visibility.Visible : Visibility.Collapsed;
+        }
 
-            // Back face button
-            string backUrl = Get("ImageBackUrl");
-            BtnShowBackFace.Visibility = !string.IsNullOrEmpty(backUrl)
-                ? Visibility.Visible : Visibility.Collapsed;
+        /// <summary>One side's name, type, mana cost, stats and text (-1 = the whole card).</summary>
+        private void ShowSide(int side)
+        {
+            if (_card == null) return;
+            var face = CardDetailText.Face(_card, side);
+            DetailName.Text = face.Name;
+            DetailType.Text = face.TypeLine;
+            Services.ManaCostConverter.Fill(DetailManaCost, face.ManaCost);
+            DetailOracle.Text = face.OracleText;
+            DetailFlavor.Text = face.FlavorText;
+            DetailPTLabel.Text = face.Stats?.Label ?? "";
+            DetailPT.Text = face.Stats?.Value ?? "";
+            DetailPTLabel.Visibility = DetailPT.Visibility = face.Stats != null ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private int _picVersion;
@@ -148,16 +99,9 @@ namespace BreakersOfE.Views.Controls
             if (_card == null) return;
 
             _showingBack = !_showingBack;
-            if (_showingBack)
-            {
-                ShowPicture(back: true);
-                BtnShowBackFace.Content = "🔄 Show Front Face";
-            }
-            else
-            {
-                ShowPicture(back: false);
-                BtnShowBackFace.Content = "🔄 Show Back Face";
-            }
+            ShowPicture(back: _showingBack);
+            ShowSide(_showingBack ? 1 : 0);
+            BtnShowBackFace.Content = _showingBack ? CardDetailText.ShowFront : CardDetailText.ShowBack;
         }
 
         private void DetailImage_MouseDoubleClick(object sender,

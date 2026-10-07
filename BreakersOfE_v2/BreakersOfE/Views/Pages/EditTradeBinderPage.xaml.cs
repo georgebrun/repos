@@ -41,12 +41,14 @@ namespace BreakersOfE.Views.Pages
         private readonly ContextMenu _bottomMenu = new();
 
         private const int UndoSteps = 20;
-        private readonly List<(ClaimSnapshot Snap, string Text)> _undo = new();
+        private readonly UndoStack<ClaimSnapshot> _undo = new(UndoSteps);
 
         public EditTradeBinderPage()
         {
             InitializeComponent();
-            new WindowKeyHook(this, Page_PreviewKeyDown);   // Ctrl+Z / Ctrl+Q from anywhere in the window
+            new WindowKeyHook(this, (_, e) => EditKeys(e, QtyBox, DoUndo));   // Ctrl+Z / Ctrl+Q from anywhere in the window
+            RememberSizes(this, TopRow, BottomRow, DetailColumn);
+            WireQtyBox(QtyBox, () => DoAdd());                               // Enter puts Qty in the binder
 
             _top.SetEmbedded(galleryByDefault: false);
             _bottom.SetEmbedded(galleryByDefault: false);
@@ -290,20 +292,10 @@ namespace BreakersOfE.Views.Pages
             SetCurrent(row);
             var b = (TradeBinderEntry)row;
             int id = b.TradeBinderEntryId;
-            string current = b.AskingPrice.HasValue ? b.AskingPrice.Value.ToString("F2", CultureInfo.CurrentCulture) : "";
-            EditPageKit.ShowCellEditor(cell, current, 90, TextAlignment.Right, digitsOnly: false,
-                $"Asking price per copy (market {b.PriceDisplay}, trade value {b.TradeValueDisplay}). Empty = none. Enter to save, Esc to cancel",
-                text =>
-                {
-                    if (!EditPageKit.TryParsePrice(text, out var price))
-                    {
-                        ShowStatus("Enter a price like 4.50 (or leave it empty for none).", true);
-                        return;
-                    }
-                    if (price == b.AskingPrice) return;
-                    Run("Asking price", new[] { b.ScryfallId }, () =>
-                        new List<EditResult> { CollectionEditService.SetAskingPrice(id, price) });
-                });
+            EditPriceInPlace(cell, b.AskingPrice,
+                $"Asking price per copy (market {b.PriceDisplay}, trade value {b.TradeValueDisplay}).", ShowStatus,
+                price => Run("Asking price", new[] { b.ScryfallId }, () =>
+                    new List<EditResult> { CollectionEditService.SetAskingPrice(id, price) }));
         }
 
         private void EditNotesInPlace(object row, DataGridCell? cell)
@@ -311,14 +303,8 @@ namespace BreakersOfE.Views.Pages
             SetCurrent(row);
             var b = (TradeBinderEntry)row;
             int id = b.TradeBinderEntryId;
-            string current = b.Notes ?? "";
-            EditPageKit.ShowCellEditor(cell, current, 280, TextAlignment.Left, digitsOnly: false,
-                "Notes for this binder row — Enter to save, Esc to cancel", text =>
-                {
-                    if (text.Trim() == current.Trim()) return;
-                    Run("Notes", new[] { b.ScryfallId }, () =>
-                        new List<EditResult> { CollectionEditService.SetBinderNotes(id, text) });
-                });
+            EditPageKit.EditNotesInPlace(cell, b.Notes, "binder", text => Run("Notes", new[] { b.ScryfallId }, () =>
+                new List<EditResult> { CollectionEditService.SetBinderNotes(id, text) }));
         }
 
         /// <summary>Right-click → Set Asking Price… / Edit Notes…: the editor over that cell (or at the mouse).</summary>
@@ -329,13 +315,12 @@ namespace BreakersOfE.Views.Pages
                 ShowStatus("Select a row in the Trade Binder table first.", true);
                 return;
             }
-            // After the right-click menu has closed, or it would close the editor at once.
-            Dispatcher.BeginInvoke(new Action(() =>
+            AfterMenuCloses(this, () =>
             {
                 var cell = _bottom.CellFor(row, header);
                 if (header == "Asking") EditAskingInPlace(row, cell);
                 else EditNotesInPlace(row, cell);
-            }), System.Windows.Threading.DispatcherPriority.Background);
+            });
         }
 
         private void ClearAsking()
@@ -349,16 +334,13 @@ namespace BreakersOfE.Views.Pages
         // ── Undo ────────────────────────────────────────────────────────
         private void PushUndo(ClaimSnapshot snap, string text)
         {
-            _undo.Add((snap, text));
-            if (_undo.Count > UndoSteps) _undo.RemoveAt(0);
+            _undo.Push(snap, text);
             UpdateUndo();
         }
 
         private void DoUndo()
         {
-            if (_undo.Count == 0) { ShowStatus("Nothing to undo.", false); return; }
-            var (snap, text) = _undo[^1];
-            _undo.RemoveAt(_undo.Count - 1);
+            if (!_undo.TryPop(out var snap, out var text)) { ShowStatus("Nothing to undo.", false); return; }
             var result = CollectionEditService.RestoreClaims(snap, text);
             UpdateUndo();
             AfterEdit(result, snap.Printings.ToList());
@@ -366,10 +348,7 @@ namespace BreakersOfE.Views.Pages
 
         private void UpdateUndo()
         {
-            BtnUndo.IsEnabled = _undo.Count > 0;
-            BtnUndo.ToolTip = _undo.Count == 0
-                ? "Nothing to undo (Ctrl+Z)"
-                : $"Undo: {_undo[^1].Text}  (Ctrl+Z · {_undo.Count} of the last {UndoSteps} changes can be undone)";
+            _undo.ShowOn(BtnUndo);
         }
 
         // ── After every change ──────────────────────────────────────────
@@ -453,7 +432,7 @@ namespace BreakersOfE.Views.Pages
                 entry.Item.Header = entry.ShowsQty && q > 1 ? $"{entry.Header} ×{q}" : entry.Header;
                 entry.Item.IsEnabled = entry.Enabled();
             }
-            string undoText = _undo.Count > 0 ? $"Undo: {Shorten(_undo[^1].Text)}" : "Undo";
+            string undoText = _undo.MenuText;
             if (_undoTop != null) _undoTop.Header = undoText;
             if (_undoBottom != null) _undoBottom.Header = undoText;
         }
@@ -478,37 +457,15 @@ namespace BreakersOfE.Views.Pages
             e.Handled = true;
         }
 
+        // Settings → Trade % changes the binder's Trade Value column: listen while on screen.
+        private void Page_Loaded(object sender, RoutedEventArgs e)
+        {
+            AppSettingsService.Changed -= OnSettingsChanged;
+            AppSettingsService.Changed += OnSettingsChanged;
+        }
+
         private void Page_Unloaded(object sender, RoutedEventArgs e) =>
             AppSettingsService.Changed -= OnSettingsChanged;
-
-        private void Page_PreviewKeyDown(object sender, KeyEventArgs e)
-        {
-            if (Keyboard.Modifiers != ModifierKeys.Control) return;
-            if (e.Key == Key.Q)
-            {
-                QtyBox.Focus();
-                e.Handled = true;
-            }
-            else if (e.Key == Key.Z && (Keyboard.FocusedElement is not TextBox || ReferenceEquals(Keyboard.FocusedElement, QtyBox)))
-            {
-                DoUndo();                  // a text box keeps its own Ctrl+Z (not the Qty box: undoing a number is no use)
-                e.Handled = true;
-            }
-        }
-
-        private void QtyBox_PreviewTextInput(object sender, TextCompositionEventArgs e) => EditPageKit.DigitsOnly(e);
-
-        private void QtyBox_PreviewKeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.Enter || e.Key == Key.Return)
-            {
-                DoAdd();
-                e.Handled = true;
-            }
-        }
-
-        private void QtyBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) =>
-            QtyBox.SelectAll();
 
         /// <summary>Trade % changed in Settings: new label, and the binder's Trade Value column re-read.</summary>
         private void OnSettingsChanged() => Dispatcher.BeginInvoke(new Action(() =>
@@ -519,32 +476,8 @@ namespace BreakersOfE.Views.Pages
 
         // ── Helpers ─────────────────────────────────────────────────────
 
-        /// <summary>A row's finish as shown (v1 foil of an etched-only printing = etched).</summary>
-        private static string FinishOf(object row) =>
-            CardFinish.Normalize(Str(row, "ShownFinish") is { Length: > 0 } shown ? shown : Str(row, "Finish"));
-
         /// <summary>The key of a collection or binder row (same rules as the service).</summary>
         private static RowKey KeyOf(object row) =>
             RowKey.Of(Str(row, "ScryfallId"), FinishOf(row), Str(row, "Language"), Str(row, "Condition"));
-
-        private static string CardText(object card) =>
-            $"{Str(card, "Name")} ({Str(card, "SetCode").ToUpperInvariant()} #{Str(card, "CollectorNumber")})";
-
-        // ── Splitters: sizes are remembered (all Edit pages share them) ──
-        private void TableSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e) =>
-            EditPageKit.SaveTopShare(TopRow, BottomRow);
-
-        private void DetailSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e) =>
-            EditPageKit.SaveDetailWidth(DetailColumn);
-
-        // NavigationView wraps pages in a ScrollViewer → infinite height →
-        // virtualization defeated → freeze. Same fix as PoolPage.
-        private void Page_Loaded(object sender, RoutedEventArgs e)
-        {
-            AppSettingsService.Changed -= OnSettingsChanged;
-            AppSettingsService.Changed += OnSettingsChanged;
-            EditPageKit.RestoreSplitters(TopRow, BottomRow, DetailColumn);
-            EditPageKit.DisableHostScroll(this);
-        }
     }
 }

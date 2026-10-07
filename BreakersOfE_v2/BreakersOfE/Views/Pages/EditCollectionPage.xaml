@@ -3,7 +3,6 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ctl="clr-namespace:BreakersOfE.Views.Controls"
       ScrollViewer.VerticalScrollBarVisibility="Disabled"
-      Loaded="Page_Loaded"
       Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
     <!-- Edit → Pool → Collection: the pool table on top, the matching
@@ -22,7 +21,6 @@
         <!-- Drag to widen or narrow the card panel -->
         <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                       ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
-                      DragCompleted="DetailSplitter_DragCompleted"
                       Background="Transparent" Cursor="SizeWE" Margin="0,0,4,0"
                       ToolTip="Drag to resize the card panel">
             <GridSplitter.Template>
@@ -53,7 +51,6 @@
             <GridSplitter Grid.Row="1" x:Name="TableSplitter" Height="12" HorizontalAlignment="Stretch"
                           ResizeDirection="Rows" ResizeBehavior="PreviousAndNext"
                           Background="Transparent" Cursor="SizeNS" Margin="0,2,0,2"
-                          DragCompleted="TableSplitter_DragCompleted"
                           ToolTip="Drag to resize the tables">
                 <GridSplitter.Template>
                     <ControlTemplate TargetType="GridSplitter">
@@ -77,9 +74,6 @@
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                             <TextBox x:Name="QtyBox" Text="1" Width="56" Margin="0,0,14,0"
                                  VerticalAlignment="Center" TextAlignment="Center"
-                                 PreviewTextInput="QtyBox_PreviewTextInput"
-                                 PreviewKeyDown="QtyBox_PreviewKeyDown"
-                                 GotKeyboardFocus="QtyBox_GotKeyboardFocus"
                                  ToolTip="How many to add or remove (Ctrl+Q). Enter adds the default finish. To set an exact quantity, double-click a Qty cell in the collection table."/>
 
                             <!-- Language and condition for cards added from the pool table.

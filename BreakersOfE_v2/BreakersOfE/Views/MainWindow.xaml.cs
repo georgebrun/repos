@@ -47,6 +47,9 @@ namespace BreakersOfE.Views
         private void BtnUpdateDatabase_Click(object sender, RoutedEventArgs e) =>
             RootNavigation.Navigate(typeof(DatabaseUpdatePage));
 
+        /// <summary>Help (pane footer): its own window, on the topic it showed last.</summary>
+        private void BtnHelp_Click(object sender, RoutedEventArgs e) => HelpWindow.Open();
+
         /// <summary>Settings (pane footer).</summary>
         private void BtnSettings_Click(object sender, RoutedEventArgs e) =>
             RootNavigation.Navigate(typeof(SettingsPage));

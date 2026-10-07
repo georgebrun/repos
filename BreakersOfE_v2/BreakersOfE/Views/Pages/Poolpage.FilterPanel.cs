@@ -442,11 +442,15 @@ namespace BreakersOfE.Views.Pages
             if (prop == null) return null;
             double? lo = PParse(min), hi = PParse(max);
             if (lo == null && hi == null) return null;
+            bool InRange(double v) => (lo == null || v >= lo) && (hi == null || v <= hi);
             return r =>
             {
+                // A two-sided card ("1 // 5"): either side in range counts.
+                if (PVal(r, prop) is string s && s.Contains("//"))
+                    return Models.CardFaces.Sides(s).Any(side => PParse(side) is double d && InRange(d));
                 var v = PNum(r, prop);
                 if (v == null) return false;               // no value (no price, "*" power…)
-                return (lo == null || v >= lo) && (hi == null || v <= hi);
+                return InRange(v.Value);
             };
         }
 

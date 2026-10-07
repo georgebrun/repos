@@ -230,7 +230,8 @@ namespace BreakersOfE.Views
         {
             var result = new Dictionary<char, int>();
             if (string.IsNullOrWhiteSpace(manaCost)) return result;
-            foreach (Match m in SymbolRx.Matches(manaCost))
+            // Two-sided cards ("{1}{R} // {5}{B}{R}"): the front side, like the mana value.
+            foreach (Match m in SymbolRx.Matches(Models.CardFaces.Sides(manaCost)[0]))
             {
                 string sym = m.Groups[1].Value.ToUpperInvariant();
                 foreach (char c in "WUBRG")

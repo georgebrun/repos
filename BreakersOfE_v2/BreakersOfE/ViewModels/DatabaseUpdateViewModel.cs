@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using BreakersOfE.Services;
 using BreakersOfE.Data;
 using BreakersOfE.Validation;
+using Microsoft.EntityFrameworkCore;
 
 namespace BreakersOfE.ViewModels
 {
@@ -139,6 +140,8 @@ namespace BreakersOfE.ViewModels
                     StatusText = "Propagating prices to collection…";
                     ProgressPercent = 95;
                     await Task.Run(PropagatePoolPricesToCollection);
+                    StatusText = "Updating card text in your collection…";
+                    await Task.Run(RefreshCollectionCardText);
 
                     StatusText = "Update complete!";
                     ProgressPercent = 100;
@@ -439,6 +442,106 @@ namespace BreakersOfE.ViewModels
                     if (tix.TryGetValue(entry.ScryfallId, out var price))
                         entry.Price = entry.Finish == Models.CardFinish.NonFoil ? price : null;
                 }
+                colDb.SaveChanges();
+            }
+            catch
+            {
+                // No online pool or collection yet — skip
+            }
+        }
+
+        /// <summary>A printing's text, cost and power / toughness / loyalty, as the card database has them.</summary>
+        private sealed record CardText(string ManaCost, string OracleText, string FlavorText,
+                                       string Power, string Toughness, string LoyaltyOrDefense);
+
+        /// <summary>
+        /// Collection rows keep a copy of each card's text. After a card data
+        /// update, bring it in line with the card database, so rows saved before
+        /// a fix get it too (two-sided cards were blank: text, cost and power
+        /// per side; Battles had no defense). Only changed values are written.
+        /// </summary>
+        private static void RefreshCollectionCardText()
+        {
+            static Dictionary<string, CardText> TextOf(IQueryable<Models.PoolCard> cards, List<string> ids)
+            {
+                var wanted = ids.Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+                if (wanted.Count == 0) return new();
+                return cards.Where(p => wanted.Contains(p.ScryfallId))
+                    .Select(p => new { p.ScryfallId, p.ManaCost, p.OracleText, p.FlavorText, p.Power, p.Toughness, p.LoyaltyOrDefense })
+                    .ToList()
+                    .GroupBy(p => p.ScryfallId)
+                    .ToDictionary(g => g.Key, g =>
+                    {
+                        var p = g.First();
+                        return new CardText(p.ManaCost ?? "", p.OracleText ?? "", p.FlavorText ?? "",
+                                            p.Power ?? "", p.Toughness ?? "", p.LoyaltyOrDefense ?? "");
+                    });
+            }
+
+            try
+            {
+                using var poolDb = new AppDbContext();
+                using var colDb = new CollectionDbContext();
+
+                var ids = colDb.CollectionEntries.Select(e => e.ScryfallId).ToList();
+                ids.AddRange(colDb.TradeBinderEntries.Select(e => e.ScryfallId));
+                ids.AddRange(colDb.WantListEntries.Select(e => e.ScryfallId));
+                var text = TextOf(poolDb.PoolCards.AsNoTracking(), ids);
+
+                foreach (var e in colDb.CollectionEntries)
+                    if (e.ScryfallId != null && text.TryGetValue(e.ScryfallId, out var t))
+                    {
+                        e.ManaCost = t.ManaCost; e.OracleText = t.OracleText; e.FlavorText = t.FlavorText;
+                        e.Power = t.Power; e.Toughness = t.Toughness; e.LoyaltyOrDefense = t.LoyaltyOrDefense;
+                    }
+                foreach (var e in colDb.TradeBinderEntries)
+                    if (e.ScryfallId != null && text.TryGetValue(e.ScryfallId, out var t))
+                    {
+                        e.ManaCost = t.ManaCost; e.OracleText = t.OracleText; e.FlavorText = t.FlavorText;
+                        e.Power = t.Power; e.Toughness = t.Toughness;
+                    }
+                foreach (var e in colDb.WantListEntries)
+                    if (e.ScryfallId != null && text.TryGetValue(e.ScryfallId, out var t))
+                    {
+                        e.ManaCost = t.ManaCost; e.OracleText = t.OracleText; e.FlavorText = t.FlavorText;
+                        e.Power = t.Power; e.Toughness = t.Toughness;
+                    }
+
+                // Tokens (there are two-sided tokens too).
+                var tokenIds = colDb.TokenCollectionEntries.Select(e => e.ScryfallId).ToList();
+                var tokenText = poolDb.TokenCards.AsNoTracking()
+                    .Where(t => tokenIds.Contains(t.ScryfallId))
+                    .Select(t => new { t.ScryfallId, t.OracleText, t.FlavorText, t.Power, t.Toughness })
+                    .ToList()
+                    .GroupBy(t => t.ScryfallId)
+                    .ToDictionary(g => g.Key, g => g.First());
+                foreach (var e in colDb.TokenCollectionEntries)
+                    if (e.ScryfallId != null && tokenText.TryGetValue(e.ScryfallId, out var t))
+                    {
+                        e.OracleText = t.OracleText ?? ""; e.FlavorText = t.FlavorText ?? "";
+                        e.Power = t.Power ?? ""; e.Toughness = t.Toughness ?? "";
+                    }
+
+                colDb.SaveChanges();
+            }
+            catch
+            {
+                // No collection yet — skip
+            }
+
+            // Online (MTGO / Arena) rows: from the online card database.
+            try
+            {
+                using var onlineDb = new OnlineDbContext();
+                using var colDb = new CollectionDbContext();
+                var text = TextOf(onlineDb.OnlineCards.AsNoTracking(),
+                                  colDb.OnlineCollectionEntries.Select(e => e.ScryfallId).ToList());
+                foreach (var e in colDb.OnlineCollectionEntries)
+                    if (e.ScryfallId != null && text.TryGetValue(e.ScryfallId, out var t))
+                    {
+                        e.ManaCost = t.ManaCost; e.OracleText = t.OracleText; e.FlavorText = t.FlavorText;
+                        e.Power = t.Power; e.Toughness = t.Toughness; e.LoyaltyOrDefense = t.LoyaltyOrDefense;
+                    }
                 colDb.SaveChanges();
             }
             catch

@@ -1,0 +1,57 @@
+# ═══ Breakers of E — Help topics ═══
+#
+# This file sets the order of the Help topic list. Lines starting with # are notes.
+#   - A line with a file name (something.md) is a topic.
+#   - A line without ".md" is a group heading; indent the topics under it by two spaces.
+#
+# Each topic is a plain text file in this folder. Its first line is the title
+# ("# Title"), the next may be a one-line summary ("> summary"). Then:
+#   ## Heading               a section heading
+#   - item                   a bullet            1. step    a numbered step
+#     (two spaces)           a line indented two spaces continues the item above
+#   Tip: …  Note: …  Warning: …    a box (Warning is amber: something to watch out for)
+#   **bold**    [Ctrl+Z] a key    [[card-pool]] a link to a topic    [[card-pool|your words]]
+#   A blank line starts a new paragraph.
+#
+# After changing a file, rebuild BoE: the topics are built into the app.
+
+getting-started.md
+
+How To
+  howto-add-cards.md
+  howto-build-deck.md
+  howto-find-missing.md
+  howto-tear-down.md
+  howto-trade-binder.md
+  howto-import.md
+  howto-export-backup.md
+  howto-update.md
+  howto-colors.md
+  howto-move-folder.md
+
+Looking at Cards
+  view-and-edit.md
+  card-pool.md
+  search-and-filters.md
+  columns-and-layout.md
+  card-details.md
+  sets.md
+  statistics.md
+
+Your Cards
+  edit-collection.md
+  trade-binder.md
+  want-list.md
+  decks.md
+  online.md
+
+Tools
+  import-export.md
+  keyword-dictionary.md
+  update-database.md
+  settings.md
+
+Reference
+  keyboard-shortcuts.md
+  data-folder.md
+  troubleshooting.md

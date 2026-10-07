@@ -54,12 +54,14 @@ namespace BreakersOfE.Views.Pages
 
         // Undo: the rows as they were before each change (newest last).
         private const int UndoSteps = 20;
-        private readonly List<(EditSnapshot Snap, string Text)> _undo = new();
+        private readonly UndoStack<EditSnapshot> _undo = new(UndoSteps);
 
         public EditCollectionPage()
         {
             InitializeComponent();
-            new WindowKeyHook(this, Page_PreviewKeyDown);   // Ctrl+Z / Ctrl+Q from anywhere in the window
+            new WindowKeyHook(this, (_, e) => EditKeys(e, QtyBox, DoUndo));   // Ctrl+Z / Ctrl+Q from anywhere in the window
+            RememberSizes(this, TopRow, BottomRow, DetailColumn);
+            WireQtyBox(QtyBox, () => DoAdd(null));                           // Enter adds the default finish
 
             // Pool on top starts as card pictures (+ / − on each), the collection
             // below as a grid; each has its own Grid / Gallery button, remembered.
@@ -554,9 +556,7 @@ namespace BreakersOfE.Views.Pages
                 return;
             }
             string header = field == TextField.Storage ? "Storage" : "Notes";
-            // After the right-click menu has closed, or it would close the editor at once.
-            Dispatcher.BeginInvoke(new Action(() => EditTextInPlace(row, _bottom.CellFor(row, header), field)),
-                System.Windows.Threading.DispatcherPriority.Background);
+            AfterMenuCloses(this, () => EditTextInPlace(row, _bottom.CellFor(row, header), field));
         }
 
         /// <summary>Favorite on/off for the selected rows (all on unless every one already is).</summary>
@@ -574,16 +574,13 @@ namespace BreakersOfE.Views.Pages
         // ── Undo ────────────────────────────────────────────────────────
         private void PushUndo(EditSnapshot snap, string text)
         {
-            _undo.Add((snap, text));
-            if (_undo.Count > UndoSteps) _undo.RemoveAt(0);
+            _undo.Push(snap, text);
             UpdateUndo();
         }
 
         private void DoUndo()
         {
-            if (_undo.Count == 0) { ShowStatus("Nothing to undo.", false); return; }
-            var (snap, text) = _undo[^1];
-            _undo.RemoveAt(_undo.Count - 1);
+            if (!_undo.TryPop(out var snap, out var text)) { ShowStatus("Nothing to undo.", false); return; }
 
             // Refused when those cards changed since (it can never apply then).
             var result = CollectionEditService.Restore(snap, text);
@@ -600,10 +597,7 @@ namespace BreakersOfE.Views.Pages
 
         private void UpdateUndo()
         {
-            BtnUndo.IsEnabled = _undo.Count > 0;
-            BtnUndo.ToolTip = _undo.Count == 0
-                ? "Nothing to undo (Ctrl+Z)"
-                : $"Undo: {_undo[^1].Text}  (Ctrl+Z · {_undo.Count} of the last {UndoSteps} changes can be undone)";
+            _undo.ShowOn(BtnUndo);
         }
 
         // ── After every change ──────────────────────────────────────────
@@ -745,7 +739,7 @@ namespace BreakersOfE.Views.Pages
                 entry.Item.IsEnabled = entry.Enabled();
             }
 
-            string undoText = _undo.Count > 0 ? $"Undo: {Shorten(_undo[^1].Text)}" : "Undo";
+            string undoText = _undo.MenuText;
             if (_undoTop != null) _undoTop.Header = undoText;
             if (_undoBottom != null) _undoBottom.Header = undoText;
 
@@ -817,15 +811,8 @@ namespace BreakersOfE.Views.Pages
                 ShowStatus("Select a row in the collection table first.", true);
                 return;
             }
-            // After the right-click menu has closed, or it would close the editor at once.
-            Dispatcher.BeginInvoke(new Action(() => EditQuantityInPlace(row, _bottom.CellFor(row, "Qty"))),
-                System.Windows.Threading.DispatcherPriority.Background);
+            AfterMenuCloses(this, () => EditQuantityInPlace(row, _bottom.CellFor(row, "Qty")));
         }
-
-        /// <summary>A tile button's keys: Shift = foil, Ctrl = etched, none = the default.</summary>
-        private static string? FinishFromKeys(ModifierKeys keys) =>
-            keys.HasFlag(ModifierKeys.Control) ? CardFinish.Etched :
-            keys.HasFlag(ModifierKeys.Shift) ? CardFinish.Foil : null;
 
         /// <summary>
         /// − on a pool tile: the finish you own of the current card (the only
@@ -905,41 +892,7 @@ namespace BreakersOfE.Views.Pages
             e.Handled = true;
         }
 
-        private void Page_PreviewKeyDown(object sender, KeyEventArgs e)
-        {
-            if (Keyboard.Modifiers != ModifierKeys.Control) return;
-            if (e.Key == Key.Q)
-            {
-                QtyBox.Focus();
-                e.Handled = true;
-            }
-            else if (e.Key == Key.Z && (Keyboard.FocusedElement is not TextBox || ReferenceEquals(Keyboard.FocusedElement, QtyBox)))
-            {
-                DoUndo();                  // a text box keeps its own Ctrl+Z (not the Qty box: undoing a number is no use)
-                e.Handled = true;
-            }
-        }
-
-        // ── Qty box: digits only; Enter adds the default finish ──────────
-        private void QtyBox_PreviewTextInput(object sender, TextCompositionEventArgs e) => EditPageKit.DigitsOnly(e);
-
-        private void QtyBox_PreviewKeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.Enter || e.Key == Key.Return)
-            {
-                DoAdd(null);
-                e.Handled = true;
-            }
-        }
-
-        private void QtyBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) =>
-            QtyBox.SelectAll();
-
         // ── Helpers ─────────────────────────────────────────────────────
-
-        /// <summary>A collection row's finish as shown (v1 foil of an etched-only printing = etched).</summary>
-        private static string FinishOf(object row) =>
-            CardFinish.Normalize(Str(row, "ShownFinish") is { Length: > 0 } shown ? shown : Str(row, "Finish"));
 
         /// <summary>Etched-only printing? From the pool card when known, else the row's flag.</summary>
         private bool EtchedOnly(object row, object? pool)
@@ -960,23 +913,5 @@ namespace BreakersOfE.Views.Pages
         /// <summary>"Foil · English · Near Mint".</summary>
         private string RowText(object row) =>
             IsOnline ? CardFinish.Display(FinishOf(row)) : KeyOf(row).Text;     // online: no language/condition
-
-        private static string CardText(object card) =>
-            $"{Str(card, "Name")} ({Str(card, "SetCode").ToUpperInvariant()} #{Str(card, "CollectorNumber")})";
-
-        // ── Splitters: sizes are remembered (all Edit pages share them) ──
-        private void TableSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e) =>
-            EditPageKit.SaveTopShare(TopRow, BottomRow);
-
-        private void DetailSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e) =>
-            EditPageKit.SaveDetailWidth(DetailColumn);
-
-        // NavigationView wraps pages in a ScrollViewer → infinite height →
-        // virtualization defeated → freeze. Same fix as PoolPage.
-        private void Page_Loaded(object sender, RoutedEventArgs e)
-        {
-            EditPageKit.RestoreSplitters(TopRow, BottomRow, DetailColumn);
-            EditPageKit.DisableHostScroll(this);
-        }
     }
 }

@@ -100,9 +100,7 @@ namespace BreakersOfE.Models
         [NotMapped] public string RowValueDisplay =>
             Price.HasValue ? $"{RowValue:F2} tix" : "—";
 
-        [NotMapped] public string PowerToughness =>
-            !string.IsNullOrWhiteSpace(Power) && !string.IsNullOrWhiteSpace(Toughness)
-                ? $"{Power}/{Toughness}" : string.Empty;
+        [NotMapped] public string PowerToughness => CardFaces.PowerToughness(Power, Toughness);
 
         [NotMapped] public double CollectorNumberSort
         {

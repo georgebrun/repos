@@ -87,7 +87,7 @@ namespace BreakersOfE.Views.Pages
         /// <summary>One Undo step: the deck file before/after, its claims, and (Find Missing) the Want List rows.</summary>
         private sealed record UndoStep(string Before, string After, string Text, ClaimSnapshot? Claims,
                                        EditSnapshot? Wants = null);
-        private static readonly Dictionary<string, List<UndoStep>> _undo = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, UndoStack<UndoStep>> _undo = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>One deck in the Deck list.</summary>
         private sealed record DeckChoice(string Path, string Name, string Label)
@@ -98,7 +98,10 @@ namespace BreakersOfE.Views.Pages
         public EditDeckPage()
         {
             InitializeComponent();
-            new WindowKeyHook(this, Page_PreviewKeyDown);   // Ctrl+Z / Ctrl+Q from anywhere in the window
+            // Ctrl+Z / Ctrl+Q from anywhere in the window (no Qty when taking a deck apart)
+            new WindowKeyHook(this, (_, e) => EditKeys(e, QtyBox, DoUndo, qtyInUse: _mode != DeckEditMode.DeckToCollection));
+            RememberSizes(this, TopRow, BottomRow, DetailColumn);
+            WireQtyBox(QtyBox, () => { if (_mode != DeckEditMode.DeckToCollection) DoAdd(null); });   // Enter adds the default finish
 
             // The pool and upper tables start as card pictures (+ / − on each),
             // the lower as a grid; each table has its own Grid / Gallery button, remembered.
@@ -491,10 +494,6 @@ namespace BreakersOfE.Views.Pages
         /// <summary>A row of your collection (cards or tokens) in the source table.</summary>
         private static bool IsCollectionRow(object row) => row is CollectionEntry || row is TokenCollectionEntry;
 
-        /// <summary>A collection row's finish as shown (v1 foil of an etched-only printing = etched).</summary>
-        private static string RowFinish(object row) =>
-            CardFinish.Normalize(Str(row, "ShownFinish") is { Length: > 0 } shown ? shown : Str(row, "Finish"));
-
         /// <summary>Free copies of a collection row (owned, not claimed by any deck).</summary>
         private static int FreeOf(object row) => Math.Max(0, Int(row, "Quantity") - Math.Max(0, Int(row, "UsedCount")));
 
@@ -549,7 +548,7 @@ namespace BreakersOfE.Views.Pages
 
             // A collection row is one finish (and only its free copies can go in).
             bool row = _current != null && IsCollectionRow(_current);
-            string rowFin = row ? RowFinish(_current!) : "";
+            string rowFin = row ? FinishOf(_current!) : "";
             bool rowFree = row && FreeOf(_current!) > 0;
             // Several rows: a finish is on only if one of them can add it (collection rows add their own).
             bool Some(string fin) => (_active?.SelectedUnordered ?? new List<object>()).Take(MaxRows + 1)
@@ -853,7 +852,7 @@ namespace BreakersOfE.Views.Pages
         }
 
         private static RowKey RowKeyOf(object row) =>
-            RowKey.Of(Str(row, "ScryfallId"), RowFinish(row), Str(row, "Language"), Str(row, "Condition"));
+            RowKey.Of(Str(row, "ScryfallId"), FinishOf(row), Str(row, "Language"), Str(row, "Condition"));
 
         private static string TableOfRow(object row) =>
             row is TokenCollectionEntry ? CollectionEditService.TokensTable : CollectionEditService.CardsTable;
@@ -896,7 +895,7 @@ namespace BreakersOfE.Views.Pages
                 bool fromRow = IsCollectionRow(row);
                 // A collection row is one finish: it adds that finish (whichever
                 // Add button), and gives only its free copies.
-                string fin = fromRow ? RowFinish(row) : finish ?? (line != null ? LineFinish(line) : DefaultFinish(card));
+                string fin = fromRow ? FinishOf(row) : finish ?? (line != null ? LineFinish(line) : DefaultFinish(card));
                 int want = qty;
                 string note = "";
                 if (fromRow)
@@ -1203,7 +1202,7 @@ namespace BreakersOfE.Views.Pages
                 return;
             }
             var row = _current;
-            string table = TableOfRow(row), sid = Str(row, "ScryfallId"), fin = RowFinish(row);
+            string table = TableOfRow(row), sid = Str(row, "ScryfallId"), fin = FinishOf(row);
             var need = Needs().FirstOrDefault(n => n.Table == table && n.Finish == fin &&
                                                    string.Equals(n.ScryfallId, sid, StringComparison.OrdinalIgnoreCase));
             if (need == null || need.Needed == 0)
@@ -1451,31 +1450,27 @@ namespace BreakersOfE.Views.Pages
                 return;
             }
             string header = finish switch { CardFinish.Foil => "Foil", CardFinish.Etched => "Etched", _ => "Non-Foil" };
-            // After the right-click menu has closed, or it would close the editor at once.
-            Dispatcher.BeginInvoke(new Action(() => EditCountInPlace(line, _deckT.CellFor(line, header), finish)),
-                System.Windows.Threading.DispatcherPriority.Background);
+            AfterMenuCloses(this, () => EditCountInPlace(line, _deckT.CellFor(line, header), finish));
         }
 
         // ── Undo ────────────────────────────────────────────────────────
-        private List<UndoStep> UndoStack =>
-            _deckPath != null && _undo.TryGetValue(_deckPath, out var s) ? s : new();
+        /// <summary>The open deck's undo (empty when no deck is open).</summary>
+        private UndoStack<UndoStep> DeckUndo =>
+            _deckPath != null && _undo.TryGetValue(_deckPath, out var s) ? s : new(UndoSteps);
 
         private void PushUndo(string path, UndoStep step)
         {
             if (step.Before == step.After && step.Claims == null && step.Wants == null) return;
-            if (!_undo.TryGetValue(path, out var stack)) _undo[path] = stack = new();
-            stack.Add(step);
-            if (stack.Count > UndoSteps) stack.RemoveAt(0);
+            if (!_undo.TryGetValue(path, out var stack)) _undo[path] = stack = new(UndoSteps);
+            stack.Push(step, step.Text);
             UpdateUndo();
         }
 
         private void DoUndo()
         {
-            var stack = UndoStack;
-            if (_deckPath == null || stack.Count == 0) { ShowStatus("Nothing to undo.", false); return; }
-            var step = stack[^1];
-            var (before, after, text) = (step.Before, step.After, step.Text);
-            stack.RemoveAt(stack.Count - 1);
+            var stack = DeckUndo;
+            if (_deckPath == null || !stack.TryPop(out var step, out var text)) { ShowStatus("Nothing to undo.", false); return; }
+            var (before, after) = (step.Before, step.After);
 
             // Only when the file is still as this page left it (it can't apply otherwise).
             if (ReadFile(_deckPath) != after)
@@ -1518,7 +1513,7 @@ namespace BreakersOfE.Views.Pages
             }
             catch (Exception ex)
             {
-                stack.Add(step with { Claims = null, Wants = null });  // the deck wasn't undone (its claims and want rows were)
+                stack.Push(step with { Claims = null, Wants = null }, text);  // the deck wasn't undone (its claims and want rows were)
                 UpdateUndo();
                 ShowStatus($"Could not undo: {ex.Message}", true);
                 return;
@@ -1532,11 +1527,7 @@ namespace BreakersOfE.Views.Pages
 
         private void UpdateUndo()
         {
-            var stack = UndoStack;
-            BtnUndo.IsEnabled = stack.Count > 0;
-            BtnUndo.ToolTip = stack.Count == 0
-                ? "Nothing to undo (Ctrl+Z)"
-                : $"Undo: {stack[^1].Text}  (Ctrl+Z · {stack.Count} of the last {UndoSteps} changes to this deck can be undone)";
+            DeckUndo.ShowOn(BtnUndo, "changes to this deck");
         }
 
         private static string? ReadFile(string path)
@@ -1590,7 +1581,7 @@ namespace BreakersOfE.Views.Pages
             Item(_srcMenu, "Remove Etched", "", () => DoRemove(CardFinish.Etched, _src), () => BtnRemoveEtched.IsEnabled, true);
             Item(_srcMenu, "Remove Card (every copy)", "", () => RemoveLines(_src), () => BtnRemoveLine.IsEnabled);
             _srcMenu.Items.Add(new Separator());
-            _undoSrc = Item(_srcMenu, "Undo", "Ctrl+Z", DoUndo, () => UndoStack.Count > 0);
+            _undoSrc = Item(_srcMenu, "Undo", "Ctrl+Z", DoUndo, () => DeckUndo.Count > 0);
 
             // The deck table.
             Item(_deckMenu, "Add Non-Foil", "", () => DoAdd(CardFinish.NonFoil, _deckT), () => BtnAddNonFoil.IsEnabled, true);
@@ -1623,7 +1614,7 @@ namespace BreakersOfE.Views.Pages
             _toMainItem = Item(_deckMenu, "Move to Main Deck", "",
                 () => MoveLines(DeckCardCategory.Mainboard, "Moved to the main deck"));
             _deckMenu.Items.Add(new Separator());
-            _undoDeck = Item(_deckMenu, "Undo", "Ctrl+Z", DoUndo, () => UndoStack.Count > 0);
+            _undoDeck = Item(_deckMenu, "Undo", "Ctrl+Z", DoUndo, () => DeckUndo.Count > 0);
 
             // Deck → Collection: the deck's own menu and the collection's.
             Item(_claimDeckMenu, "Use Copies I Own", "Enter", () => ClaimLines(useOwned: true), () => BtnUseOwned.IsEnabled);
@@ -1632,10 +1623,10 @@ namespace BreakersOfE.Views.Pages
             _claimDeckMenu.Items.Add(new Separator());
             _addTokensItem2 = Item(_claimDeckMenu, "Add its tokens…", "", () => SuggestTokens(selectedOnly: true));
             _claimDeckMenu.Items.Add(new Separator());
-            _undoItems.Add(Item(_claimDeckMenu, "Undo", "Ctrl+Z", DoUndo, () => UndoStack.Count > 0));
+            _undoItems.Add(Item(_claimDeckMenu, "Undo", "Ctrl+Z", DoUndo, () => DeckUndo.Count > 0));
             Item(_claimSrcMenu, "Use This Row for the Deck", "Enter", UseThisRow, () => BtnUseRow.IsEnabled);
             _claimSrcMenu.Items.Add(new Separator());
-            _undoItems.Add(Item(_claimSrcMenu, "Undo", "Ctrl+Z", DoUndo, () => UndoStack.Count > 0));
+            _undoItems.Add(Item(_claimSrcMenu, "Undo", "Ctrl+Z", DoUndo, () => DeckUndo.Count > 0));
 
             _srcMenu.Opened += (_, _) => MenuOpened(_src);
             _deckMenu.Opened += (_, _) => MenuOpened(_deckT);
@@ -1665,8 +1656,7 @@ namespace BreakersOfE.Views.Pages
                 entry.Item.IsEnabled = entry.Enabled();
             }
 
-            var stack = UndoStack;
-            string undoText = stack.Count > 0 ? $"Undo: {Shorten(stack[^1].Text)}" : "Undo";
+            string undoText = DeckUndo.MenuText;
             if (_undoSrc != null) _undoSrc.Header = undoText;
             if (_undoDeck != null) _undoDeck.Header = undoText;
             foreach (var u in _undoItems) u.Header = undoText;
@@ -1694,11 +1684,6 @@ namespace BreakersOfE.Views.Pages
             _toMainItem!.Visibility = hasSide || anySide ? Visibility.Visible : Visibility.Collapsed;
             _toMainItem.IsEnabled = anySide;
         }
-
-        /// <summary>A tile button's keys: Shift = foil, Ctrl = etched, none = the default.</summary>
-        private static string? FinishFromKeys(ModifierKeys keys) =>
-            keys.HasFlag(ModifierKeys.Control) ? CardFinish.Etched :
-            keys.HasFlag(ModifierKeys.Shift) ? CardFinish.Foil : null;
 
         // ══════════════════════════════════════════════════════════════════
         // KEYS
@@ -1735,56 +1720,6 @@ namespace BreakersOfE.Views.Pages
             if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) RemoveLines(_deckT);
             else DoRemove(null, _deckT);
             e.Handled = true;
-        }
-
-        private void Page_PreviewKeyDown(object sender, KeyEventArgs e)
-        {
-            if (Keyboard.Modifiers != ModifierKeys.Control) return;
-            if (e.Key == Key.Q && _mode != DeckEditMode.DeckToCollection)
-            {
-                QtyBox.Focus();
-                e.Handled = true;
-            }
-            else if (e.Key == Key.Z && (Keyboard.FocusedElement is not TextBox || ReferenceEquals(Keyboard.FocusedElement, QtyBox)))
-            {
-                DoUndo();                  // a text box keeps its own Ctrl+Z (not the Qty box: undoing a number is no use)
-                e.Handled = true;
-            }
-        }
-
-        // ── Qty box: digits only; Enter adds the default finish ──────────
-        private void QtyBox_PreviewTextInput(object sender, TextCompositionEventArgs e) => EditPageKit.DigitsOnly(e);
-
-        private void QtyBox_PreviewKeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.Enter || e.Key == Key.Return)
-            {
-                if (_mode != DeckEditMode.DeckToCollection) DoAdd(null);
-                e.Handled = true;
-            }
-        }
-
-        private void QtyBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) =>
-            QtyBox.SelectAll();
-
-        // ── Helpers ─────────────────────────────────────────────────────
-
-        private static string CardText(object card) =>
-            $"{Str(card, "Name")} ({Str(card, "SetCode").ToUpperInvariant()} #{Str(card, "CollectorNumber")})";
-
-        // ── Splitters: sizes are remembered (shared with the other Edit pages) ──
-        private void TableSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e) =>
-            EditPageKit.SaveTopShare(TopRow, BottomRow);
-
-        private void DetailSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e) =>
-            EditPageKit.SaveDetailWidth(DetailColumn);
-
-        // NavigationView wraps pages in a ScrollViewer → infinite height →
-        // virtualization defeated → freeze. Same fix as PoolPage.
-        private void Page_Loaded(object sender, RoutedEventArgs e)
-        {
-            EditPageKit.RestoreSplitters(TopRow, BottomRow, DetailColumn);
-            EditPageKit.DisableHostScroll(this);
         }
     }
 }

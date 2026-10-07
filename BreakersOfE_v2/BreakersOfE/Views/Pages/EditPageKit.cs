@@ -37,6 +37,19 @@ namespace BreakersOfE.Views.Pages
         /// <summary>Menu text: at most 60 characters.</summary>
         public static string Shorten(string s) => s.Length <= 60 ? s : s[..57] + "…";
 
+        /// <summary>A card for status lines: "Name (SET #123)".</summary>
+        public static string CardText(object card) =>
+            $"{Str(card, "Name")} ({Str(card, "SetCode").ToUpperInvariant()} #{Str(card, "CollectorNumber")})";
+
+        /// <summary>The finish a gallery tile's + / − means: Ctrl = etched, Shift = foil, else the default (null).</summary>
+        public static string? FinishFromKeys(ModifierKeys keys) =>
+            keys.HasFlag(ModifierKeys.Control) ? CardFinish.Etched :
+            keys.HasFlag(ModifierKeys.Shift) ? CardFinish.Foil : null;
+
+        /// <summary>A collection-side row's finish as shown (v1 foil of an etched-only printing = etched).</summary>
+        public static string FinishOf(object row) =>
+            CardFinish.Normalize(Str(row, "ShownFinish") is { Length: > 0 } shown ? shown : Str(row, "Finish"));
+
         // ── Status line, confirm box, Qty box ───────────────────────────
         /// <summary>The page's "what just happened" line — amber only when something needs attention (ISA-101).</summary>
         public static void ShowStatus(TextBlock target, string text, bool warning)
@@ -65,6 +78,42 @@ namespace BreakersOfE.Views.Pages
         {
             foreach (char c in e.Text)
                 if (!char.IsDigit(c)) { e.Handled = true; return; }
+        }
+
+        /// <summary>
+        /// The Qty box: digits only, the number selected when it gets focus (so
+        /// typing replaces it), and Enter does the page's main action (adds).
+        /// </summary>
+        public static void WireQtyBox(TextBox box, Action onEnter)
+        {
+            box.PreviewTextInput += (_, e) => DigitsOnly(e);
+            box.GotKeyboardFocus += (_, _) => box.SelectAll();
+            box.PreviewKeyDown += (_, e) =>
+            {
+                if (e.Key != Key.Enter && e.Key != Key.Return) return;
+                onEnter();
+                e.Handled = true;
+            };
+        }
+
+        /// <summary>
+        /// The Edit pages' keys (from anywhere in the window, see <see cref="WindowKeyHook"/>):
+        /// Ctrl+Q → the Qty box (when <paramref name="qtyInUse"/>), Ctrl+Z → undo.
+        /// A text box keeps its own Ctrl+Z, except the Qty box (undoing a number is no use).
+        /// </summary>
+        public static void EditKeys(KeyEventArgs e, TextBox qty, Action undo, bool qtyInUse = true)
+        {
+            if (Keyboard.Modifiers != ModifierKeys.Control) return;
+            if (e.Key == Key.Q && qtyInUse)
+            {
+                qty.Focus();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Z && (Keyboard.FocusedElement is not TextBox || ReferenceEquals(Keyboard.FocusedElement, qty)))
+            {
+                undo();
+                e.Handled = true;
+            }
         }
 
         /// <summary>
@@ -135,6 +184,45 @@ namespace BreakersOfE.Views.Pages
             return true;
         }
 
+        // ── Price and notes cells (Want List Offer, Trade Binder Asking, Notes) ──
+        /// <summary>
+        /// The in-place editor for a price per copy. Empty = none; anything that
+        /// isn't a price says so on the status line; an unchanged price saves nothing.
+        /// </summary>
+        public static void EditPriceInPlace(DataGridCell? cell, decimal? current, string tip,
+                                            Action<string, bool> showStatus, Action<decimal?> save)
+        {
+            string text = current.HasValue ? current.Value.ToString("F2", CultureInfo.CurrentCulture) : "";
+            ShowCellEditor(cell, text, 90, TextAlignment.Right, digitsOnly: false,
+                $"{tip} Empty = none. Enter to save, Esc to cancel", typed =>
+                {
+                    if (!TryParsePrice(typed, out var price))
+                    {
+                        showStatus("Enter a price like 4.50 (or leave it empty for none).", true);
+                        return;
+                    }
+                    if (price != current) save(price);
+                });
+        }
+
+        /// <summary>The in-place editor for a row's notes; unchanged notes save nothing.</summary>
+        public static void EditNotesInPlace(DataGridCell? cell, string? current, string what, Action<string> save)
+        {
+            string text = current ?? "";
+            ShowCellEditor(cell, text, 280, TextAlignment.Left, digitsOnly: false,
+                $"Notes for this {what} row — Enter to save, Esc to cancel", typed =>
+                {
+                    if (typed.Trim() != text.Trim()) save(typed);
+                });
+        }
+
+        /// <summary>
+        /// Open a cell editor from a right-click menu item: after the menu has
+        /// closed, or closing the menu would close the editor at once.
+        /// </summary>
+        public static void AfterMenuCloses(System.Windows.Threading.DispatcherObject page, Action open) =>
+            page.Dispatcher.BeginInvoke(open, System.Windows.Threading.DispatcherPriority.Background);
+
         // ── In-place cell editor (double-click Qty / Notes / Asking / Offer …) ──
         /// <summary>
         /// A white box with dark text and a blue edge over a cell (same look on
@@ -204,19 +292,40 @@ namespace BreakersOfE.Views.Pages
         }
 
         // ── Splitters: sizes are remembered (all Edit pages share them) ──
+        /// <summary>
+        /// The page's splitters: their sizes are restored when the page opens
+        /// and saved after each drag (one size for every Edit page). Also turns
+        /// off the host's scrolling (see <see cref="DisableHostScroll"/>).
+        /// </summary>
+        public static void RememberSizes(Page page, RowDefinition top, RowDefinition bottom, ColumnDefinition detail)
+        {
+            page.Loaded += (_, _) =>
+            {
+                RestoreSplitters(top, bottom, detail);
+                DisableHostScroll(page);
+            };
+            // Drags bubble up from the splitters (column header grips are Thumbs too: left out).
+            page.AddHandler(Thumb.DragCompletedEvent, new DragCompletedEventHandler((_, e) =>
+            {
+                if (e.OriginalSource is not GridSplitter) return;
+                SaveTopShare(top, bottom);
+                SaveDetailWidth(detail);
+            }));
+        }
+
         private const string TopShareKey = "Edit:TopShare";
         private const string DetailWidthKey = "Edit:DetailWidth";
 
-        public static void SaveTopShare(RowDefinition top, RowDefinition bottom)
+        private static void SaveTopShare(RowDefinition top, RowDefinition bottom)
         {
             double total = top.ActualHeight + bottom.ActualHeight;
             if (total > 0) GridLayoutService.SetNumber(TopShareKey, top.ActualHeight / total);
         }
 
-        public static void SaveDetailWidth(ColumnDefinition detail) =>
+        private static void SaveDetailWidth(ColumnDefinition detail) =>
             GridLayoutService.SetNumber(DetailWidthKey, detail.ActualWidth);
 
-        public static void RestoreSplitters(RowDefinition top, RowDefinition bottom, ColumnDefinition detail)
+        private static void RestoreSplitters(RowDefinition top, RowDefinition bottom, ColumnDefinition detail)
         {
             if (GridLayoutService.GetNumber(TopShareKey) is double share && share > 0.05 && share < 0.95)
             {
@@ -245,6 +354,49 @@ namespace BreakersOfE.Views.Pages
                     break;
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// An Edit page's undo: the last <see cref="Limit"/> changes, newest last,
+    /// each with the text the Undo button and menu show.
+    /// </summary>
+    internal sealed class UndoStack<T>
+    {
+        private readonly List<(T Step, string Text)> _steps = new();
+
+        public UndoStack(int limit) => Limit = limit;
+
+        public int Limit { get; }
+        public int Count => _steps.Count;
+
+        public void Push(T step, string text)
+        {
+            _steps.Add((step, text));
+            if (_steps.Count > Limit) _steps.RemoveAt(0);
+        }
+
+        /// <summary>The newest change, taken off; false when there is none.</summary>
+        public bool TryPop(out T step, out string text)
+        {
+            if (_steps.Count == 0) { step = default!; text = ""; return false; }
+            (step, text) = _steps[^1];
+            _steps.RemoveAt(_steps.Count - 1);
+            return true;
+        }
+
+        public void Clear() => _steps.Clear();
+
+        /// <summary>The right-click menu item: "Undo: Added 2 …" or "Undo".</summary>
+        public string MenuText => _steps.Count > 0 ? $"Undo: {EditPageKit.Shorten(_steps[^1].Text)}" : "Undo";
+
+        /// <summary>The Undo button: on when there is something to undo; its tip says what.</summary>
+        public void ShowOn(ButtonBase button, string changes = "changes")
+        {
+            button.IsEnabled = _steps.Count > 0;
+            button.ToolTip = _steps.Count == 0
+                ? "Nothing to undo (Ctrl+Z)"
+                : $"Undo: {_steps[^1].Text}  (Ctrl+Z · {_steps.Count} of the last {Limit} {changes} can be undone)";
         }
     }
 
