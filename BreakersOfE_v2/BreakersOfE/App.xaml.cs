@@ -7,7 +7,7 @@ namespace BreakersOfE
     /// <summary>
     /// App.xaml.cs — first code that runs on startup, and the last on exit.
     ///
-    /// Startup: the BoE_V2 folder tree, leftovers from an interrupted update,
+    /// Startup: the Breakers of E folder tree, leftovers from an interrupted update,
     /// the pool databases (cards and online) and the collection database —
     /// each brought up to the current schema (only ever ADDS tables/columns).
     /// Exit: the collection database's write-ahead log is merged into
@@ -18,6 +18,16 @@ namespace BreakersOfE
         private static Views.SplashWindow? _splash;
         private static readonly System.Diagnostics.Stopwatch _splashShown = new();
         private static readonly TimeSpan SplashMinimum = TimeSpan.FromSeconds(2.5);
+
+        /// <summary>
+        /// No card data update on record yet (a new folder, or just converted from v1):
+        /// open on Update Database and start the full update by itself; no tour this time.
+        /// Every start until an update has finished.
+        /// </summary>
+        public static bool OpenUpdateDatabaseFirst { get; private set; }
+
+        /// <summary>The startup picture is still up (the Program Tour waits for it).</summary>
+        public static bool SplashOpen => _splash != null;
 
         /// <summary>Start-up progress on the splash (no-op once it's closed).</summary>
         public static void SplashStatus(string message, int progress)
@@ -59,18 +69,36 @@ namespace BreakersOfE
         {
             base.OnStartup(e);
 
-            // First start after installing: ask where to keep the data, before
-            // anything is created. (While the question is open, closing it must
-            // not end the app — the main window isn't there yet.)
-            if (AppFolderService.IsFirstRun)
+            // Light, Dark or Follow Windows (Settings → Appearance) — before any window shows.
+            ThemeApplier.ApplySaved();
+
+            // A v1 collection in the data folder: converted before anything opens it
+            // (backed up, counted before and after, put back if anything differs).
+            // v2 is installed and v1 is gone, so there's no Quit: only a failed
+            // conversion can close BoE (it asks again at the next start).
+            if (V1Conversion.IsV1Folder(AppFolderService.RootFolder))
             {
                 ShutdownMode = ShutdownMode.OnExplicitShutdown;
-                Views.Dialogs.FirstRunFolderDialog.Ask();
+                if (!Views.Dialogs.V1ConversionWindow.Run())
+                {
+                    Shutdown();
+                    return;
+                }
                 ShutdownMode = ShutdownMode.OnLastWindowClose;
             }
 
+            // No card data yet (new, or just converted): the full update starts by itself.
+            try
+            {
+                OpenUpdateDatabaseFirst = new AgentCoordinator().ReadStatus().LastPoolUpdate == null;
+            }
+            catch
+            {
+                OpenUpdateDatabaseFirst = false;   // can't tell: the reminder line still asks
+            }
+
             // The startup picture (the campus at night), shown while the app gets ready.
-            // After the first-run question, so it never covers it.
+            // After the v1 conversion window, so it never covers it.
             try
             {
                 _splash = new Views.SplashWindow();
@@ -87,12 +115,9 @@ namespace BreakersOfE
                 _splash = null;                   // no picture: start without it
             }
 
-            // Light, Dark or Follow Windows (Settings → Appearance).
-            ThemeApplier.ApplySaved();
-
             SplashStatus("Checking the data folder…", 15);
 
-            // Make sure My Documents\BoE_V2\ and its subfolders exist
+            // Make sure My Documents\Breakers of E\ and its subfolders exist
             AppFolderService.EnsureAllFolders();
 
             // Downloads used to live next to the program; copy them over once.

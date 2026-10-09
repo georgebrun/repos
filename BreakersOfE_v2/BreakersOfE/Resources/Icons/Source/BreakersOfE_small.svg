@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+<clipPath id="L"><polygon points="0,0 146,0 116,128 134,256 0,256"/></clipPath>
+<clipPath id="R"><polygon points="146,0 256,0 256,256 134,256 116,128"/></clipPath>
+<rect x="0" y="0" width="256" height="256" rx="48" fill="#1c2438"/>
+<g clip-path="url(#L)" transform="translate(-10,4)"><path d="M56 40h140v44h-92v24h76v40h-76v24h96v44H56z" fill="#f2c05a"/></g>
+<g clip-path="url(#R)" transform="translate(14,-10)"><path d="M56 40h140v44h-92v24h76v40h-76v24h96v44H56z" fill="#f2c05a"/></g>
+</svg>

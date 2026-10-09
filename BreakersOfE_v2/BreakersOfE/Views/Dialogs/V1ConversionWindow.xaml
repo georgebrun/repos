@@ -1,0 +1,80 @@
+<ui:FluentWindow x:Class="BreakersOfE.Views.Dialogs.V1ConversionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="Breakers of E — Welcome to v2"
+        Width="680" SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="True"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica"
+        Background="{DynamicResource ApplicationBackgroundBrush}"
+        Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+
+    <!-- First v2 start on a v1 data folder: convert it (backed up, counted, put back if anything differs).
+         v2 is installed and v1 is gone, so there's no way out: no Quit, no closing it until it's done. -->
+    <StackPanel>
+        <ui:TitleBar x:Name="Bar" Title="Breakers of E — Welcome to v2" ShowMaximize="False" ShowMinimize="False" ShowClose="False"/>
+
+        <StackPanel Margin="20,4,20,18">
+            <TextBlock Text="Welcome to Breakers of E 2.0" Style="{StaticResource BoePageTitle}"/>
+            <TextBlock x:Name="FolderText" Style="{StaticResource BoeHint}" Margin="0,0,0,10"/>
+
+            <!-- ── Before: what will happen ── -->
+            <StackPanel x:Name="IntroPanel">
+                <TextBlock TextWrapping="Wrap" FontSize="14"
+                           Text="Your Breakers of E v1 collection is here. v2 is a new program, and v1 is no longer supported. Before you start, v2 converts your data:"/>
+                <Border Style="{StaticResource BoePanel}" Margin="0,10,0,0">
+                    <StackPanel>
+                        <TextBlock TextWrapping="Wrap" Margin="0,2"
+                                   Text="• First, your v1 files are copied to a &quot;v1 Backups&quot; folder here, and every copy is checked."/>
+                        <TextBlock TextWrapping="Wrap" Margin="0,2"
+                                   Text="• Your collection, Trade Binder, Want List and the copies your decks use are converted. Every card is counted before and after; if anything doesn't match, your v1 files are put back and nothing changes."/>
+                        <TextBlock TextWrapping="Wrap" Margin="0,2"
+                                   Text="• Your decks, filters and card pictures stay as they are — v2 reads them."/>
+                        <TextBlock TextWrapping="Wrap" Margin="0,2"
+                                   Text="• v1's card database is set aside. Right after, v2 downloads a new one by itself (internet needed, a few hundred MB)."/>
+                    </StackPanel>
+                </Border>
+                <TextBlock Style="{StaticResource BoeHint}" Margin="0,4,0,0"
+                           Text="It takes a minute or two. Please don't close BoE while it runs."/>
+            </StackPanel>
+
+            <!-- ── While it runs ── -->
+            <StackPanel x:Name="WorkPanel" Visibility="Collapsed" Margin="0,6,0,0">
+                <TextBlock x:Name="StepText" FontSize="14" TextWrapping="Wrap"/>
+                <ProgressBar IsIndeterminate="True" Height="6" Margin="0,10,0,0"/>
+            </StackPanel>
+
+            <!-- ── After: the counts ── -->
+            <StackPanel x:Name="ResultPanel" Visibility="Collapsed">
+                <TextBlock x:Name="ResultText" FontSize="14" TextWrapping="Wrap"/>
+                <Border Style="{StaticResource BoePanel}" Margin="0,10,0,0">
+                    <Grid x:Name="CountGrid">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="110"/>
+                            <ColumnDefinition Width="110"/>
+                            <ColumnDefinition Width="40"/>
+                        </Grid.ColumnDefinitions>
+                    </Grid>
+                </Border>
+                <TextBlock x:Name="ProblemText" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Foreground="{DynamicResource BoeWarningBrush}" Visibility="Collapsed"/>
+                <TextBlock x:Name="NextText" TextWrapping="Wrap" Margin="0,10,0,0" Visibility="Collapsed"/>
+            </StackPanel>
+
+            <!-- ── Buttons ── -->
+            <DockPanel Margin="0,16,0,0" LastChildFill="False">
+                <ui:Button x:Name="BtnBackup" DockPanel.Dock="Left" Content="Open v1 Backups" Padding="10,4"
+                           Visibility="Collapsed" Click="BtnBackup_Click"
+                           ToolTip="Open the folder with your v1 files, as they were before converting"/>
+                <ui:Button x:Name="BtnGo" DockPanel.Dock="Right" Content="Convert" Appearance="Primary" MinWidth="110"
+                           Padding="10,4" Margin="8,0,0,0" IsDefault="True" Click="BtnGo_Click"/>
+                <ui:Button x:Name="BtnClose" DockPanel.Dock="Right" Content="Close" Padding="10,4" Click="BtnClose_Click"
+                           Visibility="Collapsed" ToolTip="Close BoE. It asks to convert again the next time it starts."/>
+            </DockPanel>
+        </StackPanel>
+    </StackPanel>
+</ui:FluentWindow>

@@ -1,7 +1,7 @@
 # Your Data Folder
 > Where BoE keeps everything, and what's in it.
 
-Everything BoE saves is in one folder, Documents\Breakers of E unless you picked another. **Settings → Data folder → Open Folder** opens it.
+Everything BoE saves is in one folder, Documents\Breakers of E unless you moved it ([[howto-move-folder]]). **Settings → Data folder → Open Folder** opens it.
 
 ## What's inside
 - **breakersofe.db**: the card pool (from Update Database).
@@ -16,4 +16,4 @@ Everything BoE saves is in one folder, Documents\Breakers of E unless you picked
 ## Backing up
 Close BoE and copy the whole folder, or export a **BoE full backup** ([[howto-export-backup]]).
 
-Note: v2 creates creates backup files of v1 files so you still have them if something goes wrong.
+Note: If you used Breakers of E v1, this is the same folder. The first time v2 started, it converted your v1 collection and kept your v1 files, exactly as they were, in the **v1 Backups** folder here.

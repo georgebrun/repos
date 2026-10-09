@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:pages="clr-namespace:BreakersOfE.Views.Pages"
+        xmlns:controls="clr-namespace:BreakersOfE.Views.Controls"
         Title="Breakers of E — v2.0"
         Width="1400" Height="900"
         MinWidth="1000" MinHeight="600"
@@ -31,7 +32,11 @@
                      Grid.Row="0"
                      Title="Breakers of E"
                      ShowMaximize="True"
-                     ShowMinimize="True" />
+                     ShowMinimize="True">
+            <ui:TitleBar.Icon>
+                <ui:ImageIcon Source="pack://application:,,,/Resources/Icons/BreakersOfE.png" Width="16" Height="16"/>
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
 
         <!-- Navigation sidebar + content area -->
         <ui:NavigationView x:Name="RootNavigation"
@@ -139,7 +144,7 @@
                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                            Margin="4,4,8,0"
                            Click="BtnHelp_Click"
-                           ToolTip="How BoE works, step-by-step how-tos, and keyboard shortcuts"
+                           ToolTip="How BoE works, step-by-step how-tos, and keyboard shortcuts (F1: help for the page you're on)"
                            Visibility="{Binding IsPaneOpen, ElementName=RootNavigation,
                                         Converter={StaticResource BoolToVisibilityConverter}}"/>
                     <ui:Button Width="36" Height="36" Padding="0"
@@ -466,6 +471,9 @@
             <!-- ═══ FOOTER ═══ -->
 
         </ui:NavigationView>
+
+        <!-- The Program Tour: over everything but the title bar (the window can still be moved or closed) -->
+        <controls:TourOverlay x:Name="Tour" Margin="0,40,0,0" Panel.ZIndex="100"/>
     </Grid>
 
 </ui:FluentWindow>

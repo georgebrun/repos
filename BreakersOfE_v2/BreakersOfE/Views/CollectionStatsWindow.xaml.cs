@@ -25,6 +25,7 @@ namespace BreakersOfE.Views
             KeyDown += (_, e) =>
             {
                 if (e.Key == System.Windows.Input.Key.Escape) Close();
+                if (e.Key == System.Windows.Input.Key.F1) HelpWindow.Open("statistics");   // Help for this window
             };
 
             var list = rows.Where(r => r.Quantity > 0).ToList();

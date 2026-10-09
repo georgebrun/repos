@@ -1,0 +1,71 @@
+<ui:FluentWindow x:Class="BreakersOfE.Views.Dialogs.FinishReviewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="Foil or Etched?"
+        Width="720" Height="640" MinHeight="380"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        ExtendsContentIntoTitleBar="True">
+
+    <!-- After v1 → v2: printings that come in foil AND etched, whose copies v1 stored as foil. Never guessed. -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="Foil or Etched?" ShowMaximize="False" ShowMinimize="False"/>
+
+        <StackPanel Grid.Row="1" Margin="20,4,20,8">
+            <TextBlock Text="Foil or Etched?" Style="{StaticResource BoePageTitle}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="14"
+                       Text="v1 couldn't tell foil from etched, so it kept these as foil. Each of these printings comes in both — pick what your copies really are. Anything left on Foil stays as it is."/>
+            <TextBlock x:Name="AutoText" Style="{StaticResource BoeHint}" Margin="0,6,0,0" Visibility="Collapsed"/>
+            <DockPanel Margin="0,10,0,0" LastChildFill="False">
+                <TextBlock x:Name="CountText" DockPanel.Dock="Left" Style="{StaticResource BoeHint}" VerticalAlignment="Center"/>
+                <ui:Button DockPanel.Dock="Right" Content="All Etched" Padding="10,4" Margin="6,0,0,0" Click="BtnAllEtched_Click"/>
+                <ui:Button DockPanel.Dock="Right" Content="All Foil" Padding="10,4" Click="BtnAllFoil_Click"/>
+            </DockPanel>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="2" Margin="20,0,12,0" VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="ItemsList">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource BoePanel}" Margin="0,0,8,6">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Image Grid.Column="0" Source="{Binding Picture}" Width="60" Height="84" Margin="0,0,12,0"
+                                       Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                    <TextBlock Text="{Binding Detail}" Style="{StaticResource BoeHint}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <RadioButton Content="Foil" IsChecked="{Binding IsFoil, Mode=TwoWay}" Margin="0,0,12,0" MinWidth="0"/>
+                                    <RadioButton Content="Etched" IsChecked="{Binding IsEtched, Mode=TwoWay}" MinWidth="0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <DockPanel Grid.Row="3" Margin="20,10,20,16" LastChildFill="False">
+            <TextBlock x:Name="StatusText" DockPanel.Dock="Left" Style="{StaticResource BoeHint}" VerticalAlignment="Center"/>
+            <ui:Button x:Name="BtnApply" DockPanel.Dock="Right" Content="Apply" Appearance="Primary" MinWidth="100"
+                       Padding="10,4" Margin="8,0,0,0" IsDefault="True" Click="BtnApply_Click"
+                       ToolTip="Set the ones picked as Etched to etched: collection, Trade Binder, Want List and decks"/>
+            <ui:Button DockPanel.Dock="Right" Content="Later" Padding="10,4" Click="BtnLater_Click"
+                       ToolTip="Decide later: this list comes back the next time BoE starts"/>
+        </DockPanel>
+    </Grid>
+</ui:FluentWindow>

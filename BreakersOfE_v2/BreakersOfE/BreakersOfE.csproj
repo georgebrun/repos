@@ -17,6 +17,8 @@
     <!-- v1's stand-in card pictures: card back (loading) and "Scryfall Fail" (no picture) -->
     <Resource Include="Resources\Images\*.png" />
     <Resource Include="Resources\Images\*.jpg" />
+    <!-- The app icon, small, for the title bar (the .ico itself is ApplicationIcon above) -->
+    <Resource Include="Resources\Icons\BreakersOfE.png" />
   </ItemGroup>
 
   <ItemGroup>

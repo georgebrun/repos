@@ -36,6 +36,7 @@ namespace BreakersOfE.Views
             KeyDown += (s, e) =>
             {
                 if (e.Key == System.Windows.Input.Key.Escape) Close();
+                if (e.Key == System.Windows.Input.Key.F1) HelpWindow.Open("card-details");   // Help for this window
                 if (e.Key == System.Windows.Input.Key.Left) BtnPrev_Click(s, e);
                 if (e.Key == System.Windows.Input.Key.Right) BtnNext_Click(s, e);
             };

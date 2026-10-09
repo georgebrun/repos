@@ -72,6 +72,8 @@ namespace BreakersOfE.Views.Pages
                 TradeBox.Text = s.TradePercent.ToString();
                 SaveMineCheck.IsChecked = s.SaveMyPictures;
                 SaveViewedCheck.IsChecked = s.SaveViewedPictures;
+                CheckVersionsCheck.IsChecked = s.CheckForNewVersions;
+                VersionText.Text = "Breakers of E " + ReleaseCheck.CurrentText;
                 StartPageBox.SelectedItem = (StartPageBox.ItemsSource as System.Collections.Generic.IEnumerable<Choice<string>>)!
                     .FirstOrDefault(c => c.Value == s.StartPage);
                 ReminderBox.SelectedItem = Reminders.FirstOrDefault(r => r.Value == s.UpdateReminderDays)
@@ -106,10 +108,51 @@ namespace BreakersOfE.Views.Pages
             s.SaveViewedPictures = SaveViewedCheck.IsChecked == true;
             if (StartPageBox.SelectedItem is Choice<string> start) s.StartPage = start.Value;
             if (ReminderBox.SelectedItem is Choice<int> rem) s.UpdateReminderDays = rem.Value;
+            s.CheckForNewVersions = CheckVersionsCheck.IsChecked == true;
             AppSettingsService.Save(s);
             // Just turned on: start getting your cards' pictures now, not in a few minutes.
             if (s.SaveMyPictures && !mineWasOn) SyncNow();
             if (s.SaveMyPictures != mineWasOn) _ = RefreshPictureInfo(recount: true);
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // ABOUT — Check for Updates
+        // ══════════════════════════════════════════════════════════════════
+        /// <summary>Ask GitHub now: the new-version window, "up to date", or why it couldn't check.</summary>
+        private async void BtnCheckNow_Click(object sender, RoutedEventArgs e)
+        {
+            BtnCheckNow.IsEnabled = false;
+            CheckText.Text = "Checking…";
+            try
+            {
+                var latest = await ReleaseCheck.GetLatestAsync();
+                if (ReleaseCheck.IsNewer(latest))
+                {
+                    CheckText.Text = $"Breakers of E {ReleaseCheck.Text(latest.Version)} is available.";
+                    Dialogs.NewVersionWindow.Ask(Window.GetWindow(this), latest);
+                }
+                else CheckText.Text = $"You're running the latest version ({ReleaseCheck.CurrentText}).";
+            }
+            catch (System.Net.Http.HttpRequestException ex)
+            {
+                // 404: no release yet (or the repository isn't public); 403: GitHub's limit, try later.
+                CheckText.Text = "Couldn't check for updates: " +
+                    (ex.StatusCode == System.Net.HttpStatusCode.NotFound ? "no release was found on GitHub."
+                     : ex.StatusCode == System.Net.HttpStatusCode.Forbidden ? "GitHub is busy. Try again in a while."
+                     : "no connection to GitHub. Check the internet connection.");
+            }
+            catch (TaskCanceledException)
+            {
+                CheckText.Text = "Couldn't check for updates: GitHub didn't answer in time. Try again in a while.";
+            }
+            catch (Exception ex)
+            {
+                CheckText.Text = "Couldn't check for updates: " + ex.Message;
+            }
+            finally
+            {
+                BtnCheckNow.IsEnabled = true;
+            }
         }
 
         // ══════════════════════════════════════════════════════════════════
@@ -284,6 +327,10 @@ namespace BreakersOfE.Views.Pages
             if (hex.Length == 0 || hex == Shown(p, key)) { box.Text = Shown(p, key); return; }   // not a colour, or unchanged
             SetColor(key, hex);
         }
+
+        /// <summary>Restart Tour: on again at startup, and shown now (from the Card Pool).</summary>
+        private void BtnRestartTour_Click(object sender, RoutedEventArgs e) =>
+            (Application.Current.MainWindow as MainWindow)?.StartTour(goHome: true);
 
         private void BtnResetColors_Click(object sender, RoutedEventArgs e)
         {

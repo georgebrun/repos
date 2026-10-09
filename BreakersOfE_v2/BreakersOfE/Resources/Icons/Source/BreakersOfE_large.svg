@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2e3a58"/><stop offset="1" stop-color="#111726"/></linearGradient>
+<linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe7a0"/><stop offset=".55" stop-color="#e8b44a"/><stop offset="1" stop-color="#b9801c"/></linearGradient>
+<clipPath id="L"><polygon points="0,0 150,0 118,92 146,128 104,170 132,256 0,256"/></clipPath>
+<clipPath id="R"><polygon points="150,0 256,0 256,256 132,256 104,170 146,128 118,92"/></clipPath>
+<filter id="sh"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity=".45"/></filter></defs>
+<rect x="8" y="8" width="240" height="240" rx="44" fill="url(#bg)"/>
+<rect x="9.5" y="9.5" width="237" height="237" rx="43" fill="none" stroke="#ffffff" stroke-opacity=".08" stroke-width="3"/>
+<g filter="url(#sh)">
+<g clip-path="url(#L)" transform="translate(-4,2)"><path d="M70 52h120v34h-80v26h66v32h-66v28h82v34H70z" fill="url(#g)"/></g>
+<g clip-path="url(#R)" transform="translate(10,-7) rotate(3 128 128)"><path d="M70 52h120v34h-80v26h66v32h-66v28h82v34H70z" fill="url(#g)"/></g></g>
+<g clip-path="url(#R)" transform="translate(10,-7) rotate(3 128 128)"><polyline points="150,0 118,92 146,128 104,170 132,256" fill="none" stroke="#fff6d8" stroke-width="3" opacity=".9"/></g>
+<polyline points="150,24 118,92 146,128 104,170 132,232" fill="none" stroke="#8fb8ff" stroke-width="2" opacity=".35"/>
+</svg>

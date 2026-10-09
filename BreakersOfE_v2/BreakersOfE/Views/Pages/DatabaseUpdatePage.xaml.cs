@@ -12,9 +12,24 @@ namespace BreakersOfE.Views.Pages
     /// </summary>
     public partial class DatabaseUpdatePage : Page
     {
+        /// <summary>
+        /// Set at startup when no card data update is on record (a new folder, or
+        /// just converted from v1): the next time this page opens, the full update
+        /// (Update Database) starts by itself. Used once.
+        /// </summary>
+        public static bool StartFullUpdateOnOpen { get; set; }
+
         public DatabaseUpdatePage()
         {
             InitializeComponent();
+            Loaded += (_, _) =>
+            {
+                if (!StartFullUpdateOnOpen) return;
+                StartFullUpdateOnOpen = false;
+                if (DataContext is ViewModels.DatabaseUpdateViewModel vm && vm.CanStart &&
+                    vm.StartFullUpdateWithRulingsCommand.CanExecute(null))
+                    vm.StartFullUpdateWithRulingsCommand.Execute(null);
+            };
         }
     }
 }

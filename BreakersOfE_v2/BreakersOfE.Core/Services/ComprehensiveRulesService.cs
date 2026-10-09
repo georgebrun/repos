@@ -27,7 +27,7 @@ namespace BreakersOfE.Services
     /// <summary>
     /// Wizards' Comprehensive Rules — the official text behind every keyword.
     /// Downloaded during Update Database (or from the Keyword Dictionary page)
-    /// to Documents\BoE_V2\comprehensive-rules.txt and read from there.
+    /// to Documents\Breakers of E\comprehensive-rules.txt and read from there.
     /// Wizards renames the file with every rules update, so the current link
     /// is read from their rules page. Anything failing leaves the last good
     /// copy in place (or none: the dictionary then uses its own definitions).

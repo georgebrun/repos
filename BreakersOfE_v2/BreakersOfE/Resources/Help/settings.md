@@ -18,7 +18,12 @@
 ## Startup and updates
 - **Open on**: the page BoE starts on.
 - **Remind me to update after**: when the update reminder appears (or Never).
-- **Restart Tour**: shows the Program Tour again.
+- **Restart Tour**: shows the Program Tour now, and again each time BoE starts until you tick **Do Not Show Again**.
 
 ## Data folder
 Shows where your data is and how big it is. **Open Folder**, **Move…** (see [[howto-move-folder]]) or **Use Documents\Breakers of E Again**. See [[data-folder]].
+
+## About
+Shows the version you're running.
+- **Check for new versions when BoE starts** (on to start): BoE quietly looks on GitHub each time it starts and only says something when a newer version is out. Then **Open Download Page** opens the release with the setup file; **Not Now** asks again next time.
+- **Check for Updates** looks right away, and says when you're up to date or why it couldn't check.

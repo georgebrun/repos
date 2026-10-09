@@ -30,6 +30,7 @@ namespace BreakersOfE.Views
             KeyDown += (_, e) =>
             {
                 if (e.Key == System.Windows.Input.Key.Escape) Close();
+                if (e.Key == System.Windows.Input.Key.F1) HelpWindow.Open("sets");   // Help for this window
             };
 
             ShowRows();

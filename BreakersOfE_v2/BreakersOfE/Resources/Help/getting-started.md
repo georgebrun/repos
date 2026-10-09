@@ -4,8 +4,8 @@
 Breakers of E (BoE) keeps track of your Magic: The Gathering cards: every card that exists (the **card pool**, from Scryfall), the cards you own (your **collection**), your **decks**, a **Trade Binder** and a **Want List**.
 
 ## The first time
-1. **Pick a data folder.** The Welcome window asks where BoE keeps your data. The default is Documents\Breakers of E. You can move it later: [[howto-move-folder]].
-2. **Download the card data.** Click **Update Database** at the bottom of the side menu, then **Update Database** on that page. It downloads every card, its prices, the set and mana symbols and the rulings from Scryfall. See [[update-database]].
+1. **Your data folder.** BoE keeps everything in Documents\Breakers of E. You can move it later: [[howto-move-folder]].
+2. **The card data downloads by itself.** BoE opens on **Update Database** and starts the download: every card, its prices, the set and mana symbols and the rulings from Scryfall. It takes a few minutes. If it can't finish (no internet), it starts again the next time BoE opens. See [[update-database]].
 3. **Add your cards.** Either type them in ([[howto-add-cards]]) or bring them in from another app or a list ([[howto-import]]).
 
 ## Finding your way
@@ -17,10 +17,12 @@ Everything is in the side menu on the left:
 
 See [[view-and-edit]] for what each part holds.
 
+Tip: Press [F1] anywhere for Help on the page you're on.
+
 Tip: Click any card to see its details on the left. Double-click it for the full card window with prices, price history, rulings and legality. See [[card-details]].
 
 ## Where to next
 - [[howto-build-deck]]
 - [[search-and-filters]]
 - [[keyboard-shortcuts]]
-- The **Program Tour** shows you around the window. It starts when BoE opens until you tick **Do Not Show Again**; Settings can start it again.
+- [[tour|Take the Program Tour]]: a quick look around the window. It starts when BoE opens until you tick **Do Not Show Again** (or finish it); **Settings → Restart Tour** shows it again.

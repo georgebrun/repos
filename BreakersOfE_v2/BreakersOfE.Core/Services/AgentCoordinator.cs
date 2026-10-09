@@ -108,6 +108,9 @@ namespace BreakersOfE.Services
             WriteStatus(status);
         }
 
+        /// <summary>Raised after an update is recorded (true: the card data, false: prices only) — the reminder and the v1 finish review listen.</summary>
+        public static event Action<bool>? Updated;
+
         /// <summary>
         /// Record that a full pool update completed.
         /// </summary>
@@ -117,6 +120,7 @@ namespace BreakersOfE.Services
             status.Status = "idle";
             status.LastPoolUpdate = DateTime.UtcNow;
             WriteStatus(status);
+            Updated?.Invoke(true);
         }
 
         /// <summary>
@@ -128,6 +132,7 @@ namespace BreakersOfE.Services
             status.Status = "idle";
             status.LastPriceUpdate = DateTime.UtcNow;
             WriteStatus(status);
+            Updated?.Invoke(false);
         }
 
         /// <summary>

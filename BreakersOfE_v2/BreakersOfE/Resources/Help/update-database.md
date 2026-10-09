@@ -1,7 +1,7 @@
 # Update Database
 > Card data, prices, symbols and rulings from Scryfall.
 
-Click **Update Database** at the bottom of the side menu. **Last Updates** shows when the card data and prices were last updated.
+Click **Update Database** at the bottom of the side menu. (The very first time, BoE opens here and starts the update by itself.) **Last Updates** shows when the card data and prices were last updated.
 
 - **Update Database**: everything. Card data, prices, set and mana symbols, then rulings.
 - **Card Data Only**: card data, prices and symbols, no rulings.

@@ -18,7 +18,7 @@ namespace BreakersOfE.Services
 
     /// <summary>
     /// Cards shared between decks (read-only): which of your decks use a card.
-    /// Reads every .deck file under Documents\BoE_V2\Decks (subfolders too).
+    /// Reads every .deck file under Documents\Breakers of E\Decks (subfolders too).
     /// A card counts by NAME — any printing — and a double-faced card by its
     /// front face. Files are cached and re-read only when they change.
     /// </summary>

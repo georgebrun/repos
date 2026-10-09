@@ -33,6 +33,27 @@ namespace BreakersOfE.Services
         /// </summary>
         public bool SaveViewedPictures { get; set; }
 
+        /// <summary>
+        /// The Program Tour starts when BoE opens. Off after the tour's Do Not
+        /// Show Again or its last stop; Settings → Restart Tour turns it back on.
+        /// </summary>
+        public bool ShowTour { get; set; } = true;
+
+        /// <summary>
+        /// At startup, look for a newer release of BoE on GitHub (quietly: a
+        /// message only when there is one). Settings → About can turn it off.
+        /// </summary>
+        public bool CheckForNewVersions { get; set; } = true;
+
+        /// <summary>When this data folder was converted from v1 (null: it never held v1 data).</summary>
+        public DateTime? ConvertedFromV1 { get; set; }
+
+        /// <summary>
+        /// Converted from v1, and the foil rows still to sort out once the card
+        /// data is in (etched-only printings, and the foil-or-etched review).
+        /// </summary>
+        public bool FinishReviewPending { get; set; }
+
         /// <summary>The page the app opens on: pool, collection, decks, sets or keywords.</summary>
         public string StartPage { get; set; } = "pool";
 
@@ -54,7 +75,7 @@ namespace BreakersOfE.Services
     }
 
     /// <summary>
-    /// App-wide user settings, stored in Documents\BoE_V2\Settings.json.
+    /// App-wide user settings, stored in Documents\Breakers of E\Settings.json.
     /// Read anywhere through <see cref="Current"/>; a missing or damaged file
     /// gives the defaults (it never stops the app). The Settings window
     /// (to be built) changes them through <see cref="Save"/>.

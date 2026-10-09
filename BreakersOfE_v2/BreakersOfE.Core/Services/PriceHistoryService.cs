@@ -33,7 +33,7 @@ namespace BreakersOfE.Services
     /// • One snapshot per day: a second update the same day replaces it.
     /// • Only prices that CHANGED since the card's previous snapshot are
     ///   written (a missing row = same as before), so the file stays small.
-    /// • Stored in its own file, Documents\BoE_V2\Collection\PriceHistory.db;
+    /// • Stored in its own file, Documents\Breakers of E\Collection\PriceHistory.db;
     ///   the collection database is never touched.
     ///
     /// Read by the card details pop-up (last 5 points) and Collection

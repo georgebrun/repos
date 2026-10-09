@@ -82,7 +82,7 @@ namespace BreakersOfE.Services
     /// • Copies used by decks or the Trade Binder (UsedCount) are never removed
     ///   or moved to another row.
     /// • Before the first change of the session, collection.db is backed up to
-    ///   Documents\BoE_V2\Backups (the newest 10 backups are kept).
+    ///   Documents\Breakers of E\Backups (the newest 10 backups are kept).
     /// • <see cref="Snapshot"/> / <see cref="Restore"/> give the page its Undo.
     /// Works for the main collection and the six special collections.
     /// </summary>

@@ -1,0 +1,47 @@
+<ui:FluentWindow x:Class="BreakersOfE.Views.Dialogs.NewVersionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="Update Available"
+        Width="440" SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica"
+        Background="{DynamicResource ApplicationBackgroundBrush}"
+        Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+
+    <!-- A newer BoE is on GitHub. News, not a problem: no amber (ISA-101). -->
+    <StackPanel>
+        <ui:TitleBar Title="Update Available" ShowMaximize="False" ShowMinimize="False"/>
+
+        <StackPanel Margin="20,4,20,18">
+            <TextBlock Text="A new version of Breakers of E is available!" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
+
+            <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="90"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="You have" Style="{StaticResource BoeHint}" Margin="0,2"/>
+                <TextBlock Grid.Row="0" Grid.Column="1" x:Name="CurrentText" Margin="0,2"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="New" Style="{StaticResource BoeHint}" Margin="0,2"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="NewText" FontWeight="SemiBold" Margin="0,2"/>
+            </Grid>
+
+            <TextBlock Style="{StaticResource BoeHint}" Margin="0,12,0,0" TextWrapping="Wrap"
+                       Text="The download page has the setup file and what's new. Your collection and decks stay as they are when you update."/>
+
+            <DockPanel Margin="0,16,0,0" LastChildFill="False">
+                <ui:Button x:Name="BtnOpen" DockPanel.Dock="Right" Content="Open Download Page" Appearance="Primary"
+                           Padding="10,4" Margin="8,0,0,0" IsDefault="True" Click="BtnOpen_Click"/>
+                <ui:Button DockPanel.Dock="Right" Content="Not Now" Padding="10,4" IsCancel="True" Click="BtnNotNow_Click"/>
+            </DockPanel>
+        </StackPanel>
+    </StackPanel>
+</ui:FluentWindow>

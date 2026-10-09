@@ -17,7 +17,7 @@ namespace BreakersOfE.Services
     /// <summary>
     /// Saved grid column layouts — order, visibility, and width — kept
     /// SEPARATELY per table (Cards, Tokens, Planes, …, Collection; decks and
-    /// binders later). Stored in My Documents\BoE_V2\GridLayouts.json.
+    /// binders later). Stored in My Documents\Breakers of E\GridLayouts.json.
     ///
     /// A table with no saved entry uses the grid's built-in defaults.
     /// </summary>

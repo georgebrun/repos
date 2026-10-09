@@ -156,9 +156,25 @@ namespace BreakersOfE.Views
             TopicTitle.Text = topic.Title;
             TopicSubtitle.Text = topic.Subtitle;
             TopicSubtitle.Visibility = topic.Subtitle.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-            HelpRenderer.Render(topic.Body, ContentPanel, id => ShowTopic(HelpTopics.Find(id)));
+            HelpRenderer.Render(topic.Body, ContentPanel, OpenLink);
             ContentScroll.ScrollToTop();
             SelectInTree(topic);
+        }
+
+        /// <summary>A link: another topic, or [[tour]] — the Program Tour in the main window.</summary>
+        private void OpenLink(string id)
+        {
+            if (string.Equals(id, "tour", StringComparison.OrdinalIgnoreCase))
+            {
+                if (Application.Current.MainWindow is MainWindow main)
+                {
+                    if (main.WindowState == WindowState.Minimized) main.WindowState = WindowState.Normal;
+                    main.Activate();
+                    main.StartTour(goHome: true);
+                }
+                return;
+            }
+            ShowTopic(HelpTopics.Find(id));
         }
 
         private void GoBack()

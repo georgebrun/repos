@@ -132,7 +132,7 @@ namespace BreakersOfE.Services
                 "application/json;q=0.9,*/*;q=0.8");
             _http.Timeout = TimeSpan.FromMinutes(30);
 
-            // Downloads go under Documents\BoE_V2 (the program folder may be read-only).
+            // Downloads go under Documents\Breakers of E (the program folder may be read-only).
             _setSymbolsFolder = AppFolderService.SetSymbolsFolder;
             _manaSymbolsFolder = AppFolderService.ManaSymbolsFolder;
         }

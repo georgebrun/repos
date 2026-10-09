@@ -22,5 +22,9 @@
 - Statistics and Set Completion: [Esc] closes.
 - Column filter: [Enter] is OK, [Esc] is Cancel.
 
+## Program Tour
+- [→] or [Enter]: next. [←]: back. [Esc]: close the tour.
+
 ## Help
+- [F1]: Help for the page you're on. It works in the card window, the statistics windows and Set Completion too.
 - [Ctrl+F]: search Help. [Backspace]: back to the previous topic. [Esc]: close Help.

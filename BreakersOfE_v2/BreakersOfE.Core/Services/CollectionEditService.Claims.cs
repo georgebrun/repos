@@ -304,6 +304,44 @@ namespace BreakersOfE.Services
             }
         }
 
+        /// <summary>
+        /// v1 → v2 conversion (V1Conversion): every v1 claim placed on its
+        /// collection rows at once, and every Used count worked out again from
+        /// the claims (v1's stored ones may be stale). Finishes are taken as v1
+        /// stored them: etched is sorted out after the first card data update.
+        /// Returns how many cards had claims or a Used count.
+        /// </summary>
+        public static int ConvertAllV1Claims()
+        {
+            using var db = new CollectionDbContext();
+
+            // v1 usage rows written before per-deck entries existed: their
+            // counts are in Quantity / FoilQuantity only.
+            foreach (var u in db.DeckUsages.Where(u => u.CollectionTable == "" &&
+                         u.EnteredNonFoil == 0 && u.EnteredFoil == 0 && (u.Quantity > 0 || u.FoilQuantity > 0)))
+            {
+                u.EnteredNonFoil = Math.Max(0, u.Quantity);
+                u.EnteredFoil = Math.Max(0, u.FoilQuantity);
+            }
+            db.SaveChanges();
+
+            var sids = db.DeckUsages.Where(u => u.CollectionTable == "").Select(u => u.ScryfallId)
+                .Concat(db.CollectionEntries.Where(e => e.UsedCount != 0).Select(e => e.ScryfallId))
+                .ToList().Where(s => !string.IsNullOrEmpty(s))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var tokenSids = db.TokenCollectionEntries.Where(e => e.UsedCount != 0).Select(e => e.ScryfallId)
+                .ToList().Where(s => !string.IsNullOrEmpty(s)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+            // No card pool yet (v1's was set aside): finishes as stored, no pool lookups.
+            var cache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            foreach (var s in sids.Concat(tokenSids)) cache[s] = false;
+
+            Recompute(db, CardsTable, sids, cache);
+            Recompute(db, TokensTable, tokenSids, cache);
+            db.SaveChanges();
+            return sids.Count + tokenSids.Count;
+        }
+
         private static string DeckTypeText(Deck deck) => DeckFormats.For(deck).Name;
 
         /// <summary>Claim up to <paramref name="n"/> free copies of one row for the deck (inside an open context).</summary>

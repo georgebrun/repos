@@ -18,7 +18,7 @@ namespace BreakersOfE.Views.Pages
     public partial class PoolPage
     {
         // ══════════════════════════════════════════════════════════════════
-        // DECK BROWSER — every .deck file under Documents\BoE_V2\Decks
+        // DECK BROWSER — every .deck file under Documents\Breakers of E\Decks
         // (subfolders too), grouped by deck type (DeckFormats order), A→Z. Click a tile →
         // the deck opens read-only in the grid or gallery (per the switch).
         // ══════════════════════════════════════════════════════════════════

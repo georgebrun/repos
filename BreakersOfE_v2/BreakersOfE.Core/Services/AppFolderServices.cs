@@ -6,14 +6,14 @@ namespace BreakersOfE.Services
     /// <summary>
     /// Centralized service for all user-facing file paths (v2).
     ///
-    /// All v2 user data lives under My Documents\BoE_V2\ — completely
-    /// separate from v1's "Breakers of E" folder, so the two versions
-    /// never touch each other's databases, decks, or images.
+    /// All user data lives under My Documents\Breakers of E\ — the same
+    /// folder v1 used. v2's first start there converts v1's collection
+    /// (V1Conversion), keeping v1's files in "v1 Backups".
     /// </summary>
     public static class AppFolderService
     {
         // ── Root folder — v2 uses its own isolated folder ──────────────────────
-        // Normally Documents\BoE_V2. Settings → Data folder can move it: the
+        // Normally Documents\Breakers of E. Settings → Data folder can move it: the
         // new place is remembered in a small pointer file OUTSIDE the data
         // folder (%LocalAppData%\BreakersOfE_V2\data-folder.txt), read once
         // at startup. A pointer to a folder that isn't there (an unplugged
@@ -22,9 +22,9 @@ namespace BreakersOfE.Services
 
         private static string? _root;
 
-        /// <summary>Documents\BoE_V2 — where the data lives unless moved.</summary>
+        /// <summary>Documents\Breakers of E — where the data lives unless moved.</summary>
         public static string DefaultRootFolder =>
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "BoE_V2");
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Breakers of E");
 
         private static string PointerPath =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -61,62 +61,6 @@ namespace BreakersOfE.Services
             return DefaultRootFolder;
         }
 
-        /// <summary>
-        /// First start after installing: no data folder chosen yet and no
-        /// default folder (Documents\BoE_V2) either. BoE then asks where to
-        /// keep its data before anything is created.
-        /// </summary>
-        public static bool IsFirstRun
-        {
-            get
-            {
-                if (_root != null) return false;
-                try
-                {
-                    return !File.Exists(PointerPath) && !Directory.Exists(DefaultRootFolder);
-                }
-                catch
-                {
-                    return false;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Where data would go for a folder the user picked: the folder itself
-        /// when it's empty, new, or already holds BoE data; otherwise a
-        /// "BoE_V2" folder inside it (so BoE's files don't mix with others).
-        /// </summary>
-        public static string DataFolderFor(string picked)
-        {
-            string full = Path.GetFullPath(picked);
-            if (!Directory.Exists(full)) return full;
-            bool hasBoe = File.Exists(Path.Combine(full, "breakersofe.db")) ||
-                          File.Exists(Path.Combine(full, "Collection", "collection.db"));
-            if (hasBoe || !Directory.EnumerateFileSystemEntries(full).Any()) return full;
-            return Path.Combine(full, "BoE_V2");
-        }
-
-        /// <summary>
-        /// First start: use this data folder from now on (creates it; checks
-        /// BoE can save there). Returns "" or why it can't be used.
-        /// </summary>
-        public static string ChooseFirstFolder(string folder)
-        {
-            try
-            {
-                Directory.CreateDirectory(folder);
-                if (!CanWrite(folder)) return "BoE can't save in that folder (read-only, or no permission). Pick another.";
-                SetDataFolder(folder);
-                _root = Path.GetFullPath(folder);
-                return "";
-            }
-            catch (Exception ex)
-            {
-                return $"That folder can't be used: {ex.Message}";
-            }
-        }
-
         private static bool CanWrite(string folder)
         {
             try
@@ -134,7 +78,7 @@ namespace BreakersOfE.Services
 
         /// <summary>
         /// Remember a new data folder (used from the next start). Null or the
-        /// default folder: forget the pointer, back to Documents\BoE_V2.
+        /// default folder: forget the pointer, back to Documents\Breakers of E.
         /// </summary>
         public static void SetDataFolder(string? folder)
         {
@@ -145,7 +89,7 @@ namespace BreakersOfE.Services
                               StringComparison.OrdinalIgnoreCase))
             {
                 if (File.Exists(PointerPath)) File.Delete(PointerPath);
-                Directory.CreateDirectory(DefaultRootFolder);     // so the next start doesn't ask again (first run)
+                Directory.CreateDirectory(DefaultRootFolder);
                 return;
             }
             File.WriteAllText(PointerPath, Path.GetFullPath(folder));
@@ -169,7 +113,7 @@ namespace BreakersOfE.Services
 
         // ── Program folder (next to the executable) — READ-ONLY at run time:
         //    under Program Files a normal user can't write here. Everything the
-        //    app downloads goes under Documents\BoE_V2 instead. ──────────────
+        //    app downloads goes under Documents\Breakers of E instead. ──────────────
         public static string ProgramFolder =>
             AppDomain.CurrentDomain.BaseDirectory;
 
@@ -207,7 +151,7 @@ namespace BreakersOfE.Services
 
         /// <summary>
         /// One-time move: earlier v2 builds saved symbols and rulings next to
-        /// the program. Copy them to Documents\BoE_V2 if they aren't there yet
+        /// the program. Copy them to Documents\Breakers of E if they aren't there yet
         /// (the originals are left alone). Never throws.
         /// </summary>
         public static void CopyLegacyDownloads()
