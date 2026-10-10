@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/icon.png" width="96" alt="Breakers of E icon">
+  <img src="icon.png" width="96" alt="Breakers of E icon">
 </p>
 
 <h1 align="center">Breakers of E</h1>
