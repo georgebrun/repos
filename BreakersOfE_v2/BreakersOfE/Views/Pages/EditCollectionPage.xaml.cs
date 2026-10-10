@@ -131,6 +131,7 @@ namespace BreakersOfE.Views.Pages
         private static string DisplayName(string poolTag) => poolTag switch
         {
             "ArtSeries" => "Art Series",
+            "FrontCards" => "Front Cards",
             "MtgoCards" => "MTGO",
             "ArenaCards" => "Arena",
             "" => "Cards",

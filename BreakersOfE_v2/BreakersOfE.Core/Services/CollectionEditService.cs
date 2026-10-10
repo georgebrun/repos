@@ -98,6 +98,8 @@ namespace BreakersOfE.Services
             "Vanguards" => "CollVanguards",
             "ArtSeries" => "CollArtSeries",
             "Conspiracies" => "CollConspiracies",
+            "Oversized" => OversizedTable,
+            "FrontCards" => FrontTable,
             "MtgoCards" => "MtgoCollection",
             "ArenaCards" => "ArenaCollection",
             _ => "Collection",
@@ -141,6 +143,8 @@ namespace BreakersOfE.Services
                     "CollVanguards" => db.VanguardCards.AsNoTracking().FirstOrDefault(c => c.ScryfallId == scryfallId),
                     "CollArtSeries" => db.ArtSeriesCards.AsNoTracking().FirstOrDefault(c => c.ScryfallId == scryfallId),
                     "CollConspiracies" => db.ConspiracyCards.AsNoTracking().FirstOrDefault(c => c.ScryfallId == scryfallId),
+                    OversizedTable => db.OversizedCards.AsNoTracking().FirstOrDefault(c => c.ScryfallId == scryfallId),
+                    FrontTable => db.FrontCards.AsNoTracking().FirstOrDefault(c => c.ScryfallId == scryfallId),
                     _ => (object?)db.PoolCards.AsNoTracking().FirstOrDefault(c => c.ScryfallId == scryfallId),
                 };
             }
@@ -849,6 +853,8 @@ namespace BreakersOfE.Services
                 "CollVanguards" => db.VanguardCollectionEntries.Where(e => e.ScryfallId == sid).ToList(),
                 "CollArtSeries" => db.ArtSeriesCollectionEntries.Where(e => e.ScryfallId == sid).ToList(),
                 "CollConspiracies" => db.ConspiracyCollectionEntries.Where(e => e.ScryfallId == sid).ToList(),
+                OversizedTable => db.OversizedCollectionEntries.Where(e => e.ScryfallId == sid).ToList(),
+                FrontTable => db.FrontCollectionEntries.Where(e => e.ScryfallId == sid).ToList(),
                 "MtgoCollection" => db.OnlineCollectionEntries
                     .Where(e => e.Game == OnlineGame.Mtgo && e.ScryfallId == sid).ToList(),
                 "ArenaCollection" => db.OnlineCollectionEntries
@@ -879,6 +885,8 @@ namespace BreakersOfE.Services
                     "CollVanguards" => db.VanguardCollectionEntries.Where(e => chunk.Contains(e.ScryfallId)).ToList(),
                     "CollArtSeries" => db.ArtSeriesCollectionEntries.Where(e => chunk.Contains(e.ScryfallId)).ToList(),
                     "CollConspiracies" => db.ConspiracyCollectionEntries.Where(e => chunk.Contains(e.ScryfallId)).ToList(),
+                    OversizedTable => db.OversizedCollectionEntries.Where(e => chunk.Contains(e.ScryfallId)).ToList(),
+                    FrontTable => db.FrontCollectionEntries.Where(e => chunk.Contains(e.ScryfallId)).ToList(),
                     "MtgoCollection" => db.OnlineCollectionEntries
                         .Where(e => e.Game == OnlineGame.Mtgo && chunk.Contains(e.ScryfallId)).ToList(),
                     "ArenaCollection" => db.OnlineCollectionEntries
@@ -901,6 +909,8 @@ namespace BreakersOfE.Services
             "CollVanguards" => db.VanguardCollectionEntries.Select(e => e.ScryfallId).Distinct().ToList(),
             "CollArtSeries" => db.ArtSeriesCollectionEntries.Select(e => e.ScryfallId).Distinct().ToList(),
             "CollConspiracies" => db.ConspiracyCollectionEntries.Select(e => e.ScryfallId).Distinct().ToList(),
+            OversizedTable => db.OversizedCollectionEntries.Select(e => e.ScryfallId).Distinct().ToList(),
+            FrontTable => db.FrontCollectionEntries.Select(e => e.ScryfallId).Distinct().ToList(),
             "MtgoCollection" => db.OnlineCollectionEntries.Where(e => e.Game == OnlineGame.Mtgo).Select(e => e.ScryfallId).Distinct().ToList(),
             "ArenaCollection" => db.OnlineCollectionEntries.Where(e => e.Game == OnlineGame.Arena).Select(e => e.ScryfallId).Distinct().ToList(),
             BinderTable => db.TradeBinderEntries.Select(e => e.ScryfallId).Distinct().ToList(),
@@ -939,6 +949,8 @@ namespace BreakersOfE.Services
             "CollVanguards" => typeof(VanguardCollectionEntry),
             "CollArtSeries" => typeof(ArtSeriesCollectionEntry),
             "CollConspiracies" => typeof(ConspiracyCollectionEntry),
+            OversizedTable => typeof(OversizedCollectionEntry),
+            FrontTable => typeof(FrontCollectionEntry),
             "MtgoCollection" or "ArenaCollection" => typeof(OnlineCollectionEntry),
             BinderTable => typeof(TradeBinderEntry),
             WantTable => typeof(WantListEntry),

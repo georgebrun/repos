@@ -14,6 +14,10 @@ namespace BreakersOfE.Data
         public DbSet<VanguardCard> VanguardCards { get; set; }
         public DbSet<ArtSeriesCard> ArtSeriesCards { get; set; }
         public DbSet<ConspiracyCard> ConspiracyCards { get; set; }
+        /// <summary>Oversized cards (Scryfall "oversized"): display commanders, league prizes …</summary>
+        public DbSet<OversizedCard> OversizedCards { get; set; }
+        /// <summary>The theme cards at the front of Jumpstart and similar packs.</summary>
+        public DbSet<FrontCard> FrontCards { get; set; }
 
         // ── Other Tables ────────────────────────────────────────────────────
         public DbSet<AppSetting> AppSettings { get; set; }
@@ -45,6 +49,11 @@ namespace BreakersOfE.Data
         {
             Database.EnsureCreated();
 
+            // Tables added in a later version (Oversized, Front Cards): EnsureCreated
+            // does nothing once a file has tables, so the model's own script runs
+            // with IF NOT EXISTS (existing tables are left as they are).
+            CreateMissingTables();
+
             // Conversion for pools built before a column existed: add it (no
             // data lost). Checked first, so there are no "duplicate column"
             // exceptions. The next Full Database Update fills it in.
@@ -56,6 +65,25 @@ namespace BreakersOfE.Data
             foreach (var table in new[] { "PoolCards", "TokenCards", "PlanarCards", "SchemeCards",
                                           "VanguardCards", "ArtSeriesCards", "ConspiracyCards" })
                 AddColumnIfMissing(table, "IsEtched", "INTEGER NOT NULL DEFAULT 0");
+        }
+
+        private void CreateMissingTables()
+        {
+            string script = Database.GenerateCreateScript()
+                .Replace("CREATE TABLE \"", "CREATE TABLE IF NOT EXISTS \"")
+                .Replace("CREATE UNIQUE INDEX \"", "CREATE UNIQUE INDEX IF NOT EXISTS \"")
+                .Replace("CREATE INDEX \"", "CREATE INDEX IF NOT EXISTS \"");
+            Database.OpenConnection();
+            try
+            {
+                using var cmd = Database.GetDbConnection().CreateCommand();
+                cmd.CommandText = script;
+                cmd.ExecuteNonQuery();
+            }
+            finally
+            {
+                Database.CloseConnection();
+            }
         }
 
         private void AddColumnIfMissing(string table, string column, string definition)
@@ -147,6 +175,22 @@ namespace BreakersOfE.Data
 
             modelBuilder.Entity<ConspiracyCard>()
                 .HasIndex(c => c.Name);
+
+            // OversizedCards: full cards, like PoolCards (paper only: no online fields).
+            var over = modelBuilder.Entity<OversizedCard>();
+            over.HasIndex(c => c.ScryfallId).IsUnique();
+            over.HasIndex(c => c.Name);
+            over.Ignore(c => c.IsOnMtgo);
+            over.Ignore(c => c.IsOnArena);
+            over.Ignore(c => c.IsDigital);
+            over.Ignore(c => c.MtgoId);
+            over.Ignore(c => c.MtgoFoilId);
+            over.Ignore(c => c.ArenaId);
+
+            // FrontCards
+            modelBuilder.Entity<FrontCard>()
+                .HasIndex(c => c.ScryfallId)
+                .IsUnique();
 
             // ── AppSettings key is already the primary key ───────────────────
             modelBuilder.Entity<AppSetting>()

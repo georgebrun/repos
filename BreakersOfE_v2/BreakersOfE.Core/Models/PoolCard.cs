@@ -6,7 +6,12 @@ using System.Windows.Media;
 
 namespace BreakersOfE.Models
 {
-    public class PoolCard : IOwnedCard, ILegalityRow, System.ComponentModel.INotifyPropertyChanged
+    /// <summary>
+    /// Everything a pool printing has. Not a table of its own: EF maps the
+    /// concrete types below, each to its own table (an unmapped base class
+    /// gives each its own table, not one shared one).
+    /// </summary>
+    public abstract class PoolCardBase : IOwnedCard, ILegalityRow, System.ComponentModel.INotifyPropertyChanged
     {
         [Key]
         public int PoolId { get; set; }
@@ -186,4 +191,14 @@ namespace BreakersOfE.Models
             CardColorService.GetForeground(
                 Colors, ColorIdentity, TypeLine);
     }
+
+    /// <summary>A card in the card pool (Card Pool → Cards), and the online pool's rows.</summary>
+    public class PoolCard : PoolCardBase { }
+
+    /// <summary>
+    /// An oversized card (Card Pool → Oversized): Scryfall marks it oversized —
+    /// display commanders, league prizes, oversized promos. A full card, just
+    /// not one for decks (planes, schemes and vanguards keep their own tables).
+    /// </summary>
+    public class OversizedCard : PoolCardBase { }
 }

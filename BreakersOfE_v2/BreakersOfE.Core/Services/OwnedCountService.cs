@@ -84,6 +84,10 @@ namespace BreakersOfE.Services
                                   .ToList().Select(e => (e.ScryfallId, e.Finish, e.Quantity)),
                     "Conspiracies" => db.ConspiracyCollectionEntries.Select(e => new { e.ScryfallId, e.Finish, e.Quantity })
                                   .ToList().Select(e => (e.ScryfallId, e.Finish, e.Quantity)),
+                    "Oversized" => db.OversizedCollectionEntries.Select(e => new { e.ScryfallId, e.Finish, e.Quantity })
+                                  .ToList().Select(e => (e.ScryfallId, e.Finish, e.Quantity)),
+                    "FrontCards" => db.FrontCollectionEntries.Select(e => new { e.ScryfallId, e.Finish, e.Quantity })
+                                  .ToList().Select(e => (e.ScryfallId, e.Finish, e.Quantity)),
                     _ => db.CollectionEntries.Select(e => new { e.ScryfallId, e.Finish, e.Quantity })
                                   .ToList().Select(e => (e.ScryfallId, e.Finish, e.Quantity)),
                 };

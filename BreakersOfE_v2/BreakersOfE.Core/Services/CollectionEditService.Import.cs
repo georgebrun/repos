@@ -76,6 +76,8 @@ namespace BreakersOfE.Services
                     "CollVanguards" => db.VanguardCards.AsNoTracking().Where(c => chunk.Contains(c.ScryfallId)).ToList(),
                     "CollArtSeries" => db.ArtSeriesCards.AsNoTracking().Where(c => chunk.Contains(c.ScryfallId)).ToList(),
                     "CollConspiracies" => db.ConspiracyCards.AsNoTracking().Where(c => chunk.Contains(c.ScryfallId)).ToList(),
+                    OversizedTable => db.OversizedCards.AsNoTracking().Where(c => chunk.Contains(c.ScryfallId)).ToList(),
+                    FrontTable => db.FrontCards.AsNoTracking().Where(c => chunk.Contains(c.ScryfallId)).ToList(),
                     _ => db.PoolCards.AsNoTracking().Where(c => chunk.Contains(c.ScryfallId)).ToList(),
                 };
                 foreach (var c in cards) map.TryAdd(GetString(c, "ScryfallId"), c);
@@ -379,7 +381,8 @@ namespace BreakersOfE.Services
         // ══════════════════════════════════════════════════════════════════
         /// <summary>The paper collection tables, in the order the full file lists them.</summary>
         public static readonly string[] PaperTables =
-            { CardsTable, TokensTable, "CollPlanes", "CollSchemes", "CollVanguards", "CollArtSeries", "CollConspiracies" };
+            { CardsTable, TokensTable, "CollPlanes", "CollSchemes", "CollVanguards", "CollArtSeries", "CollConspiracies",
+              OversizedTable, FrontTable };
 
         /// <summary>
         /// Every row of every paper collection table, every field — the file a

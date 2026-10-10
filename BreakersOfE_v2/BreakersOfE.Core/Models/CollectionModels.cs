@@ -4,7 +4,11 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace BreakersOfE.Models
 {
     // ── Pool Collection ─────────────────────────────────────────────────────
-    public class CollectionEntry : ILegalityRow, IFinishRow
+    /// <summary>
+    /// Everything a collection row of a full card has. Not a table of its own:
+    /// EF maps the concrete types below, each to its own table.
+    /// </summary>
+    public abstract class CollectionEntryBase : ILegalityRow, IFinishRow
     {
         [Key]
         public int CollectionEntryId { get; set; }
@@ -197,6 +201,12 @@ namespace BreakersOfE.Models
             BreakersOfE.Services.CardColorService.GetForeground(
                 Colors, ColorIdentity, TypeLine);
     }
+
+    /// <summary>Your cards (Collection → Cards).</summary>
+    public class CollectionEntry : CollectionEntryBase { }
+
+    /// <summary>Your oversized cards (Collection → Oversized). Never in decks.</summary>
+    public class OversizedCollectionEntry : CollectionEntryBase { }
 
     // ── Token Collection ────────────────────────────────────────────────────
     public class TokenCollectionEntry : IFinishRow
@@ -745,6 +755,109 @@ namespace BreakersOfE.Models
         public string OracleId { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string TypeLine { get; set; } = string.Empty;
+        public string FlavorText { get; set; } = string.Empty;
+        public string SetCode { get; set; } = string.Empty;
+        public string SetName { get; set; } = string.Empty;
+        public string SetType { get; set; } = string.Empty;
+        public string CollectorNumber { get; set; } = string.Empty;
+        public string Rarity { get; set; } = string.Empty;
+        public string Artist { get; set; } = string.Empty;
+        public string ImageSmallUrl { get; set; } = string.Empty;
+        public string ImageNormalUrl { get; set; } = string.Empty;
+        public string Layout { get; set; } = string.Empty;
+        public bool IsFoilAvailable { get; set; }
+        public bool IsNonFoilAvailable { get; set; }
+        public string ReleasedAt { get; set; } = string.Empty;
+        public string LocalImagePath { get; set; } = string.Empty;
+        public bool IsFavorite { get; set; }
+
+        // ── Collection metadata ─────────────────────────────────────────────
+        public int Quantity { get; set; }
+        public int FoilQuantity { get; set; }
+        // Phase 2 per-finish: Finish nonfoil/foil/etched, single Price for this finish.
+        public string Finish { get; set; } = "nonfoil";
+        public decimal? Price { get; set; }
+        public string Condition { get; set; } = "Unknown";
+        public string Language { get; set; } = "English";
+        public string Notes { get; set; } = string.Empty;
+        public string StorageLocation { get; set; } = string.Empty;
+        public DateTime DateAdded { get; set; } = DateTime.Now;
+        public DateTime DateModified { get; set; } = DateTime.Now;
+        public int UsedCount { get; set; } = 0;
+        public decimal? BuyAt { get; set; }
+        public decimal? SellAt { get; set; }
+        public decimal? SellAtValue { get; set; }
+        public decimal? PriceHigh { get; set; }
+        public decimal? MarketValue { get; set; }
+        public decimal? PriceLow { get; set; }
+        public int Needed { get; set; } = 0;
+        public int Excess { get; set; } = 0;
+        public int Target { get; set; } = 0;
+        public string Desired { get; set; } = "Unassigned";
+        public string CardGroup { get; set; } = string.Empty;
+        public string PrintType { get; set; } = "Unknown";
+        public string BuyStatus { get; set; } = "Unassigned";
+        public string SellStatus { get; set; } = "Unassigned";
+
+        // ── Display-only (not stored): lets the shared grid, gallery, detail
+        //    panel, and totals row show these rows like the main collection. ──
+        /// <summary>Filled from the pool on load: the printing exists as etched /
+        /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
+        [NotMapped] public bool IsEtched { get; set; }
+        [NotMapped] public bool PrintingEtchedOnly { get; set; }
+        /// <summary>The finish this row really is (a v1 foil row of an etched-only printing is etched).</summary>
+        [NotMapped] public string ShownFinish => CardFinish.Shown(Finish, PrintingEtchedOnly);
+        [NotMapped] public string FinishPill => CardFinish.Pill(ShownFinish);
+        /// <summary>Favorite column: a star when this row is a favorite.</summary>
+        [NotMapped] public string FavoriteDisplay => IsFavorite ? "★" : string.Empty;
+        [NotMapped] public string PriceDisplay => Price.HasValue ? $"${Price.Value:F2}" : "—";
+        [NotMapped] public decimal RowValue => (Price ?? 0m) * Quantity;
+        [NotMapped] public string RowValueDisplay => Price.HasValue ? $"${RowValue:F2}" : "—";
+        [NotMapped] public string DateAddedDisplay => DateAdded.ToString("yyyy-MM-dd");
+        [NotMapped]
+        public string RarityCode => Rarity?.ToLower() switch
+        {
+            "common" => "C",
+            "uncommon" => "U",
+            "rare" => "R",
+            "mythic" => "M",
+            "special" => "S",
+            "bonus" => "B",
+            _ => "?"
+        };
+        [NotMapped]
+        public double CollectorNumberSort
+        {
+            get
+            {
+                if (double.TryParse(CollectorNumber, out var v)) return v;
+                int end = 0;
+                while (end < CollectorNumber.Length && char.IsDigit(CollectorNumber[end])) end++;
+                return end > 0 && double.TryParse(CollectorNumber[..end], out var v2) ? v2 : 9999;
+            }
+        }
+        [NotMapped] public string SetSymbolPath => Services.AppFolderService.SetSymbolPath(SetCode);
+        [NotMapped] public int AvailableCount => Math.Max(0, Quantity - UsedCount);
+        [NotMapped] public string BuyAtDisplay => BuyAt.HasValue ? $"${BuyAt.Value:F2}" : string.Empty;
+        [NotMapped] public string SellAtDisplay => SellAt.HasValue ? $"${SellAt.Value:F2}" : string.Empty;
+        [NotMapped] public string SellAtValueDisplay => SellAtValue.HasValue ? $"${SellAtValue.Value:F2}" : string.Empty;
+        [NotMapped]
+        public System.Windows.Media.Brush RowForegroundBrush =>
+            BreakersOfE.Services.CardColorService.GetForeground("", "", TypeLine);
+    }
+
+    // ── Front Cards Collection ──────────────────────────────────────────────
+    public class FrontCollectionEntry : IFinishRow
+    {
+        [Key]
+        public int FrontCollectionEntryId { get; set; }
+        public string ScryfallId { get; set; } = string.Empty;
+
+        // ── Embedded card data ──────────────────────────────────────────────
+        public string OracleId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string TypeLine { get; set; } = string.Empty;
+        public string OracleText { get; set; } = string.Empty;
         public string FlavorText { get; set; } = string.Empty;
         public string SetCode { get; set; } = string.Empty;
         public string SetName { get; set; } = string.Empty;

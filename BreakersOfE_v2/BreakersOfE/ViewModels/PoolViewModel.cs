@@ -111,6 +111,14 @@ namespace BreakersOfE.ViewModels
                             rows = db.ConspiracyCards.AsNoTracking().OrderBy(c => c.Name)
                                      .ToList().Cast<object>().ToList();
                             label = "conspiracies"; break;
+                        case "Oversized":
+                            rows = db.OversizedCards.AsNoTracking().OrderBy(c => c.Name)
+                                     .ToList().Cast<object>().ToList();
+                            label = "oversized cards"; break;
+                        case "FrontCards":
+                            rows = db.FrontCards.AsNoTracking().OrderBy(c => c.Name)
+                                     .ToList().Cast<object>().ToList();
+                            label = "front cards"; break;
                         case "Collection":
                             // View-only: read the collection, never write.
                             using (var cdb = new CollectionDbContext())
@@ -149,6 +157,17 @@ namespace BreakersOfE.ViewModels
                                 rows = cdb.ConspiracyCollectionEntries.AsNoTracking().OrderBy(c => c.Name)
                                           .ToList().Cast<object>().ToList();
                             label = "conspiracy rows"; break;
+                        case "CollOversized":
+                            using (var cdb = new CollectionDbContext())
+                                rows = cdb.OversizedCollectionEntries.AsNoTracking()
+                                          .OrderBy(c => c.Name).ThenBy(c => c.SetCode)
+                                          .ToList().Cast<object>().ToList();
+                            label = "oversized rows"; break;
+                        case "CollFrontCards":
+                            using (var cdb = new CollectionDbContext())
+                                rows = cdb.FrontCollectionEntries.AsNoTracking().OrderBy(c => c.Name)
+                                          .ToList().Cast<object>().ToList();
+                            label = "front card rows"; break;
                         case "TradeBinder":
                             using (var cdb = new CollectionDbContext())
                                 rows = cdb.TradeBinderEntries.AsNoTracking()
@@ -299,6 +318,8 @@ namespace BreakersOfE.ViewModels
             "Vanguards"    => "Card Pool — Vanguards",
             "ArtSeries"    => "Card Pool — Art Series",
             "Conspiracies" => "Card Pool — Conspiracies",
+            "Oversized"    => "Card Pool — Oversized",
+            "FrontCards"   => "Card Pool — Front Cards",
             "Collection"   => "Collection — Cards",
             "CollTokens"       => "Collection — Tokens",
             "CollPlanes"       => "Collection — Planes",
@@ -306,6 +327,8 @@ namespace BreakersOfE.ViewModels
             "CollVanguards"    => "Collection — Vanguards",
             "CollArtSeries"    => "Collection — Art Series",
             "CollConspiracies" => "Collection — Conspiracies",
+            "CollOversized"    => "Collection — Oversized",
+            "CollFrontCards"   => "Collection — Front Cards",
             "TradeBinder"      => "Trade Binder",
             "WantList"         => "Want List",
             "MtgoCards"        => "Online — MTGO Cards",

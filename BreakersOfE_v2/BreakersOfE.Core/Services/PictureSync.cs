@@ -239,6 +239,8 @@ namespace BreakersOfE.Services
                 Add(db.VanguardCards.AsNoTracking().Select(c => new { c.ScryfallId, c.ImageNormalUrl }).AsEnumerable().Select(c => (c.ScryfallId, c.ImageNormalUrl)));
                 Add(db.ArtSeriesCards.AsNoTracking().Select(c => new { c.ScryfallId, c.ImageNormalUrl }).AsEnumerable().Select(c => (c.ScryfallId, c.ImageNormalUrl)));
                 Add(db.ConspiracyCards.AsNoTracking().Select(c => new { c.ScryfallId, c.ImageNormalUrl }).AsEnumerable().Select(c => (c.ScryfallId, c.ImageNormalUrl)));
+                Add(db.OversizedCards.AsNoTracking().Select(c => new { c.ScryfallId, c.ImageNormalUrl }).AsEnumerable().Select(c => (c.ScryfallId, c.ImageNormalUrl)));
+                Add(db.FrontCards.AsNoTracking().Select(c => new { c.ScryfallId, c.ImageNormalUrl }).AsEnumerable().Select(c => (c.ScryfallId, c.ImageNormalUrl)));
             }
             catch (Exception ex)
             {

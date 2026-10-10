@@ -257,6 +257,16 @@
                                                TargetPageType="{x:Type pages:PoolPage}"
                                                Icon="{ui:SymbolIcon EyeTracking24}" />
 
+                        <ui:NavigationViewItem Content="Oversized"
+                                               Tag="Oversized"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon FullScreenMaximize24}" />
+
+                        <ui:NavigationViewItem Content="Front Cards"
+                                               Tag="FrontCards"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Tag24}" />
+
                     </ui:NavigationViewItem.MenuItems>
                 </ui:NavigationViewItem>
 
@@ -311,6 +321,16 @@
                                                Tag="CollConspiracies"
                                                TargetPageType="{x:Type pages:PoolPage}"
                                                Icon="{ui:SymbolIcon EyeTracking24}" />
+
+                        <ui:NavigationViewItem Content="Oversized"
+                                               Tag="CollOversized"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon FullScreenMaximize24}" />
+
+                        <ui:NavigationViewItem Content="Front Cards"
+                                               Tag="CollFrontCards"
+                                               TargetPageType="{x:Type pages:PoolPage}"
+                                               Icon="{ui:SymbolIcon Tag24}" />
 
                         <ui:NavigationViewItem Content="Trade Binder"
                                                Tag="TradeBinder"
@@ -399,6 +419,16 @@
                                                Tag="Edit:Conspiracies"
                                                TargetPageType="{x:Type pages:EditCollectionPage}"
                                                Icon="{ui:SymbolIcon EyeTracking24}" />
+
+                        <ui:NavigationViewItem Content="Oversized"
+                                               Tag="Edit:Oversized"
+                                               TargetPageType="{x:Type pages:EditCollectionPage}"
+                                               Icon="{ui:SymbolIcon FullScreenMaximize24}" />
+
+                        <ui:NavigationViewItem Content="Front Cards"
+                                               Tag="Edit:FrontCards"
+                                               TargetPageType="{x:Type pages:EditCollectionPage}"
+                                               Icon="{ui:SymbolIcon Tag24}" />
 
                     </ui:NavigationViewItem.MenuItems>
                 </ui:NavigationViewItem>

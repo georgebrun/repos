@@ -135,8 +135,17 @@ namespace BreakersOfE.ViewModels
 
                 if (result.Success)
                 {
-                    // Propagate prices to collection
                     CanCancel = false;                 // the card database is already saved
+
+                    // Tokens, oversized and front cards in Collection → Cards: to their own tables.
+                    StatusText = "Sorting your collection…";
+                    var sorted = await Task.Run(() =>
+                    {
+                        try { return CollectionEditService.MoveRowsToTheirTables(); }
+                        catch (Exception ex) { return new SortReport(new(), new() { "Couldn't sort your collection: " + ex.Message }); }
+                    });
+
+                    // Propagate prices to collection
                     StatusText = "Propagating prices to collection…";
                     ProgressPercent = 95;
                     await Task.Run(PropagatePoolPricesToCollection);
@@ -156,6 +165,8 @@ namespace BreakersOfE.ViewModels
 
                     // Fire keyword rebuild in background (low priority)
                     _ = Task.Run(() => RebuildKeywordDictionaryBackground(), CancellationToken.None);
+
+                    if (sorted.Any) ShowSortReport(sorted);
                 }
                 else if (result.Cancelled)
                 {
@@ -395,6 +406,24 @@ namespace BreakersOfE.ViewModels
                     }
                 }
 
+                // Oversized cards: their own pool table, the same price rule.
+                var oversizedPrices = poolDb.OversizedCards
+                    .Select(p => new PoolPrice(p.ScryfallId!, p.PriceUsd, p.PriceUsdFoil, p.PriceUsdEtched, p.IsFoil, p.IsEtched))
+                    .ToList()
+                    .GroupBy(p => p.ScryfallId)
+                    .ToDictionary(g => g.Key, g => g.First());
+                foreach (var entry in colDb.OversizedCollectionEntries)
+                {
+                    if (entry.ScryfallId != null &&
+                        oversizedPrices.TryGetValue(entry.ScryfallId, out var prices))
+                    {
+                        entry.PriceUsd = prices.PriceUsd;
+                        entry.PriceUsdFoil = prices.PriceUsdFoil;
+                        entry.PriceUsdEtched = prices.PriceUsdEtched;
+                        entry.Price = RowPrice(entry.Finish, prices);
+                    }
+                }
+
                 foreach (var entry in colDb.TradeBinderEntries)
                 {
                     if (entry.ScryfallId != null &&
@@ -462,7 +491,7 @@ namespace BreakersOfE.ViewModels
         /// </summary>
         private static void RefreshCollectionCardText()
         {
-            static Dictionary<string, CardText> TextOf(IQueryable<Models.PoolCard> cards, List<string> ids)
+            static Dictionary<string, CardText> TextOf<TCard>(IQueryable<TCard> cards, List<string> ids) where TCard : Models.PoolCardBase
             {
                 var wanted = ids.Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
                 if (wanted.Count == 0) return new();
@@ -505,6 +534,16 @@ namespace BreakersOfE.ViewModels
                     {
                         e.ManaCost = t.ManaCost; e.OracleText = t.OracleText; e.FlavorText = t.FlavorText;
                         e.Power = t.Power; e.Toughness = t.Toughness;
+                    }
+
+                // Oversized cards (from their own pool table).
+                var oversizedText = TextOf(poolDb.OversizedCards.AsNoTracking(),
+                                           colDb.OversizedCollectionEntries.Select(e => e.ScryfallId).ToList());
+                foreach (var e in colDb.OversizedCollectionEntries)
+                    if (e.ScryfallId != null && oversizedText.TryGetValue(e.ScryfallId, out var t))
+                    {
+                        e.ManaCost = t.ManaCost; e.OracleText = t.OracleText; e.FlavorText = t.FlavorText;
+                        e.Power = t.Power; e.Toughness = t.Toughness; e.LoyaltyOrDefense = t.LoyaltyOrDefense;
                     }
 
                 // Tokens (there are two-sided tokens too).
@@ -606,6 +645,27 @@ namespace BreakersOfE.ViewModels
                 PriceStaleWarning = "";
         }
 
+        /// <summary>What moved from Collection → Cards to Tokens, Oversized or Front Cards (and what couldn't).</summary>
+        private static void ShowSortReport(SortReport r)
+        {
+            static string Bullets(List<string> items) =>
+                string.Join("\n", items.Take(25).Select(s => "• " + s)) + (items.Count > 25 ? $"\n… and {items.Count - 25} more" : "");
+            var text = new System.Text.StringBuilder();
+            if (r.Moved.Count > 0)
+                text.Append($"Moved {r.Moved.Count} {(r.Moved.Count == 1 ? "printing" : "printings")} out of Collection → Cards, to where they belong now:\n\n")
+                    .Append(Bullets(r.Moved));
+            if (r.Kept.Count > 0)
+            {
+                if (text.Length > 0) text.Append("\n\n");
+                text.Append("Left in Collection → Cards because a deck or the Trade Binder uses them " +
+                            "(free them there, and the next full update moves them):\n\n")
+                    .Append(Bullets(r.Kept));
+            }
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                System.Windows.MessageBox.Show(System.Windows.Application.Current.MainWindow, text.ToString(),
+                    "Collection Sorted", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information));
+        }
+
         /// <summary>
         /// Builds a summary string after a successful full update.
         /// </summary>
@@ -616,6 +676,8 @@ namespace BreakersOfE.ViewModels
                    $"Planar: {result.PlanarCardsImported:N0}  " +
                    $"Schemes: {result.SchemeCardsImported:N0}  " +
                    $"Conspiracy: {result.ConspiracyCardsImported:N0}  " +
+                   $"Oversized: {result.OversizedCardsImported:N0}  " +
+                   $"Front Cards: {result.FrontCardsImported:N0}  " +
                    $"Online (MTGO/Arena): {result.OnlineCardsImported:N0}  " +
                    $"Skipped: {result.SkippedCount:N0}";
         }

@@ -4,7 +4,7 @@
 The side menu has two sections. Only one is open at a time; click **View** or **Edit** to switch.
 
 ## View (look, don't change)
-- **Card Pool**: every card Scryfall knows, by kind: Cards, Tokens, Planes, Schemes, Vanguards, Art Series, Conspiracies. See [[card-pool]].
+- **Card Pool**: every card Scryfall knows, by kind: Cards, Tokens, Planes, Schemes, Vanguards, Art Series, Conspiracies, Oversized, Front Cards. See [[card-pool]].
 - **Sets**: every set as a tile with how much of it you own. See [[sets]].
 - **Collection**: the cards you own, by the same kinds, plus **Trade Binder** and **Want List**.
 - **Decks**: your decks as tiles, grouped by deck type (Commander, Constructed, …). Click one to open it.

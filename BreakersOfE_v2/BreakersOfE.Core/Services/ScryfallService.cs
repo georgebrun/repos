@@ -37,6 +37,8 @@ namespace BreakersOfE.Services
         public int VanguardCardsImported { get; set; }
         public int ArtSeriesCardsImported { get; set; }
         public int ConspiracyCardsImported { get; set; }
+        public int OversizedCardsImported { get; set; }
+        public int FrontCardsImported { get; set; }
         /// <summary>Printings stored in the online pool (on MTGO and/or Arena).</summary>
         public int OnlineCardsImported { get; set; }
         public int SkippedCount { get; set; }
@@ -409,6 +411,23 @@ namespace BreakersOfE.Services
                 await odb.SaveChangesAsync(ct);
             }
 
+            // Oversized cards: the same prices (a small table).
+            using (var xdb = PoolDb())
+            {
+                foreach (var card in xdb.OversizedCards.ToList())
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (!priceLookup.TryGetValue(card.ScryfallId, out var p)) continue;
+                    card.PriceUsd = p.usd;
+                    card.PriceUsdFoil = p.usdFoil;
+                    card.PriceUsdEtched = p.usdEtched;
+                    card.PriceEur = p.eur;
+                    card.PriceEurFoil = p.eurFoil;
+                    card.PriceTix = p.tix;
+                }
+                await xdb.SaveChangesAsync(ct);
+            }
+
             Report(progress, "Prices updated.", endPct,
                 $"{updated:N0} cards updated");
         }
@@ -628,6 +647,8 @@ namespace BreakersOfE.Services
                 await db.Database.ExecuteSqlRawAsync("DELETE FROM VanguardCards", ct);
                 await db.Database.ExecuteSqlRawAsync("DELETE FROM ArtSeriesCards", ct);
                 await db.Database.ExecuteSqlRawAsync("DELETE FROM ConspiracyCards", ct);
+                await db.Database.ExecuteSqlRawAsync("DELETE FROM OversizedCards", ct);
+                await db.Database.ExecuteSqlRawAsync("DELETE FROM FrontCards", ct);
             }
             // Online pool: rebuilt from scratch (drop + create), so a column
             // added in a later version is always there.
@@ -645,6 +666,8 @@ namespace BreakersOfE.Services
             var vanguard = new List<VanguardCard>(batchSize);
             var artSeries = new List<ArtSeriesCard>(batchSize);
             var conspiracy = new List<ConspiracyCard>(batchSize);
+            var oversized = new List<OversizedCard>(batchSize);
+            var front = new List<FrontCard>(batchSize);
             var online = new List<PoolCard>(batchSize);      // MTGO / Arena pool
 
             // Track seen ScryfallIds to skip duplicates in the bulk file
@@ -705,9 +728,9 @@ namespace BreakersOfE.Services
 
                 // Paper pool: paper printings only (digital-only cards never go here).
                 if (hasPaper)
-                    RouteCard(cardEl, GetString(cardEl, "layout"),
+                    RouteCard(cardEl,
                         pool, tokens, planar, schemes,
-                        vanguard, artSeries, conspiracy, result);
+                        vanguard, artSeries, conspiracy, oversized, front, result);
 
                 // Online pool: every regular card on MTGO or Arena, including
                 // digital-only ones. Its own table — paper never sees it.
@@ -733,6 +756,10 @@ namespace BreakersOfE.Services
                 { await FlushBatchAsync(artSeries, ct); artSeries.Clear(); }
                 if (conspiracy.Count >= batchSize)
                 { await FlushBatchAsync(conspiracy, ct); conspiracy.Clear(); }
+                if (oversized.Count >= batchSize)
+                { await FlushBatchAsync(oversized, ct); oversized.Clear(); }
+                if (front.Count >= batchSize)
+                { await FlushBatchAsync(front, ct); front.Clear(); }
 
                 if (i % 1000 == 0)
                 {
@@ -745,6 +772,8 @@ namespace BreakersOfE.Services
                         $"Planar: {result.PlanarCardsImported:N0}  " +
                         $"Schemes: {result.SchemeCardsImported:N0}  " +
                         $"Conspiracy: {result.ConspiracyCardsImported:N0}  " +
+                        $"Oversized: {result.OversizedCardsImported:N0}  " +
+                        $"Front: {result.FrontCardsImported:N0}  " +
                         $"Online: {result.OnlineCardsImported:N0}";
                     Report(progress, "Importing to card pool database (breakersofe.db)…", pct, detail);
                 }
@@ -760,19 +789,59 @@ namespace BreakersOfE.Services
             if (vanguard.Count > 0) await FlushBatchAsync(vanguard, ct);
             if (artSeries.Count > 0) await FlushBatchAsync(artSeries, ct);
             if (conspiracy.Count > 0) await FlushBatchAsync(conspiracy, ct);
+            if (oversized.Count > 0) await FlushBatchAsync(oversized, ct);
+            if (front.Count > 0) await FlushBatchAsync(front, ct);
             if (online.Count > 0) await FlushOnlineAsync(online, ct);
         }
 
         /// <summary>
-        /// A card that goes to the main Cards pool (not a token, plane,
-        /// scheme, vanguard, art series or conspiracy) — same rule as RouteCard.
+        /// A card that goes to the main Cards pool (not a token, plane, scheme,
+        /// vanguard, art series, conspiracy, oversized or front card) — the same
+        /// rule as RouteCard.
         /// </summary>
-        private static bool IsRegularCard(JsonElement card)
+        private static bool IsRegularCard(JsonElement card) => Classify(card) == PoolKind.Cards;
+
+        /// <summary>Which pool table a printing goes to.</summary>
+        private enum PoolKind { Cards, Tokens, Planes, Schemes, Vanguards, ArtSeries, Conspiracies, Oversized, FrontCards }
+
+        /// <summary>
+        /// Game pieces for Theros's solo challenges (Hero's Path, Face the Hydra,
+        /// Battle the Horde, Defeat a God): kept with the tokens, like Scryfall's
+        /// other minigame cards.
+        /// </summary>
+        private static readonly HashSet<string> ChallengeSets =
+            new(StringComparer.OrdinalIgnoreCase) { "thp1", "thp2", "thp3", "tfth", "tbth", "tdag" };
+
+        /// <summary>
+        /// Where a printing belongs. In order: conspiracies; planes, schemes,
+        /// vanguards and art series (by layout); anything Scryfall marks
+        /// oversized; tokens — token layouts, emblems, everything from a token
+        /// set (dungeons, helper and substitute cards) or a minigame set, the
+        /// Theros challenge cards and sticker sheets; front cards (their own
+        /// layout); any other card whose type is just "Card"; then Cards.
+        /// </summary>
+        private static PoolKind Classify(JsonElement card)
         {
-            if (GetString(card, "type_line").Contains("Conspiracy", StringComparison.OrdinalIgnoreCase))
-                return false;
-            return GetString(card, "layout") is not ("token" or "double_faced_token" or "planar"
-                or "scheme" or "vanguard" or "art_series");
+            string layout = GetString(card, "layout");
+            string typeLine = GetString(card, "type_line").Trim();
+
+            // Scryfall uses layout "normal" for Conspiracy cards: the type decides.
+            if (typeLine.Contains("Conspiracy", StringComparison.OrdinalIgnoreCase)) return PoolKind.Conspiracies;
+            switch (layout)
+            {
+                case "planar": return PoolKind.Planes;
+                case "scheme": return PoolKind.Schemes;
+                case "vanguard": return PoolKind.Vanguards;
+                case "art_series": return PoolKind.ArtSeries;
+            }
+            if (GetBool(card, "oversized")) return PoolKind.Oversized;
+            if (layout is "token" or "double_faced_token" or "emblem") return PoolKind.Tokens;
+            if (GetString(card, "set_type") is "token" or "minigame") return PoolKind.Tokens;
+            if (layout == "front_card") return PoolKind.FrontCards;
+            if (ChallengeSets.Contains(GetString(card, "set"))) return PoolKind.Tokens;
+            if (typeLine.StartsWith("Stickers", StringComparison.OrdinalIgnoreCase)) return PoolKind.Tokens;
+            if (typeLine == "Card") return PoolKind.Tokens;          // helper cards with no real type
+            return PoolKind.Cards;
         }
 
         /// <summary>A pool card plus where it can be played online and its MTGO / Arena ids.</summary>
@@ -803,54 +872,63 @@ namespace BreakersOfE.Services
 
         // ── Route card to correct table ───────────────────────────────────────
         private static void RouteCard(
-            JsonElement card, string layout,
+            JsonElement card,
             List<PoolCard> pool, List<TokenCard> tokens,
             List<PlanarCard> planar, List<SchemeCard> schemes,
             List<VanguardCard> vanguard,
             List<ArtSeriesCard> artSeries,
             List<ConspiracyCard> conspiracy,
+            List<OversizedCard> oversized,
+            List<FrontCard> front,
             ImportResult result)
         {
-            // Check type_line for Conspiracy before checking layout,
-            // since Scryfall uses layout="normal" for Conspiracy cards
-            string typeLine = GetString(card, "type_line");
-            if (typeLine.Contains("Conspiracy", StringComparison.OrdinalIgnoreCase))
+            string layout = GetString(card, "layout");
+            switch (Classify(card))
             {
-                conspiracy.Add(ParseConspiracyCard(card));
-                result.ConspiracyCardsImported++;
-                return;
-            }
+                case PoolKind.Conspiracies:
+                    conspiracy.Add(ParseConspiracyCard(card));
+                    result.ConspiracyCardsImported++;
+                    break;
 
-            switch (layout)
-            {
-                case "token":
-                case "double_faced_token":
+                case PoolKind.Tokens:
                     tokens.Add(ParseTokenCard(card));
                     result.TokenCardsImported++;
                     break;
 
-                case "planar":
+                case PoolKind.Planes:
                     planar.Add(ParsePlanarCard(card));
                     result.PlanarCardsImported++;
                     break;
 
-                case "scheme":
+                case PoolKind.Schemes:
                     schemes.Add(ParseSchemeCard(card));
                     result.SchemeCardsImported++;
                     break;
 
-                case "vanguard":
+                case PoolKind.Vanguards:
                     vanguard.Add(ParseVanguardCard(card));
                     result.VanguardCardsImported++;
                     break;
 
-                case "art_series":
+                case PoolKind.ArtSeries:
                     artSeries.Add(ParseArtSeriesCard(card));
                     result.ArtSeriesCardsImported++;
                     break;
 
+                case PoolKind.Oversized:
+                    var oc = ParsePoolCard<OversizedCard>(card);
+                    oc.IsMeld = layout == "meld";
+                    oversized.Add(oc);
+                    result.OversizedCardsImported++;
+                    break;
+
+                case PoolKind.FrontCards:
+                    front.Add(ParseFrontCard(card));
+                    result.FrontCardsImported++;
+                    break;
+
                 default:
-                    var pc = ParsePoolCard(card);
+                    var pc = ParsePoolCard<PoolCard>(card);
                     pc.IsMeld = layout == "meld";
                     pool.Add(pc);
                     result.PoolCardsImported++;
@@ -913,6 +991,10 @@ namespace BreakersOfE.Services
                 setCodes.Add(c);
             foreach (var c in db.ArtSeriesCards.Select(x => x.SetCode).Distinct())
                 setCodes.Add(c);
+            foreach (var c in db.OversizedCards.Select(x => x.SetCode).Distinct())
+                setCodes.Add(c);
+            foreach (var c in db.FrontCards.Select(x => x.SetCode).Distinct())
+                setCodes.Add(c);
             // Online-only sets (Alchemy, MTGO-only) need their symbols too.
             using (var odb = OnlineDb())
                 foreach (var c in odb.OnlineCards.Select(x => x.SetCode).Distinct())
@@ -921,6 +1003,13 @@ namespace BreakersOfE.Services
             var list = setCodes.ToList();
             int total = list.Count;
             int i = 0;
+
+            // Each set's real symbol, from Scryfall's list of sets. "Child" sets
+            // (tokens TAFR, oversized OC19, promos PM20, front cards FJMP …) have
+            // no symbol file under their own code: they use the parent set's.
+            // Unreachable list: the code's own file, as before.
+            var iconOf = await SetIconUrlsAsync(ct);
+            var fetched = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);   // shared parent symbols: once
 
             foreach (string code in list)
             {
@@ -933,9 +1022,11 @@ namespace BreakersOfE.Services
                 {
                     try
                     {
-                        string url = $"https://svgs.scryfall.io/sets/" +
-                                       $"{code.ToLower()}.svg";
-                        byte[] bytes = await _http.GetByteArrayAsync(url, ct);
+                        string url = iconOf.TryGetValue(code, out var icon) && icon.Length > 0
+                            ? icon
+                            : $"https://svgs.scryfall.io/sets/{code.ToLower()}.svg";
+                        if (!fetched.TryGetValue(url, out var bytes))
+                            fetched[url] = bytes = await _http.GetByteArrayAsync(url, ct);
                         await WriteWholeAsync(path, bytes, ct);
                         downloaded++;
                     }
@@ -954,6 +1045,30 @@ namespace BreakersOfE.Services
             return downloaded;
         }
 
+        /// <summary>
+        /// Set code → its symbol's address (Scryfall "icon_svg_uri"), for every
+        /// set. Empty when the list can't be read (symbols then go by code).
+        /// </summary>
+        private async Task<Dictionary<string, string>> SetIconUrlsAsync(CancellationToken ct)
+        {
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                string json = await _http.GetStringAsync("https://api.scryfall.com/sets", ct);
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
+                    foreach (var set in data.EnumerateArray())
+                    {
+                        string code = GetString(set, "code");
+                        string icon = GetString(set, "icon_svg_uri");
+                        if (code.Length > 0 && icon.Length > 0) map[code] = icon;
+                    }
+            }
+            catch (OperationCanceledException) { throw; }
+            catch { /* no list: each symbol by its own code, as before */ }
+            return map;
+        }
+
         // ════════════════════════════════════════════════════════════════════
         // STEP 6 — BASIC VERIFICATION
         // ════════════════════════════════════════════════════════════════════
@@ -967,7 +1082,9 @@ namespace BreakersOfE.Services
                 db.PlanarCards.Count() +
                 db.SchemeCards.Count() +
                 db.VanguardCards.Count() +
-                db.ArtSeriesCards.Count();
+                db.ArtSeriesCards.Count() +
+                db.OversizedCards.Count() +
+                db.FrontCards.Count();
 
             int colorTotal =
                 result.WhiteCount + result.BlueCount +
@@ -1025,10 +1142,13 @@ namespace BreakersOfE.Services
         // ════════════════════════════════════════════════════════════════════
         // CARD PARSERS — all include SetType and pricing
         // ════════════════════════════════════════════════════════════════════
-        private static PoolCard ParsePoolCard(JsonElement c)
+        private static PoolCard ParsePoolCard(JsonElement c) => ParsePoolCard<PoolCard>(c);
+
+        /// <summary>A full card (Cards, the online pool, Oversized).</summary>
+        private static T ParsePoolCard<T>(JsonElement c) where T : PoolCardBase, new()
         {
             var prices = ParsePrices(c);
-            return new PoolCard
+            return new T
             {
                 ScryfallId = GetString(c, "id"),
                 OracleId = GetString(c, "oracle_id"),
@@ -1172,6 +1292,30 @@ namespace BreakersOfE.Services
             ReleasedAt = GetString(c, "released_at"),
             HandModifier = GetString(c, "hand_modifier"),
             LifeModifier = GetString(c, "life_modifier"),
+            LocalImagePath = string.Empty
+        };
+
+        private static FrontCard ParseFrontCard(JsonElement c) => new()
+        {
+            ScryfallId = GetString(c, "id"),
+            OracleId = GetString(c, "oracle_id"),
+            Name = GetString(c, "name"),
+            TypeLine = GetString(c, "type_line"),
+            OracleText = SidesText(c, "oracle_text"),
+            FlavorText = SidesText(c, "flavor_text"),
+            SetCode = GetString(c, "set").ToUpper(),
+            SetName = GetString(c, "set_name"),
+            SetType = GetString(c, "set_type"),
+            CollectorNumber = GetString(c, "collector_number"),
+            Rarity = GetString(c, "rarity"),
+            Artist = GetString(c, "artist"),
+            ImageSmallUrl = GetImageUri(c, "small"),
+            ImageNormalUrl = GetImageUri(c, "normal"),
+            Layout = GetString(c, "layout"),
+            IsFoil = HasFinish(c, "foil"),
+            IsNonFoil = HasFinish(c, "nonfoil"),
+            IsEtched = HasFinish(c, "etched"),
+            ReleasedAt = GetString(c, "released_at"),
             LocalImagePath = string.Empty
         };
 

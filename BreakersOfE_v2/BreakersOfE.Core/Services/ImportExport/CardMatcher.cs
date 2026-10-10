@@ -65,6 +65,28 @@ namespace BreakersOfE.Services
                     CollectorNumber = t.CollectorNumber, ReleasedAt = t.ReleasedAt ?? "",
                     NonFoil = t.IsNonFoil, Foil = t.IsFoil, Etched = t.IsEtched,
                 });
+            // Oversized and front cards: found by Scryfall ID or set + number, and
+            // last among a name's printings (a name alone means the regular card).
+            foreach (var o in db.OversizedCards.AsNoTracking()
+                         .Select(o => new { o.ScryfallId, o.Name, o.SetCode, o.SetName, o.CollectorNumber, o.ReleasedAt, o.IsNonFoil, o.IsFoil, o.IsEtched })
+                         .ToList())
+                m.Add(new PoolPrinting
+                {
+                    Table = CollectionEditService.OversizedTable,
+                    ScryfallId = o.ScryfallId, Name = o.Name, SetCode = o.SetCode, SetName = o.SetName,
+                    CollectorNumber = o.CollectorNumber, ReleasedAt = o.ReleasedAt ?? "",
+                    NonFoil = o.IsNonFoil, Foil = o.IsFoil, Etched = o.IsEtched,
+                });
+            foreach (var f in db.FrontCards.AsNoTracking()
+                         .Select(f => new { f.ScryfallId, f.Name, f.SetCode, f.SetName, f.CollectorNumber, f.ReleasedAt, f.IsNonFoil, f.IsFoil, f.IsEtched })
+                         .ToList())
+                m.Add(new PoolPrinting
+                {
+                    Table = CollectionEditService.FrontTable,
+                    ScryfallId = f.ScryfallId, Name = f.Name, SetCode = f.SetCode, SetName = f.SetName,
+                    CollectorNumber = f.CollectorNumber, ReleasedAt = f.ReleasedAt ?? "",
+                    NonFoil = f.IsNonFoil, Foil = f.IsFoil, Etched = f.IsEtched,
+                });
             return m;
         }
 
@@ -198,6 +220,7 @@ namespace BreakersOfE.Services
             bool wantToken = line.Section == ImportSection.Tokens || line.Table == CollectionEditService.TokensTable;
             var q = list.Distinct()
                 .OrderBy(p => p.IsToken == wantToken ? 0 : 1)
+                .ThenBy(p => p.IsSideTable ? 1 : 0)
                 .ThenBy(p => p.Digital ? 1 : 0)
                 .ThenBy(p => line.Finish == null || p.Has(line.Finish) ? 0 : 1);
             q = byNumber

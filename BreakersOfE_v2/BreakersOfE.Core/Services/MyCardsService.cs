@@ -54,6 +54,8 @@ namespace BreakersOfE.Services
                 ids.UnionWith(db.VanguardCollectionEntries.AsNoTracking().Select(e => e.ScryfallId).ToList());
                 ids.UnionWith(db.ArtSeriesCollectionEntries.AsNoTracking().Select(e => e.ScryfallId).ToList());
                 ids.UnionWith(db.ConspiracyCollectionEntries.AsNoTracking().Select(e => e.ScryfallId).ToList());
+                ids.UnionWith(db.OversizedCollectionEntries.AsNoTracking().Select(e => e.ScryfallId).ToList());
+                ids.UnionWith(db.FrontCollectionEntries.AsNoTracking().Select(e => e.ScryfallId).ToList());
                 ids.UnionWith(db.TradeBinderEntries.AsNoTracking().Select(e => e.ScryfallId).ToList());
                 ids.UnionWith(db.WantListEntries.AsNoTracking().Select(e => e.ScryfallId).ToList());
             }

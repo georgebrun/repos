@@ -78,6 +78,10 @@ namespace BreakersOfE.Services
     {
         public const string CardsTable = "Collection";
         public const string TokensTable = "CollTokens";
+        /// <summary>Oversized cards: their own collection, never claimed by decks.</summary>
+        public const string OversizedTable = "CollOversized";
+        /// <summary>Front cards (Jumpstart theme cards): their own collection.</summary>
+        public const string FrontTable = "CollFrontCards";
 
         /// <summary>The collection table a deck line's copies come from.</summary>
         public static string TableOf(DeckCard c) => c.IsTokenLine ? TokensTable : CardsTable;

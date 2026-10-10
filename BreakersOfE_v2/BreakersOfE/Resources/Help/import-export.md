@@ -18,7 +18,7 @@ Warning: **Replace** makes your collection match the file: in each collection ta
 Note: BoE deck files open in Edit → Decks, not here. MTG Studio files, MTGO .dek files and online collections can't be imported yet.
 
 ## Export
-1. **Export**: **My collection**, **A deck**, **Want List** or **Trade Binder**.
+1. **Export**: **My collection** (your cards, including the oversized ones), **A deck**, **Want List** or **Trade Binder**.
 2. **as**: a **Text list** (to paste into Moxfield, Archidekt, MTG Deck Tools…), a **ManaBox CSV**, a **Spreadsheet CSV** with every detail, or a **BoE full backup** of the whole collection.
 3. Options: **Only copies I can use** leaves out copies claimed by decks or the binder; **Include tokens**; **Mark foil and etched (*F* / *E*)**.
 4. **Copy to Clipboard** to paste into a website, or **Save File…** (to the Exports folder).

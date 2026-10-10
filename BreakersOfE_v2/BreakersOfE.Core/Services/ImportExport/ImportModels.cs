@@ -94,9 +94,13 @@ namespace BreakersOfE.Services
         public bool Etched { get; init; }
         public bool Digital { get; init; }
         public bool IsToken => Table == CollectionEditService.TokensTable;
+        /// <summary>An oversized or front card (their own tables; never a name-only first pick).</summary>
+        public bool IsSideTable => Table == CollectionEditService.OversizedTable || Table == CollectionEditService.FrontTable;
 
         /// <summary>"M10 #146 — Magic 2010".</summary>
-        public string Text => $"{SetCode.ToUpperInvariant()} #{CollectorNumber} — {SetName}" + (IsToken ? " (token)" : "");
+        public string Text => $"{SetCode.ToUpperInvariant()} #{CollectorNumber} — {SetName}" +
+            (IsToken ? " (token)" : Table == CollectionEditService.OversizedTable ? " (oversized)" :
+             Table == CollectionEditService.FrontTable ? " (front card)" : "");
 
         public bool Has(string finish) => CollectionEditService.FinishExists(finish, NonFoil, Foil, Etched);
 

@@ -47,6 +47,12 @@ namespace BreakersOfE.Services
                         "CollConspiracies" => db.ConspiracyCards.Where(c => chunk.Contains(c.ScryfallId))
                             .Select(c => new { c.ScryfallId, c.IsFoil, c.IsEtched }).ToList()
                             .Select(c => (c.ScryfallId, c.IsFoil, c.IsEtched)),
+                        "CollOversized" => db.OversizedCards.Where(c => chunk.Contains(c.ScryfallId))
+                            .Select(c => new { c.ScryfallId, c.IsFoil, c.IsEtched }).ToList()
+                            .Select(c => (c.ScryfallId, c.IsFoil, c.IsEtched)),
+                        "CollFrontCards" => db.FrontCards.Where(c => chunk.Contains(c.ScryfallId))
+                            .Select(c => new { c.ScryfallId, c.IsFoil, c.IsEtched }).ToList()
+                            .Select(c => (c.ScryfallId, c.IsFoil, c.IsEtched)),
                         // Collection, Trade Binder, Want List, decks: the main Cards pool
                         _ => db.PoolCards.Where(c => chunk.Contains(c.ScryfallId))
                             .Select(c => new { c.ScryfallId, c.IsFoil, c.IsEtched }).ToList()

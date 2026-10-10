@@ -23,6 +23,10 @@ namespace BreakersOfE.Data
         public DbSet<VanguardCollectionEntry> VanguardCollectionEntries { get; set; }
         public DbSet<ConspiracyCollectionEntry> ConspiracyCollectionEntries { get; set; }
         public DbSet<ArtSeriesCollectionEntry> ArtSeriesCollectionEntries { get; set; }
+        /// <summary>Your oversized cards (display commanders, league prizes …).</summary>
+        public DbSet<OversizedCollectionEntry> OversizedCollectionEntries { get; set; }
+        /// <summary>Your front cards (Jumpstart and similar theme cards).</summary>
+        public DbSet<FrontCollectionEntry> FrontCollectionEntries { get; set; }
         public DbSet<TradeBinderEntry> TradeBinderEntries { get; set; }
         public DbSet<WantListEntry> WantListEntries { get; set; }
         public DbSet<DeckUsage> DeckUsages { get; set; }
@@ -60,6 +64,10 @@ namespace BreakersOfE.Data
                 .HasIndex(e => e.ScryfallId);
             modelBuilder.Entity<CollectionEntry>()
                 .HasIndex(e => e.PoolId);  // legacy compat
+            modelBuilder.Entity<OversizedCollectionEntry>()
+                .HasIndex(e => e.ScryfallId);
+            modelBuilder.Entity<FrontCollectionEntry>()
+                .HasIndex(e => e.ScryfallId);
 
             // DeckUsage is looked up by card (ScryfallId) for the nested table,
             // and by deck (DeckId) for reconcile/cleanup.

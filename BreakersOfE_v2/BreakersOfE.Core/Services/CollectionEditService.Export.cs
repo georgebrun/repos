@@ -63,6 +63,7 @@ namespace BreakersOfE.Services
             var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var s in db.PoolCards.AsNoTracking().Where(c => c.IsEtched && !c.IsFoil).Select(c => c.ScryfallId)) set.Add(s);
             foreach (var s in db.TokenCards.AsNoTracking().Where(c => c.IsEtched && !c.IsFoil).Select(c => c.ScryfallId)) set.Add(s);
+            foreach (var s in db.OversizedCards.AsNoTracking().Where(c => c.IsEtched && !c.IsFoil).Select(c => c.ScryfallId)) set.Add(s);
             return set;
         }
 
@@ -71,7 +72,8 @@ namespace BreakersOfE.Services
             var eo = EtchedOnlySids();
             var list = new List<ExportRow>();
             using var db = new CollectionDbContext();
-            foreach (string table in tokens ? new[] { CardsTable, TokensTable } : new[] { CardsTable })
+            // Oversized cards go with the cards (they were in Cards before they had their own table).
+            foreach (string table in tokens ? new[] { CardsTable, OversizedTable, TokensTable } : new[] { CardsTable, OversizedTable })
             {
                 foreach (var r in RowsMany(db, table, AllSids(db, table)))
                 {
