@@ -62,7 +62,7 @@
                 </GridSplitter.Template>
             </GridSplitter>
 
-            <DockPanel Grid.Row="2">
+            <DockPanel Grid.Row="2" x:Name="BarPanel">
                 <!-- ═══ MODE BUTTONS (Pool → Collection) ═══
                  Act on the card selected last, in either table. Qty applies to
                  every Add and Remove button (and the keys / right-click). -->

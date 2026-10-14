@@ -37,6 +37,8 @@ namespace BreakersOfE.Views.Pages
         private bool? _embeddedGallery;
         /// <summary>Edit pages: what a table starts as before it's ever switched.</summary>
         private bool? _embeddedGalleryDefault;
+        /// <summary>Edit → Sets: always card pictures (the Grid / Gallery button is hidden).</summary>
+        private bool _fixedGallery;
 
         /// <summary>The card view: the Edit table's own choice, else the switch above the navigation.</summary>
         private PoolViewMode SwitchMode =>
@@ -48,7 +50,7 @@ namespace BreakersOfE.Views.Pages
         /// <summary>Edit pages: the table's Grid / Gallery button.</summary>
         private void BtnViewMode_Click(object sender, RoutedEventArgs e)
         {
-            if (_embeddedGallery == null) return;
+            if (_embeddedGallery == null || _fixedGallery) return;
             _embeddedGallery = !_embeddedGallery.Value;
             Services.GridLayoutService.SetEditGallery(EditGalleryKey(_currentTag), _embeddedGallery.Value);
             SetViewMode(SwitchMode);
@@ -64,6 +66,35 @@ namespace BreakersOfE.Views.Pages
             if (!IsBrowser(_viewMode)) SetViewMode(SwitchMode);
         }
 
+        /// <summary>
+        /// "◀ All Decks", "◀ All Sets", or "◀ Adventures in the Forgotten Realms"
+        /// (a part's cards, opened from its release page). Shown on a card view
+        /// opened from a browser, and on a release page.
+        /// </summary>
+        private void UpdateBackButton()
+        {
+            bool cardView = !IsBrowser(_viewMode);
+            bool releasePage = _viewMode == PoolViewMode.Sets && _openRelease != null;
+            BtnBackToSets.Visibility = (cardView && (_inSetsContext || _inDecksContext)) || releasePage
+                ? Visibility.Visible : Visibility.Collapsed;
+            if (_inDecksContext)
+            {
+                BtnBackToSets.Content = "◀  All Decks";
+                BtnBackToSets.ToolTip = "Back to the deck browser";
+            }
+            else if (cardView && _partOfRelease != null)
+            {
+                string name = FindRelease(_partOfRelease)?.Name ?? "Release";
+                BtnBackToSets.Content = $"◀  {name}";
+                BtnBackToSets.ToolTip = "Back to this release's sets";
+            }
+            else
+            {
+                BtnBackToSets.Content = "◀  All Sets";
+                BtnBackToSets.ToolTip = "Back to the set browser";
+            }
+        }
+
         private void SetViewMode(PoolViewMode mode)
         {
             var previous = _viewMode;
@@ -71,6 +102,7 @@ namespace BreakersOfE.Views.Pages
 
             _viewMode = mode;
             UpdateChecklist();
+            if (previous != mode) ViewModeChanged?.Invoke();
 
             PoolGrid.Visibility = mode == PoolViewMode.Grid ? Visibility.Visible : Visibility.Collapsed;
             Gallery.Visibility = mode == PoolViewMode.Gallery ? Visibility.Visible : Visibility.Collapsed;
@@ -82,7 +114,7 @@ namespace BreakersOfE.Views.Pages
             bool cardView = !IsBrowser(mode);
             BtnClearFilters.Visibility = cardView ? Visibility.Visible : Visibility.Collapsed;
             // Edit tables: their own Grid / Gallery button.
-            BtnViewMode.Visibility = cardView && _embeddedGallery != null ? Visibility.Visible : Visibility.Collapsed;
+            BtnViewMode.Visibility = cardView && _embeddedGallery != null && !_fixedGallery ? Visibility.Visible : Visibility.Collapsed;
             BtnViewMode.Content = mode == PoolViewMode.Gallery ? "Show as Grid" : "Show as Gallery";
             // Filters panel + sort: every card view (grid and gallery), never the browsers.
             var cv = cardView ? Visibility.Visible : Visibility.Collapsed;
@@ -107,15 +139,12 @@ namespace BreakersOfE.Views.Pages
                 HookTotalsScroll();
                 QueueTotalsSync();
             }
-            BtnBackToSets.Visibility = cardView && (_inSetsContext || _inDecksContext)
-                ? Visibility.Visible : Visibility.Collapsed;
-            BtnBackToSets.Content = _inDecksContext ? "◀  All Decks" : "◀  All Sets";
-            BtnBackToSets.ToolTip = _inDecksContext ? "Back to the deck browser" : "Back to the set browser";
+            UpdateBackButton();
 
             if (mode == PoolViewMode.Sets)
             {
-                _vm.Title = "Sets";
-                if (_setTiles != null) _vm.StatusText = $"{_setTiles.Count:N0} sets";
+                _vm.Title = SetsTitle();
+                if (_setTiles != null) _vm.StatusText = SetsStatus();
             }
             else if (mode == PoolViewMode.Decks)
             {
@@ -139,10 +168,15 @@ namespace BreakersOfE.Views.Pages
                             FocusGridRow(selected);
                         break;
                     case PoolViewMode.Sets:
-                        if (_vm.AllRows.Count == 0) break;   // still loading; OnItemsChanged builds
+                        // Still loading (the rows on hand may be the table we came from,
+                        // e.g. a release's tokens): OnItemsChanged builds the tiles.
+                        if (_vm.AllRows.Count == 0 || _vm.IsLoading || _currentTag != "Cards") break;
                         BuildSetTilesIfNeeded();
                         RebuildSetRows();
-                        _vm.StatusText = $"{_setTiles!.Count:N0} sets";
+                        _vm.Title = SetsTitle();
+                        _vm.StatusText = SetsStatus();
+                        UpdateBackButton();
+                        if (SetList.Items.Count > 0) SetList.ScrollIntoView(SetList.Items[0]);
                         break;
                     case PoolViewMode.Decks:
                         RebuildDeckRows();

@@ -133,8 +133,10 @@ namespace BreakersOfE.Views.Pages
             {
                 var row = _setRows[r];
                 if (row.IsHeader) continue;
+                // A release matches by its own name or any of its parts' names.
                 var match = row.Tiles.FirstOrDefault(t =>
-                    t.Name.StartsWith(text, StringComparison.OrdinalIgnoreCase));
+                    t.Name.StartsWith(text, StringComparison.OrdinalIgnoreCase) ||
+                    t.Parts.Any(p => p.Name.StartsWith(text, StringComparison.OrdinalIgnoreCase)));
                 if (match == null) continue;
 
                 if (_setHighlighted != null) _setHighlighted.IsHighlighted = false;

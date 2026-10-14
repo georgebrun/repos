@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon.png" width="96" alt="Breakers of E icon">
+  <img src="docs/images/icon.png" width="96" alt="Breakers of E icon">
 </p>
 
 <h1 align="center">Breakers of E</h1>
@@ -7,6 +7,10 @@
 <p align="center">
   A Magic: The Gathering collection manager and deck builder for Windows.<br>
   <a href="https://github.com/georgebrun/repos/releases/latest"><b>Download the latest version</b></a>
+</p>
+
+<p align="center">
+  <img src="docs/images/card-pool-gallery.png" width="900" alt="The card pool as a gallery: each picture with its prices and counts per finish underneath">
 </p>
 
 ---
@@ -17,14 +21,24 @@ Breakers of E (BoE) keeps track of every Magic card that exists, the cards you o
 
 ### Card pool
 - Every Magic card from Scryfall (100,000+ printings), loaded for instant browsing
-- Separate pools for Tokens, Planes, Schemes, Vanguards, Art Series and Conspiracies
+- Separate pools for Tokens, Planes, Schemes, Vanguards, Art Series, Conspiracies, Oversized cards and Front Cards
 - **MTGO and Arena** cards in their own tables (MTGO prices in tix)
 - **Non-Foil, Foil and Etched** as real finishes, each with its own price
-- Set browser with a set completion checklist
 - **Update Database**: card data, prices, set and mana symbols and rulings in one click, or prices only
+
+### Sets
+- Every release as a tile, with how much of it you own: the set together with its Commander decks, promos, tokens, art series and more
+- A release's page shows each part with its own completion; open one for its cards, with **Missing Only** and the cards you don't own dimmed
+- **Set Completion**: every set's progress, value and what's missing
+
+<p align="center">
+  <img src="docs/images/sets.png" width="49%" alt="The Sets page: releases as tiles with owned counts">
+  <img src="docs/images/release.png" width="49%" alt="A release's page: the set, its Commander decks, promos, tokens and art series">
+</p>
 
 ### Browsing
 - **Grid and Gallery** views of every table
+- Gallery pictures stay clean: underneath, each finish gets its own price and count (gold for foil and etched)
 - Column filters, multi-level sort, saved column layouts and zoom
 - A **Filters** panel: colors, rarity, type, legality, finish, artist, set, deck, rules text, and price, mana value, power and toughness ranges
 - Card panel and card window: prices with a price chart, legality by format, rulings, and every deck using the card
@@ -32,10 +46,21 @@ Breakers of E (BoE) keeps track of every Magic card that exists, the cards you o
 
 ### Collection
 - One row per printing × finish × language × condition, with notes, storage location, favorites and price
-- Add and remove with a Qty box, keys, right-click menus or gallery **+ / −** tiles, with **Undo**
+- Add and remove with a Qty box, keys, right-click menus, or the **− / +** under each gallery picture, with **Undo**
+- **Edit → Sets**: opened a pack, box or precon? Go down the set's pictures and click **+** on what you got; tokens and oversized cards go to their own collections by themselves
 - Copies used by decks or the Trade Binder can't be removed by accident
+- A finish you own that the card doesn't come in is flagged in amber (usually the wrong set picked)
 - **Statistics**: counts, value, breakdowns, and **collection value over time**
 - A backup of your collection before the first change each session
+
+<p align="center">
+  <img src="docs/images/edit-sets.png" width="900" alt="Edit → Sets: a set's cards with − / + per finish; cards you don't own are dimmed">
+</p>
+
+<p align="center">
+  <img src="docs/images/edit-collection.png" width="49%" alt="Edit → Pool → Collection: the card pool on top, your collection below">
+  <img src="docs/images/collection-statistics.png" width="49%" alt="Collection statistics: value over time, by color, rarity, type and set">
+</p>
 
 ### Decks
 - **Every format, with its real rules**: Standard, Pioneer, Modern, Legacy, Vintage, Pauper and more; Commander, Brawl, Standard Brawl, Pauper Commander, Duel Commander, Oathbreaker; Limited
@@ -45,13 +70,23 @@ Breakers of E (BoE) keeps track of every Magic card that exists, the cards you o
 - **Deck statistics**: mana curve, mana symbols vs. sources, value, Commander brackets, **draw odds** and **sample hands**
 - Autosave, Undo, and **Tear Down** to free a deck's cards
 
+<p align="center">
+  <img src="docs/images/deck-statistics.png" width="600" alt="Deck statistics: mana curve and colors needed vs. sources">
+</p>
+
 ### Trade Binder and Want List
 - **Trade Binder**: set copies aside to trade or sell, with Trade Value; **Traded / Sold** takes them out of your collection
 - **Want List**: cards you're looking for, with an offer price; **Got It** moves them into your collection
 
 ### Import and export
 - Import from **ManaBox**, **Moxfield, Archidekt, Deckbox, TCGplayer, Dragon Shield, MTGGoldfish, Deckstats, Delver Lens** CSVs, or a plain **text list**, into your collection, Want List or a new deck, with a preview of every line and **Undo Last Import**
+- **MTGO and Arena**: MTGO .dek and CSV files (matched exactly by MTGO id, foils included) and Arena lists into your online collections
 - Export a text list (for Moxfield, Archidekt, MTG Deck Tools…), a ManaBox CSV, a spreadsheet CSV, or a **BoE full backup**
+- Send a deck to **Arena** (paste into its Import) or **MTGO** (.dek); cards are swapped for a printing that game has, and anything it doesn't have is listed
+
+<p align="center">
+  <img src="docs/images/import-preview.png" width="900" alt="Import preview: every line matched to a printing before anything changes">
+</p>
 
 ### And more
 - **Keyword Dictionary**: what every keyword means, the official rules, and the cards that have it
@@ -99,7 +134,7 @@ Everything BoE saves is in one folder, **Documents\Breakers of E** unless you mo
 | `Collection\collection.db` | Your collection, Trade Binder, Want List, tokens and online collections |
 | `Collection\PriceHistory.db` | The prices saved with each update |
 | `Decks` | One `.deck` file per deck |
-| `Backups` | Copies of `collection.db` from before the first change each session |
+| `Backups` | Copies of `collection.db`: before the first change each session, and before every Replace import |
 | `breakersofe.db`, `rulings.db` | The card data and rulings (downloaded again any time) |
 
 To back up, close BoE and copy the whole folder, or use **Edit → Import / Export → BoE full backup**.
@@ -119,8 +154,7 @@ To make the installer:
 ```
 BreakersOfE_v2.sln
 ├── BreakersOfE.Core     — shared library: models, data (EF Core + SQLite), services
-├── BreakersOfE          — the WPF app (WPF-UI): views, view models, Help topics
-└── BreakersOfE.Agent    — background helper, parked (not part of 2.0)
+└── BreakersOfE          — the WPF app (WPF-UI): views, view models, Help topics
 BreakersOfE_v1           — v1, kept for reference (no longer supported)
 Installer                — publish script and Inno Setup scripts
 ```

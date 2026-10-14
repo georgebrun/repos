@@ -141,7 +141,7 @@
                         <!-- Version -->
                         <TextBlock Grid.Row="2"
                                    Name="VersionText"
-                                   Text="Version 2.0.1"
+                                   Text="Version 2.0.2"
                                    FontSize="10"
                                    Foreground="#88AAAAAA"
                                    HorizontalAlignment="Right"

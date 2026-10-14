@@ -29,6 +29,7 @@ namespace BreakersOfE.Services
                     };
                 }
                 string deckName = "";
+                string note = "";
                 List<ExportRow> rows;
                 switch (o.Source)
                 {
@@ -37,6 +38,15 @@ namespace BreakersOfE.Services
                         if (deck == null) return new ExportResult { Error = "Could not open that deck." };
                         deckName = deck.Name;
                         rows = DeckExportRows(deck, o.IncludeTokens);
+                        // For MTGO or Arena: each card as a printing that game has.
+                        if (o.Format == ExportFormat.MtgoDek) rows = ToGame(rows, OnlineGame.Mtgo, out note);
+                        else if (o.Format == ExportFormat.ArenaText) rows = ToGame(rows, OnlineGame.Arena, out note);
+                        break;
+                    case ExportSource.MtgoCollection:
+                        rows = OnlineExportRows(OnlineGame.Mtgo);
+                        break;
+                    case ExportSource.ArenaCollection:
+                        rows = OnlineExportRows(OnlineGame.Arena);
                         break;
                     case ExportSource.WantList:
                         rows = WantExportRows();
@@ -48,7 +58,13 @@ namespace BreakersOfE.Services
                         rows = CollectionExportRows(o.OnlyFree, o.IncludeTokens);
                         break;
                 }
-                return ExportWriter.Write(rows, o, deckName);
+                var result = ExportWriter.Write(rows, o, deckName);
+                if (note.Length == 0) return result;
+                return new ExportResult
+                {
+                    Text = result.Text, Lines = result.Lines, Copies = result.Copies, FileName = result.FileName, Error = result.Error,
+                    Note = result.Note.Length > 0 ? $"{note} {result.Note}" : note,
+                };
             }
             catch (Exception ex)
             {
@@ -113,7 +129,8 @@ namespace BreakersOfE.Services
                 if (c.IsFooter) continue;
                 bool tokenLine = c.Category == DeckCardCategory.Tokens;
                 if (tokenLine && !tokens) continue;
-                string section = c.Category switch
+                // The commander may be flagged on its line rather than in the Commander part.
+                string section = c.IsCommander && !tokenLine ? "Commander" : c.Category switch
                 {
                     DeckCardCategory.Commander => "Commander",
                     DeckCardCategory.Sideboard => "Sideboard",

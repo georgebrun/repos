@@ -45,6 +45,17 @@ namespace BreakersOfE.Services
                 case ExportFormat.SpreadsheetCsv:
                     (text, lines) = Spreadsheet(sorted, o);
                     break;
+                case ExportFormat.MtgoDek:
+                    (text, lines) = MtgoDek(sorted);
+                    if (o.Source == ExportSource.Deck && sorted.Any(r => r.Section == "Commander"))
+                        note = "MTGO keeps a Commander deck's commander in the sideboard: it's there in this file.";
+                    break;
+                case ExportFormat.MtgoCsv:
+                    (text, lines) = MtgoCsv(sorted);
+                    break;
+                case ExportFormat.ArenaText:
+                    (text, lines) = ArenaText(sorted, o);
+                    break;
                 default:
                     (text, lines) = TextList(sorted, o);
                     break;
@@ -95,6 +106,111 @@ namespace BreakersOfE.Services
             }
             return (sb.ToString(), n);
         }
+
+        // ── MTGO .dek ────────────────────────────────────────────────────
+        /// <summary>
+        /// Magic Online's .dek: one &lt;Cards&gt; per MTGO id. A deck's sideboard
+        /// (and commander, as MTGO wants it) is Sideboard="true". Rows without
+        /// an MTGO id can't be loaded by MTGO and are left out.
+        /// </summary>
+        private static (string, int) MtgoDek(List<ExportRow> rows)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
+            sb.AppendLine("<Deck xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">");
+            sb.AppendLine("  <NetDeckID>0</NetDeckID>");
+            sb.AppendLine("  <PreconstructedDeckID>0</PreconstructedDeckID>");
+            int n = 0;
+            var groups = rows.Where(r => r.MtgoId is > 0)
+                .GroupBy(r => (Id: r.MtgoId!.Value, Side: r.Section is "Sideboard" or "Commander"))
+                .Select(g => (g.Key.Id, g.Key.Side, Name: MtgoName(g.First()), Qty: g.Sum(r => r.Quantity)));
+            foreach (var (id, side, name, qty) in groups)
+            {
+                sb.Append("  <Cards CatID=\"").Append(id.ToString(CultureInfo.InvariantCulture))
+                  .Append("\" Quantity=\"").Append(qty.ToString(CultureInfo.InvariantCulture))
+                  .Append("\" Sideboard=\"").Append(side ? "true" : "false")
+                  .Append("\" Name=\"").Append(System.Security.SecurityElement.Escape(name))
+                  .AppendLine("\" Annotation=\"0\" />");
+                n++;
+            }
+            sb.AppendLine("</Deck>");
+            return (sb.ToString(), n);
+        }
+
+        /// <summary>MTGO names a two-part card "Fire/Ice" and a double-faced one by its front.</summary>
+        private static string MtgoName(ExportRow r) => FrontOnly(r) ? Front(r.Name) : r.Name.Replace(" // ", "/");
+
+        private static bool FrontOnly(ExportRow r) =>
+            r.Layout is "transform" or "modal_dfc" or "adventure" or "flip" or "meld" or "prepare";
+
+        private static string Front(string name)
+        {
+            int i = name.IndexOf(" // ", StringComparison.Ordinal);
+            return i > 0 ? name[..i] : name;
+        }
+
+        // ── MTGO CSV ─────────────────────────────────────────────────────
+        private static (string, int) MtgoCsv(List<ExportRow> rows)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine(CsvText.Line(new[] { "Card Name", "Quantity", "ID #", "Rarity", "Set", "Collector #", "Premium" }));
+            foreach (var r in rows)
+                sb.AppendLine(CsvText.Line(new[]
+                {
+                    MtgoName(r), r.Quantity.ToString(CultureInfo.InvariantCulture),
+                    r.MtgoId?.ToString(CultureInfo.InvariantCulture) ?? "",
+                    r.Rarity.Length > 0 ? char.ToUpperInvariant(r.Rarity[0]) + r.Rarity[1..].ToLowerInvariant() : "",
+                    GameSetCode(r.SetCode), r.CollectorNumber, r.Finish == CardFinish.NonFoil ? "No" : "Yes",
+                }));
+            return (sb.ToString(), rows.Count);
+        }
+
+        // ── Arena text ───────────────────────────────────────────────────
+        /// <summary>
+        /// MTG Arena's import text (its Import button reads the clipboard):
+        /// "4 Lightning Bolt (STA) 42" under Commander / Deck / Sideboard. No
+        /// finish marks (Arena has no foils); double-faced and adventure cards
+        /// by their front name, as Arena writes them.
+        /// </summary>
+        private static (string, int) ArenaText(List<ExportRow> rows, ExportOptions o)
+        {
+            var sb = new StringBuilder();
+            int n = 0;
+            bool headers = o.Source == ExportSource.Deck;
+            var groups = rows
+                .Where(r => !r.IsToken && r.Section != "Tokens")
+                .GroupBy(r => (r.Section, Name: ArenaName(r), Set: r.SetCode.ToLowerInvariant(), r.CollectorNumber))
+                .Select(g => (g.Key.Section, g.Key.Name, Set: g.First().SetCode, g.Key.CollectorNumber, Qty: g.Sum(r => r.Quantity)));
+            string? current = null;
+            foreach (var (section, name, set, cn, qty) in groups)
+            {
+                if (headers && section != current)
+                {
+                    if (current != null) sb.AppendLine();
+                    sb.AppendLine(section.Length == 0 ? "Deck" : section);
+                    current = section;
+                }
+                sb.Append(qty.ToString(CultureInfo.InvariantCulture)).Append(' ').Append(name);
+                if (set.Length > 0)
+                {
+                    sb.Append(" (").Append(GameSetCode(set)).Append(')');
+                    if (cn.Length > 0) sb.Append(' ').Append(cn);
+                }
+                sb.AppendLine();
+                n++;
+            }
+            return (sb.ToString(), n);
+        }
+
+        private static string ArenaName(ExportRow r) => FrontOnly(r) ? Front(r.Name) : r.Name;
+
+        /// <summary>The few sets MTGO and Arena call by another code than Scryfall does.</summary>
+        private static string GameSetCode(string scryfallCode) => scryfallCode.ToLowerInvariant() switch
+        {
+            "dom" => "DAR",
+            "con" => "CON_",
+            _ => scryfallCode.ToUpperInvariant(),
+        };
 
         // ── ManaBox CSV ──────────────────────────────────────────────────
         private static readonly string[] ManaBoxHeaders =
@@ -223,12 +339,17 @@ namespace BreakersOfE.Services
                 ExportSource.Deck => deckName.Length > 0 ? deckName : "Deck",
                 ExportSource.WantList => "Want List",
                 ExportSource.TradeBinder => "Trade Binder",
+                ExportSource.MtgoCollection => "MTGO Collection",
+                ExportSource.ArenaCollection => "Arena Collection",
                 _ => o.OnlyFree ? "Collection (free copies)" : "Collection",
             };
             string kind = o.Format switch
             {
                 ExportFormat.ManaBoxCsv => " - ManaBox.csv",
                 ExportFormat.SpreadsheetCsv => ".csv",
+                ExportFormat.MtgoDek => ".dek",
+                ExportFormat.MtgoCsv => " - MTGO.csv",
+                ExportFormat.ArenaText => " - Arena.txt",
                 _ => ".txt",
             };
             string name = $"{what} {DateTime.Now:yyyy-MM-dd}{kind}";

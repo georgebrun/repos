@@ -4,7 +4,7 @@
 The card pool is on top and your Want List below. Each want row is one printing in one finish.
 
 ## Using the list
-- **Add Non-Foil / Add Foil / Add Etched** ([Enter], [Shift+Enter], [Ctrl+Enter]): put Qty copies on the list.
+- **Add Non-Foil / Add Foil / Add Etched** ([Enter], [Shift+Enter], [Ctrl+Enter]): put Qty copies on the list. With both tables in Gallery these buttons (and **Remove**) are hidden: use the − / + boxes under each picture.
 - **Remove** ([Delete]): take Qty off. [Shift+Delete] removes all of the selected rows.
 - **Got It…**: you got the cards. Qty copies go into your collection, in the **Language** and **Condition** picked beside the button, and come off the Want List. Undo takes back both.
 

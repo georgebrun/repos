@@ -10,7 +10,7 @@
 - [Ctrl+Z]: undo the last change.
 - Top table: [Enter] adds the usual finish (non-foil when the card has one), [Shift+Enter] adds foil, [Ctrl+Enter] adds etched. On the Trade Binder page, [Enter] puts the copies in the binder.
 - Bottom table: [Delete] removes Qty, [Shift+Delete] removes all of the selected rows.
-- Gallery **+** and **−**: hold [Shift] for foil, [Ctrl] for etched.
+- Gallery: each finish has its own **−** / **+** under the picture, so no keys are needed.
 - In a cell editor: [Enter] saves, [Esc] cancels.
 
 ## Deck → Collection

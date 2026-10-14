@@ -41,10 +41,15 @@ namespace BreakersOfE.Views.Pages
         public static string CardText(object card) =>
             $"{Str(card, "Name")} ({Str(card, "SetCode").ToUpperInvariant()} #{Str(card, "CollectorNumber")})";
 
-        /// <summary>The finish a gallery tile's + / − means: Ctrl = etched, Shift = foil, else the default (null).</summary>
+        /// <summary>
+        /// The finish a gallery − / + means. The buttons under a tile send one
+        /// key per finish: Ctrl = etched, Shift = foil, Alt = non-foil.
+        /// None = the default (null): a collection row's own tile, or the keyboard.
+        /// </summary>
         public static string? FinishFromKeys(ModifierKeys keys) =>
             keys.HasFlag(ModifierKeys.Control) ? CardFinish.Etched :
-            keys.HasFlag(ModifierKeys.Shift) ? CardFinish.Foil : null;
+            keys.HasFlag(ModifierKeys.Shift) ? CardFinish.Foil :
+            keys.HasFlag(ModifierKeys.Alt) ? CardFinish.NonFoil : null;
 
         /// <summary>A collection-side row's finish as shown (v1 foil of an etched-only printing = etched).</summary>
         public static string FinishOf(object row) =>

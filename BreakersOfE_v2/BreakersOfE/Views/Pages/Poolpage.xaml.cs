@@ -254,7 +254,9 @@ namespace BreakersOfE.Views.Pages
         /// <summary>Card Pool nav items (Cards, Tokens, …): always a card view.</summary>
         public void LoadPool(string tag)
         {
+            _fixedGallery = false;
             _inSetsContext = false;
+            _openRelease = _partOfRelease = null;
             _inDecksContext = false;
             _pendingSelect = null;             // a new table: no re-select left over from an edit
             _pendingFallback = null;
@@ -269,10 +271,12 @@ namespace BreakersOfE.Views.Pages
         /// "Sets" nav item: the set browser over the main Cards pool. Reuses
         /// the Cards pool if it's already loaded (no 100K-card reload).
         /// </summary>
-        public void ShowSets()
+        public void ShowSets(string? release = null)
         {
             _inSetsContext = true;
             _inDecksContext = false;
+            _openRelease = release;             // a release's page (its parts), or null for all releases
+            _partOfRelease = null;
 
             // The set view has its own filters (separate from Cards). Coming
             // back to the browser drops the set's Edition filter.
@@ -296,7 +300,8 @@ namespace BreakersOfE.Views.Pages
         private void BtnBackToSets_Click(object sender, RoutedEventArgs e)
         {
             if (_inDecksContext) ShowDecks();
-            else ShowSets();
+            else if (_viewMode == PoolViewMode.Sets) ShowSets();      // a release page → all releases
+            else ShowSets(_partOfRelease);                           // a set's cards → its release page (or all)
         }
 
         private const string SetsFilterKey = "Sets";
@@ -332,6 +337,12 @@ namespace BreakersOfE.Views.Pages
             ResetSearch();
             ClearDetail();
             Gallery.Reset();         // new card objects for this table
+            Gallery.Game = KindOf(tag) switch   // online tiles: tix prices (MTGO) or none (Arena)
+            {
+                TableKind.MtgoPool or TableKind.MtgoCollection => Models.OnlineGame.Mtgo,
+                TableKind.ArenaPool or TableKind.ArenaCollection => Models.OnlineGame.Arena,
+                _ => null,
+            };
             _setTiles = null;        // set tiles come from the Cards pool
         }
 
@@ -363,8 +374,9 @@ namespace BreakersOfE.Views.Pages
             {
                 BuildSetTilesIfNeeded();
                 RebuildSetRows();
-                _vm.Title = "Sets";
-                _vm.StatusText = $"{_setTiles!.Count:N0} sets";
+                _vm.Title = SetsTitle();
+                _vm.StatusText = SetsStatus();
+                UpdateBackButton();
             }
 
             // Filters panel: this table's lists and settings; Sort list in step.

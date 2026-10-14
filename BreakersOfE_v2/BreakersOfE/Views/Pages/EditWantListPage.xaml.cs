@@ -62,6 +62,10 @@ namespace BreakersOfE.Views.Pages
 
             _top.SelectedCardChanged += card => OnSelected(_top, card);
             _bottom.SelectedCardChanged += card => OnSelected(_bottom, card);
+            // Both tables as pictures: the boxes under each picture replace the finish buttons.
+            _top.ViewModeChanged += ShowFinishButtons;
+            _bottom.ViewModeChanged += ShowFinishButtons;
+            Loaded += (_, _) => ShowFinishButtons();
 
             // A table re-read after an edit: its rows are new objects.
             _bottom.ItemsReloaded += () =>
@@ -194,6 +198,13 @@ namespace BreakersOfE.Views.Pages
             if (_active == null) return false;
             if (_active.SelectedRowCount > MaxRows) return true;
             return _active.SelectedUnordered.Any(r => IsWantRow(r) || ComesIn(r, finish));
+        }
+
+        /// <summary>Add Non-Foil / Foil / Etched and Remove: hidden when both tables show pictures.</summary>
+        private void ShowFinishButtons()
+        {
+            var v = _top.ShowingGallery && _bottom.ShowingGallery ? Visibility.Collapsed : Visibility.Visible;
+            BtnAddNonFoil.Visibility = BtnAddFoil.Visibility = BtnAddEtched.Visibility = BtnRemove.Visibility = v;
         }
 
         private static bool ComesIn(object pool, string finish)

@@ -17,6 +17,8 @@ namespace BreakersOfE.Services
         OtherCsv,
         /// <summary>A text list: "4 Lightning Bolt (M10) 146 *F*", with optional Commander / Deck / Sideboard headers.</summary>
         TextList,
+        /// <summary>Magic Online's .dek file (XML): each card by its MTGO id (CatID), foils included.</summary>
+        MtgoDek,
     }
 
     /// <summary>Where an import goes.</summary>
@@ -27,6 +29,10 @@ namespace BreakersOfE.Services
         WantList,
         /// <summary>A new deck file.</summary>
         NewDeck,
+        /// <summary>The MTGO collection (Online → Collection → MTGO).</summary>
+        MtgoCollection,
+        /// <summary>The Arena collection (Online → Collection → Arena).</summary>
+        ArenaCollection,
     }
 
     /// <summary>Add to what's there, or make the target match the file.</summary>
@@ -49,6 +55,8 @@ namespace BreakersOfE.Services
         public string SetName { get; set; } = "";
         public string CollectorNumber { get; set; } = "";
         public string ScryfallId { get; set; } = "";
+        /// <summary>Magic Online's id for the card ("CatID" in a .dek, "ID #" in MTGO's CSV): non-foil or foil.</summary>
+        public int? MtgoId { get; set; }
 
         /// <summary>Finish as stated (null = the file doesn't say).</summary>
         public string? Finish { get; set; }

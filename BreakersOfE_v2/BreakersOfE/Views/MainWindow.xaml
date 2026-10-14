@@ -433,6 +433,13 @@
                     </ui:NavigationViewItem.MenuItems>
                 </ui:NavigationViewItem>
 
+                <!-- Sets: add the cards of a set you opened (release tiles, then − / + under each card) -->
+                <ui:NavigationViewItem x:Name="NavEditSets" Content="Sets"
+                                       Tag="Edit:Sets"
+                                       TargetPageType="{x:Type pages:EditCollectionPage}"
+                                       Icon="{ui:SymbolIcon Layer24}"
+                                       Visibility="Collapsed" />
+
                 <!-- Decks: build and change decks (pool on top, the deck below) -->
                 <ui:NavigationViewItem x:Name="NavEditDecks" Content="Decks"
                                        Icon="{ui:SymbolIcon Layer24}"

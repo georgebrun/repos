@@ -21,8 +21,9 @@ namespace BreakersOfE.Services
             ImportFormat.Auto => "Auto-detect",
             ImportFormat.BoeFull => "BoE full collection file (.csv)",
             ImportFormat.ManaBox => "ManaBox (.csv)",
-            ImportFormat.OtherCsv => "Other app's CSV — Moxfield, Archidekt, Deckbox, TCGplayer, Dragon Shield, MTGGoldfish, Deckstats, Delver Lens …",
-            ImportFormat.TextList => "Text list — 4 Lightning Bolt (M10) 146 *F*",
+            ImportFormat.OtherCsv => "Other app's CSV — Moxfield, Archidekt, Deckbox, TCGplayer, Dragon Shield, MTGGoldfish, Deckstats, Delver Lens, MTGO …",
+            ImportFormat.TextList => "Text list — 4 Lightning Bolt (M10) 146 *F* (Arena and MTGO lists too)",
+            ImportFormat.MtgoDek => "MTGO .dek file",
             _ => f.ToString(),
         };
 
@@ -37,9 +38,11 @@ namespace BreakersOfE.Services
             if (t.Length == 0) { refusal = "The file is empty."; return ImportFormat.Auto; }
             if (t.StartsWith("<"))
             {
+                if (t.Contains("<Deck", StringComparison.OrdinalIgnoreCase) && t.Contains("CatID", StringComparison.OrdinalIgnoreCase))
+                    return ImportFormat.MtgoDek;
                 refusal = t.Contains("<mtgstudiodeck", StringComparison.OrdinalIgnoreCase)
                     ? "This is an MTG Studio deck file. BoE doesn't read MTG Studio files — export the deck from MTG Studio as a CSV or text list and import that."
-                    : "This is an XML file (an MTGO .dek?) — MTGO import comes in a later part.";
+                    : "This is an XML file BoE doesn't know. MTGO .dek files (with CatID numbers) are read; export other apps' lists as CSV or text.";
                 return ImportFormat.Auto;
             }
             if (t.StartsWith("{"))
@@ -90,6 +93,7 @@ namespace BreakersOfE.Services
             try
             {
                 if (format == ImportFormat.TextList) ParseText(text, result);
+                else if (format == ImportFormat.MtgoDek) ParseDek(text, result);
                 else ParseCsv(text, format, result);
             }
             catch (Exception ex)
@@ -99,6 +103,7 @@ namespace BreakersOfE.Services
             if (result.Error.Length == 0 && result.Lines.Count == 0)
                 result.Error = format == ImportFormat.TextList
                     ? "No card lines found. Text lists look like: 4 Lightning Bolt (M10) 146"
+                    : format == ImportFormat.MtgoDek ? "No cards found in this .dek file."
                     : "No card rows found under the header line.";
             return result;
         }
@@ -113,6 +118,8 @@ namespace BreakersOfE.Services
         private static readonly string[] SetEitherCols = { "Edition", "Set" };
         private static readonly string[] NumberCols = { "Collector number", "Collector Number", "Collector's number", "Card Number", "Number", "Collector #", "CN", "No" };
         private static readonly string[] SidCols = { "Scryfall ID", "Scryfall Id", "ScryfallId", "Scryfall" };
+        /// <summary>MTGO's CSV ("ID #") and similar: the card's Magic Online id.</summary>
+        private static readonly string[] MtgoIdCols = { "ID #", "ID#", "CatID", "Cat ID", "MTGO ID", "MtgoId" };
         private static readonly string[] FinishCols = { "Finish", "Foil", "Is Foil", "Printing", "Premium", "Foil/Etched", "Variant" };
         private static readonly string[] LangCols = { "Language", "Lang" };
         private static readonly string[] CondCols = { "Condition", "Cond" };
@@ -145,7 +152,8 @@ namespace BreakersOfE.Services
                 cSid = csv.Col(SidCols), cFinish = csv.Col(FinishCols), cLang = csv.Col(LangCols),
                 cCond = csv.Col(CondCols), cPrice = csv.Col(PriceCols), cNotes = csv.Col(NotesCols),
                 cStorage = csv.Col(StorageCols), cAdded = csv.Col(AddedCols),
-                cTable = csv.Col(BoeFormat.TableHeader), cFav = csv.Col("Favorite"), cSection = csv.Col(SectionCols);
+                cTable = csv.Col(BoeFormat.TableHeader), cFav = csv.Col("Favorite"), cSection = csv.Col(SectionCols),
+                cMtgo = csv.Col(MtgoIdCols);
             string finishHeader = cFinish >= 0 ? CsvText.Key(csv.Headers[cFinish]) : "";
 
             if (cName < 0 && cSid < 0)
@@ -206,12 +214,54 @@ namespace BreakersOfE.Services
                     Table = format == ImportFormat.BoeFull && cTable >= 0 ? CsvText.Get(row, cTable) : null,
                     Favorite = cFav >= 0 ? ParseBool(CsvText.Get(row, cFav)) : null,
                     Section = cSection >= 0 ? SectionOf(CsvText.Get(row, cSection)) : ImportSection.None,
+                    MtgoId = int.TryParse(CsvText.Get(row, cMtgo), NumberStyles.None, CultureInfo.InvariantCulture, out var mid) && mid > 0 ? mid : null,
                 };
                 line.Source = $"{qty} {name}" +
                     (setCode.Length > 0 ? $" ({setCode.ToUpperInvariant()})" : setName.Length > 0 ? $" ({setName})" : "") +
                     (line.CollectorNumber.Length > 0 ? $" {line.CollectorNumber}" : "") +
                     (line.Finish is CardFinish.Foil ? " *F*" : line.Finish is CardFinish.Etched ? " *E*" : "");
                 result.Lines.Add(line);
+            }
+        }
+
+        // ── MTGO .dek ────────────────────────────────────────────────────
+        /// <summary>
+        /// Magic Online's .dek (its Export button, for a deck or the whole
+        /// collection): &lt;Cards CatID="12345" Quantity="4" Sideboard="false"
+        /// Name="Lightning Bolt" /&gt;. CatID is MTGO's own id — it says the
+        /// printing and whether it's a foil (Premium).
+        /// </summary>
+        private static void ParseDek(string text, ImportParseResult result)
+        {
+            var doc = System.Xml.Linq.XDocument.Parse(text.TrimStart('\uFEFF'));
+            int n = 0;
+            foreach (var el in doc.Descendants().Where(e => e.Name.LocalName == "Cards"))
+            {
+                n++;
+                string Attr(string a) => el.Attributes().FirstOrDefault(x => x.Name.LocalName.Equals(a, StringComparison.OrdinalIgnoreCase))?.Value?.Trim() ?? "";
+                string name = Attr("Name"), cat = Attr("CatID"), qtyText = Attr("Quantity");
+                int? id = int.TryParse(cat, NumberStyles.None, CultureInfo.InvariantCulture, out var c) && c > 0 ? c : null;
+                if (name.Length == 0 && id == null)
+                {
+                    result.Problems.Add($"Card {n}: no name or CatID — skipped.");
+                    continue;
+                }
+                int qty = qtyText.Length == 0 ? 1 : int.TryParse(qtyText, NumberStyles.None, CultureInfo.InvariantCulture, out var q) ? q : -1;
+                if (qty < 0)
+                {
+                    result.Problems.Add($"Card {n} ({name}): \"{qtyText}\" isn't a quantity — skipped.");
+                    continue;
+                }
+                bool side = Attr("Sideboard").Equals("true", StringComparison.OrdinalIgnoreCase);
+                result.Lines.Add(new ImportLine
+                {
+                    LineNumber = n,
+                    Quantity = qty,
+                    Name = name,
+                    MtgoId = id,
+                    Section = side ? ImportSection.Sideboard : ImportSection.None,
+                    Source = $"{qty} {name}" + (id != null ? $" (MTGO #{id})" : "") + (side ? " — sideboard" : ""),
+                });
             }
         }
 

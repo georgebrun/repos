@@ -6,9 +6,13 @@ Open **Edit**, then **Pool → Collection** and a kind (Cards, Tokens, …). The
 ## Adding
 1. Set **Add/Remove Qty** (how many) and pick the **Language** and **Condition** for new cards. They start from Settings → Collection defaults.
 2. Select the card in the pool (on top), or a row of your collection to add more of that row.
-3. Click **Add Non-Foil**, **Add Foil** or **Add Etched**, or press [Enter], [Shift+Enter] or [Ctrl+Enter]. In the Gallery, click a picture's **+** (hold [Shift] for foil, [Ctrl] for etched).
+3. Click **Add Non-Foil**, **Add Foil** or **Add Etched**, or press [Enter], [Shift+Enter] or [Ctrl+Enter]. In the Gallery, click **+** in the finish's box under the picture.
 
 Only the finishes the printing comes in can be added.
+
+Tip: Opened a pack, box or precon? **Edit → Sets** shows one set at a time as pictures, so you can go down the set and click **+** on what you got. See [[sets]].
+
+Tip: With both tables in Gallery, the Add and Remove finish buttons are hidden: the boxes under each picture do the same job. **Remove All…** and **Undo** stay. Switch either table to Grid and the buttons come back. To add to several selected pictures at once, use [Enter], [Shift+Enter] or [Ctrl+Enter].
 
 ## Removing
 - **Remove Non-Foil / Foil / Etched** take away Qty copies.

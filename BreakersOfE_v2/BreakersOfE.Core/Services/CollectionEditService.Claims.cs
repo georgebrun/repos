@@ -82,6 +82,9 @@ namespace BreakersOfE.Services
         public const string OversizedTable = "CollOversized";
         /// <summary>Front cards (Jumpstart theme cards): their own collection.</summary>
         public const string FrontTable = "CollFrontCards";
+        /// <summary>The online collections (one table in collection.db, told apart by Game).</summary>
+        public const string MtgoTable = "MtgoCollection";
+        public const string ArenaTable = "ArenaCollection";
 
         /// <summary>The collection table a deck line's copies come from.</summary>
         public static string TableOf(DeckCard c) => c.IsTokenLine ? TokensTable : CardsTable;

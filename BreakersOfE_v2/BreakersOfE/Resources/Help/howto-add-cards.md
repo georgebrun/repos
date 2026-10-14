@@ -8,7 +8,7 @@
 5. Click the card, then **Add Non-Foil**, **Add Foil** or **Add Etched**. Or press [Enter] (the usual finish, non-foil when there is one), [Shift+Enter] (foil) or [Ctrl+Enter] (etched).
 6. The card appears in your collection below. The status line says what was added.
 
-Tip: In the Gallery, click a picture's **+** to add Qty copies; hold [Shift] for foil or [Ctrl] for etched.
+Tip: In the Gallery, each finish has its own box under the picture: click its **+** to add Qty copies, **−** to take them away.
 
 Tip: Made a mistake? **Undo** or [Ctrl+Z].
 

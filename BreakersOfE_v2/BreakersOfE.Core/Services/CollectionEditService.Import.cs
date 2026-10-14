@@ -64,6 +64,18 @@ namespace BreakersOfE.Services
         {
             var map = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
             var all = sids.Where(s => !string.IsNullOrEmpty(s)).Distinct().ToList();
+            if (IsOnline(collTag))
+            {
+                // MTGO / Arena: the online card pool (its own table).
+                using var odb = new OnlineDbContext();
+                for (int i = 0; i < all.Count; i += 400)
+                {
+                    var chunk = all.Skip(i).Take(400).ToList();
+                    foreach (var c in odb.OnlineCards.AsNoTracking().Where(c => chunk.Contains(c.ScryfallId)).ToList())
+                        map.TryAdd(c.ScryfallId, c);
+                }
+                return map;
+            }
             using var db = new AppDbContext();
             for (int i = 0; i < all.Count; i += 400)
             {
@@ -103,7 +115,8 @@ namespace BreakersOfE.Services
             var notes = new List<string>();
             try
             {
-                EnsureBackup();
+                if (mode == ImportMode.Replace) BackupNow();     // Replace removes rows: always a fresh copy
+                else EnsureBackup();
                 foreach (var tableGroup in items.GroupBy(i => i.Printing.Table))
                 {
                     string table = tableGroup.Key;
@@ -232,7 +245,8 @@ namespace BreakersOfE.Services
             var undo = new ImportUndo { Text = description };
             try
             {
-                EnsureBackup();
+                if (mode == ImportMode.Replace) BackupNow();     // Replace removes rows: always a fresh copy
+                else EnsureBackup();
                 var cards = items.Where(i => i.Printing.Table == CardsTable && i.Printing.Has(i.Finish)).ToList();
                 int skipped = items.Count - cards.Count;
                 var fileSids = cards.Select(i => i.Printing.ScryfallId).Distinct(StringComparer.OrdinalIgnoreCase).ToList();

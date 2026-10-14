@@ -19,6 +19,18 @@ namespace BreakersOfE.ViewModels
         public string SetType { get; init; } = "";
         public string SymbolPath { get; init; } = "";
 
+        // ── Releases (Scryfall's set families) ────────────────────────────
+        /// <summary>The table this set's cards are in: "Cards", "Tokens", "ArtSeries", "Oversized", "FrontCards".</summary>
+        public string Table { get; init; } = "Cards";
+        /// <summary>What this set is within its release: "Set", "Commander", "Promos", "Tokens" …</summary>
+        public string Label { get; set; } = "";
+        /// <summary>A release tile: its parts (main set first). Empty for a single set.</summary>
+        public List<SetTile> Parts { get; set; } = new();
+        public bool IsRelease => Parts.Count > 1;
+        /// <summary>Third line: a release's parts ("Set · Commander · Promos"), or a part's label.</summary>
+        public string PartsText { get; set; } = "";
+        public bool HasPartsText => PartsText.Length > 0;
+
         /// <summary>Earliest release date among the set's cards (ISO yyyy-mm-dd).</summary>
         public string ReleasedAt { get; set; } = "";
 
@@ -47,7 +59,8 @@ namespace BreakersOfE.ViewModels
             TotalValue > 0 ? TotalValue.ToString("C2", CultureInfo.GetCultureInfo("en-US")) : "—";
 
         public string ToolTipText =>
-            $"{Name}\nOwned {OwnedText} ({CompletionText})\nSet value {TotalValueText} · Missing {MissingValueText}";
+            $"{Name}" + (HasPartsText ? $" ({PartsText})" : "") +
+            $"\nOwned {OwnedText} ({CompletionText})\n{(IsRelease ? "Release" : "Set")} value {TotalValueText} · Missing {MissingValueText}";
 
         public string YearText => ReleasedAt.Length >= 4 ? ReleasedAt[..4] : "";
 
@@ -144,6 +157,57 @@ namespace BreakersOfE.ViewModels
             for (int i = 0; i < Sections.Length; i++)
                 if (Sections[i].section == section) return i;
             return Sections.Length;   // "Other" last
+        }
+
+        /// <summary>
+        /// What a set is within its release, for its tile: the table decides
+        /// for tokens, art series, oversized and front cards; otherwise the
+        /// set type ("Commander", "Promos" …); the release's own set is "Set".
+        /// </summary>
+        public static string LabelFor(string table, string? setType, bool isMain) => table switch
+        {
+            "Tokens" => "Tokens",
+            "ArtSeries" => "Art Series",
+            "Oversized" => "Oversized",
+            "FrontCards" => "Front Cards",
+            _ when isMain => "Set",
+            _ => (setType ?? "").ToLowerInvariant() switch
+            {
+                "commander" => "Commander",
+                "promo" => "Promos",
+                "masterpiece" => "Masterpieces",
+                "box" => "Box Set",
+                "funny" => "Extras",
+                "alchemy" => "Alchemy",
+                "duel_deck" => "Duel Decks",
+                "starter" => "Starter",
+                "memorabilia" => "Memorabilia",
+                "minigame" => "Minigames",
+                "token" => "Tokens",
+                "draft_innovation" => "Draft",
+                "expansion" or "core" or "masters" => "Set",
+                "" => "Other",
+                var t => System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(t.Replace('_', ' ')),
+            },
+        };
+
+        /// <summary>Order of parts on a release page: the set first, then these, then the rest.</summary>
+        public static int LabelOrder(string label) => label switch
+        {
+            "Set" => 0, "Commander" => 1, "Promos" => 2, "Tokens" => 3, "Art Series" => 4,
+            "Oversized" => 5, "Front Cards" => 6, _ => 7,
+        };
+
+        /// <summary>Which part of a release is its face: Cards-table sets of these kinds first.</summary>
+        public static int MainRank(SetTile t)
+        {
+            if (t.Table != "Cards") return 50;
+            return (t.SetType ?? "").ToLowerInvariant() switch
+            {
+                "expansion" => 0, "core" => 1, "masters" => 2, "draft_innovation" => 3, "commander" => 4,
+                "funny" => 5, "starter" => 6, "duel_deck" => 7, "box" => 8, "masterpiece" => 9,
+                "promo" => 20, "memorabilia" => 30, _ => 10,
+            };
         }
     }
 }

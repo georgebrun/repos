@@ -30,6 +30,10 @@ namespace BreakersOfE.Services
         private readonly Dictionary<string, List<PoolPrinting>> _byName = new();
         private readonly Dictionary<string, string> _setCodeByName = new();
         private readonly HashSet<string> _setCodes = new();
+        /// <summary>Magic Online ids (.dek CatID, MTGO CSV "ID #"): the printing, and whether that id is its foil.</summary>
+        private readonly Dictionary<int, (PoolPrinting P, bool Foil)> _byMtgoId = new();
+        /// <summary>An MTGO or Arena pool: every printing is a digital one, so digital isn't put last.</summary>
+        private bool _online;
 
         /// <summary>Other apps' set codes that differ from Scryfall's.</summary>
         private static readonly Dictionary<string, string> SetAliases = new(StringComparer.OrdinalIgnoreCase)
@@ -87,13 +91,66 @@ namespace BreakersOfE.Services
                     CollectorNumber = f.CollectorNumber, ReleasedAt = f.ReleasedAt ?? "",
                     NonFoil = f.IsNonFoil, Foil = f.IsFoil, Etched = f.IsEtched,
                 });
+            m.AddMtgoIds();
             return m;
         }
 
-        private void Add(PoolPrinting p)
+        /// <summary>
+        /// MTGO ids for paper printings (an MTGO .dek or CSV into the paper
+        /// collection): the online pool has them, under the same Scryfall ids.
+        /// </summary>
+        private void AddMtgoIds()
+        {
+            try
+            {
+                using var odb = new OnlineDbContext();
+                foreach (var o in odb.OnlineCards.AsNoTracking()
+                             .Where(c => c.MtgoId != null || c.MtgoFoilId != null)
+                             .Select(c => new { c.ScryfallId, c.MtgoId, c.MtgoFoilId }).ToList())
+                {
+                    if (!_bySid.TryGetValue(o.ScryfallId, out var p)) continue;          // a digital-only printing
+                    if (o.MtgoId is int nf && nf > 0) _byMtgoId.TryAdd(nf, (p, false));
+                    if (o.MtgoFoilId is int f && f > 0) _byMtgoId.TryAdd(f, (p, true));
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"MTGO ids: {ex.Message}");         // no online pool yet: by name, as before
+            }
+        }
+
+        /// <summary>
+        /// The MTGO or Arena card pool (Online), for importing into that game's
+        /// collection. MTGO: non-foil when the printing has an MTGO id, foil
+        /// (Premium) when it has a foil id. Arena: non-foil only.
+        /// </summary>
+        public static CardMatcher LoadOnline(string game)
+        {
+            bool arena = game == OnlineGame.Arena;
+            var m = new CardMatcher { _online = true };
+            string table = arena ? CollectionEditService.ArenaTable : CollectionEditService.MtgoTable;
+            using var db = new OnlineDbContext();
+            var pool = arena ? db.OnlineCards.AsNoTracking().Where(c => c.IsOnArena)
+                             : db.OnlineCards.AsNoTracking().Where(c => c.IsOnMtgo);
+            foreach (var c in pool.Select(c => new { c.ScryfallId, c.Name, c.SetCode, c.SetName, c.CollectorNumber, c.ReleasedAt, c.MtgoId, c.MtgoFoilId })
+                                  .ToList())
+                m.Add(new PoolPrinting
+                {
+                    Table = table,
+                    ScryfallId = c.ScryfallId, Name = c.Name, SetCode = c.SetCode, SetName = c.SetName,
+                    CollectorNumber = c.CollectorNumber, ReleasedAt = c.ReleasedAt ?? "",
+                    NonFoil = arena || c.MtgoId != null || c.MtgoFoilId == null,     // no ids at all: non-foil
+                    Foil = !arena && c.MtgoFoilId != null,
+                }, arena ? null : c.MtgoId, arena ? null : c.MtgoFoilId);     // Arena: MTGO ids mean nothing there
+            return m;
+        }
+
+        private void Add(PoolPrinting p, int? mtgoId = null, int? mtgoFoilId = null)
         {
             if (string.IsNullOrEmpty(p.ScryfallId) || _bySid.ContainsKey(p.ScryfallId)) return;
             _bySid[p.ScryfallId] = p;
+            if (mtgoId is int nfId && nfId > 0) _byMtgoId.TryAdd(nfId, (p, false));
+            if (mtgoFoilId is int fId && fId > 0) _byMtgoId.TryAdd(fId, (p, true));
             string set = p.SetCode.ToLowerInvariant();
             _setCodes.Add(set);
             if (p.SetName.Length > 0) _setCodeByName.TryAdd(NameKey(p.SetName), set);
@@ -167,6 +224,13 @@ namespace BreakersOfE.Services
                 how = "Scryfall ID";
                 return new List<PoolPrinting> { bySid };
             }
+            // 1b. Magic Online id (MTGO .dek / CSV): the printing, and foil or not.
+            if (line.MtgoId is int mid && _byMtgoId.TryGetValue(mid, out var byMtgo))
+            {
+                how = "MTGO id";
+                line.Finish = byMtgo.Foil ? CardFinish.Foil : CardFinish.NonFoil;   // the id says which
+                return new List<PoolPrinting> { byMtgo.P };
+            }
 
             string? set = SetCodeOf(line);
             string key = NameKey(line.Name);
@@ -196,7 +260,7 @@ namespace BreakersOfE.Services
                 if (set != null && _bySetName.TryGetValue((set, k), out var inSet) && inSet.Count > 0)
                 {
                     how = inSet.Count == 1 ? "set and name" : $"set and name — {inSet.Count} versions in that set";
-                    return Order(inSet, line, byNumber: true);
+                    return Order(inSet, line, byNumber: true, _online);
                 }
 
             // 4. Name only
@@ -205,7 +269,7 @@ namespace BreakersOfE.Services
                 {
                     how = all.Count == 1 ? "name" : $"name only — {all.Count} printings";
                     if (set != null) how += $" (set \"{line.SetCode}{line.SetName}\" not found)";
-                    return Order(all, line, byNumber: false);
+                    return Order(all, line, byNumber: false, _online);
                 }
             return new List<PoolPrinting>();
         }
@@ -215,13 +279,13 @@ namespace BreakersOfE.Services
         /// digital, the finish asked for, then (same set) the lowest collector
         /// number or (any set) the newest printing.
         /// </summary>
-        private static List<PoolPrinting> Order(List<PoolPrinting> list, ImportLine line, bool byNumber)
+        private static List<PoolPrinting> Order(List<PoolPrinting> list, ImportLine line, bool byNumber, bool online)
         {
             bool wantToken = line.Section == ImportSection.Tokens || line.Table == CollectionEditService.TokensTable;
             var q = list.Distinct()
                 .OrderBy(p => p.IsToken == wantToken ? 0 : 1)
                 .ThenBy(p => p.IsSideTable ? 1 : 0)
-                .ThenBy(p => p.Digital ? 1 : 0)
+                .ThenBy(p => !online && p.Digital ? 1 : 0)
                 .ThenBy(p => line.Finish == null || p.Has(line.Finish) ? 0 : 1);
             q = byNumber
                 ? q.ThenBy(p => NumberSort(p.CollectorNumber)).ThenBy(p => p.CollectorNumber, StringComparer.OrdinalIgnoreCase)

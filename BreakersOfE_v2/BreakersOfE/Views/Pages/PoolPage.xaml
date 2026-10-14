@@ -541,7 +541,7 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Width="300" Height="72" Margin="4" CornerRadius="8"
+                                        <Border Width="300" Height="88" Margin="4" CornerRadius="8"
                                             BorderThickness="2" Cursor="Hand"
                                             ToolTip="{Binding ToolTipText}"
                                             MouseLeftButtonDown="SetTile_MouseLeftButtonDown">
@@ -575,6 +575,11 @@
                                                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                                                     <TextBlock Text="{Binding Summary}" FontSize="12" Margin="0,3,0,0"
                                                            TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                    <!-- A release: its parts ("Set · Commander · Promos"); a part: what it is -->
+                                                    <TextBlock Text="{Binding PartsText}" FontSize="11" Margin="0,2,0,0"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Visibility="{Binding HasPartsText, Converter={StaticResource BoolToVisibilityConverter}}"
                                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                                     <!-- Completion: printings owned / in the set -->
                                                     <ProgressBar Height="4" Margin="0,6,0,0" Maximum="100"

@@ -35,6 +35,8 @@ namespace BreakersOfE.Views.Pages
         private ImportUndo? _undo;
         private static CardMatcher? _matcher;           // the card pool, loaded once …
         private static DateTime _matcherStamp;          // … and again after a database update
+        private static readonly Dictionary<string, (CardMatcher M, DateTime Stamp)> _onlineMatchers = new();   // MTGO / Arena pools
+        private string? _readFor;                       // the pool the preview was matched against (null = paper, "mtgo", "arena")
         private bool _busy;
 
         private sealed record TargetChoice(ImportTarget Target, string Text)
@@ -70,6 +72,8 @@ namespace BreakersOfE.Views.Pages
                 new TargetChoice(ImportTarget.Collection, "Collection (cards and tokens)"),
                 new TargetChoice(ImportTarget.WantList, "Want List"),
                 new TargetChoice(ImportTarget.NewDeck, "A new deck"),
+                new TargetChoice(ImportTarget.MtgoCollection, "MTGO collection"),
+                new TargetChoice(ImportTarget.ArenaCollection, "Arena collection"),
             };
             TargetBox.SelectedIndex = 0;
             FormatBox.ItemsSource = Enum.GetValues<ImportFormat>().Select(f => new FormatChoice(f)).ToList();
@@ -85,6 +89,8 @@ namespace BreakersOfE.Views.Pages
                 new ExportSourceChoice(ExportSource.Deck, "A deck"),
                 new ExportSourceChoice(ExportSource.WantList, "Want List"),
                 new ExportSourceChoice(ExportSource.TradeBinder, "Trade Binder"),
+                new ExportSourceChoice(ExportSource.MtgoCollection, "MTGO collection"),
+                new ExportSourceChoice(ExportSource.ArenaCollection, "Arena collection"),
             };
             ExportSourceBox.SelectedIndex = 0;
             ExportFormatBox.ItemsSource = FormatsFor(ExportSource.Collection);
@@ -93,6 +99,14 @@ namespace BreakersOfE.Views.Pages
         }
 
         private ImportTarget Target => (TargetBox.SelectedItem as TargetChoice)?.Target ?? ImportTarget.Collection;
+
+        /// <summary>The game of an online target ("mtgo" / "arena"), else null (paper).</summary>
+        private static string? GameOf(ImportTarget t) => t switch
+        {
+            ImportTarget.MtgoCollection => OnlineGame.Mtgo,
+            ImportTarget.ArenaCollection => OnlineGame.Arena,
+            _ => null,
+        };
         private ImportFormat Format => (FormatBox.SelectedItem as FormatChoice)?.Format ?? ImportFormat.Auto;
         private ImportMode Mode => ReplaceRadio.IsChecked == true ? ImportMode.Replace : ImportMode.Add;
         private string DefaultLanguage => LanguageBox.SelectedItem as string ?? CardLanguage.Default;
@@ -106,7 +120,7 @@ namespace BreakersOfE.Views.Pages
             var dlg = new Microsoft.Win32.OpenFileDialog
             {
                 Title = "Import cards from…",
-                Filter = "Card lists (*.csv;*.txt)|*.csv;*.txt|All files (*.*)|*.*",
+                Filter = "Card lists (*.csv;*.txt;*.dek)|*.csv;*.txt;*.dek|All files (*.*)|*.*",
                 InitialDirectory = Directory.Exists(AppFolderService.ImportsFolder) ? AppFolderService.ImportsFolder : "",
             };
             if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
@@ -142,26 +156,41 @@ namespace BreakersOfE.Views.Pages
         {
             if (_busy) return;
             _busy = true;
-            SetBusy(true, _matcher == null ? "Loading the card pool (first time only)…" : "Reading…");
+            var format = Format;
+            var target = Target;
+            string? game = GameOf(target);
+            bool first = game == null ? _matcher == null : !_onlineMatchers.ContainsKey(game);
+            SetBusy(true, first ? $"Loading the {(game == null ? "card pool" : OnlineGame.Display(game) + " card pool")} (first time only)…" : "Reading…");
             try
             {
-                var format = Format;
-                var target = Target;
                 var (parse, rows) = await Task.Run(() =>
                 {
                     var p = ImportParsers.Parse(text, format);
                     var list = new List<ImportPreviewRow>();
                     if (p.Error.Length > 0) return (p, list);
                     var stamp = File.Exists(AppFolderService.DatabasePath) ? File.GetLastWriteTimeUtc(AppFolderService.DatabasePath) : DateTime.MinValue;
-                    if (_matcher == null || stamp != _matcherStamp)
+                    CardMatcher matcher;
+                    if (game == null)
                     {
-                        _matcher = CardMatcher.Load();
-                        _matcherStamp = stamp;
+                        if (_matcher == null || stamp != _matcherStamp)
+                        {
+                            _matcher = CardMatcher.Load();
+                            _matcherStamp = stamp;
+                        }
+                        matcher = _matcher!;
+                    }
+                    else
+                    {
+                        // MTGO / Arena: that game's own card pool (its printings, its ids).
+                        if (!_onlineMatchers.TryGetValue(game, out var om) || om.Stamp != stamp)
+                            _onlineMatchers[game] = om = (CardMatcher.LoadOnline(game), stamp);
+                        matcher = om.M;
                     }
                     foreach (var line in p.Lines)
-                        list.Add(ImportPreviewRow.Make(line, _matcher!));
+                        list.Add(ImportPreviewRow.Make(line, matcher));
                     return (p, list);
                 });
+                _readFor = game;
 
                 _sourceName = sourceName;
                 _lastText = text;
@@ -250,16 +279,20 @@ namespace BreakersOfE.Views.Pages
             {
                 ImportTarget.WantList => "the Want List",
                 ImportTarget.NewDeck => $"a new deck \"{(string.IsNullOrWhiteSpace(DeckNameBox.Text) ? "Imported Deck" : DeckNameBox.Text.Trim())}\"",
+                ImportTarget.MtgoCollection => "your MTGO collection",
+                ImportTarget.ArenaCollection => "your Arena collection",
                 _ => "your collection",
             };
             string question = mode == ImportMode.Replace
                 ? $"REPLACE: make {where} match this file exactly?\n\n" +
                   (target == ImportTarget.WantList
                       ? "Everything on the Want List that isn't in the file is removed."
+                      : GameOf(target) is { } g
+                      ? $"Everything in your {OnlineGame.Display(g)} collection that isn't in the file is removed."
                       : "In each collection table the file has cards for, rows not in the file are removed — copies claimed by decks or the Trade Binder stay.") +
                   $"\n\nThe file has {copies:N0} copies in {go.Count:N0} lines." +
                   (left > 0 ? $"\n{left:N0} line(s) with problems or not found are left out." : "") +
-                  "\n\nA backup is made first, and Undo Last Import takes it all back."
+                  "\n\nYour collection is backed up first (Backups folder), and Undo Last Import takes it all back."
                 : $"Import {copies:N0} copies ({go.Count:N0} lines) into {where}?" +
                   (left > 0 ? $"\n\n{left:N0} line(s) with problems or not found are left out." : "") +
                   (target == ImportTarget.NewDeck ? "" : "\n\nUndo Last Import takes it back.");
@@ -352,11 +385,28 @@ namespace BreakersOfE.Views.Pages
             new(ExportFormat.ManaBoxCsv, "ManaBox CSV — MTG Deck Tools upload, ManaBox"),
             new(ExportFormat.SpreadsheetCsv, "Spreadsheet CSV — every detail, for Excel"),
             new(ExportFormat.BoeFull, "BoE full backup — every table and detail (restore: Import → Replace)"),
+            new(ExportFormat.ArenaText, "Arena — paste into MTG Arena's Import"),
+            new(ExportFormat.MtgoDek, "MTGO .dek — load in Magic Online"),
+            new(ExportFormat.MtgoCsv, "MTGO CSV — Magic Online's collection layout"),
         };
 
-        /// <summary>The formats a list can be exported as (the BoE backup is the whole collection only).</summary>
-        private static List<ExportFormatChoice> FormatsFor(ExportSource source) =>
-            AllFormats.Where(f => f.Format != ExportFormat.BoeFull || source == ExportSource.Collection).ToList();
+        /// <summary>
+        /// The formats a list can be exported as: the BoE backup is the whole
+        /// paper collection only; MTGO and Arena formats for decks and the
+        /// online collections.
+        /// </summary>
+        private static List<ExportFormatChoice> FormatsFor(ExportSource source)
+        {
+            ExportFormat[] fits = source switch
+            {
+                ExportSource.Collection => new[] { ExportFormat.TextList, ExportFormat.ManaBoxCsv, ExportFormat.SpreadsheetCsv, ExportFormat.BoeFull },
+                ExportSource.Deck => new[] { ExportFormat.TextList, ExportFormat.ManaBoxCsv, ExportFormat.SpreadsheetCsv, ExportFormat.ArenaText, ExportFormat.MtgoDek },
+                ExportSource.MtgoCollection => new[] { ExportFormat.MtgoDek, ExportFormat.MtgoCsv, ExportFormat.TextList },
+                ExportSource.ArenaCollection => new[] { ExportFormat.ArenaText, ExportFormat.TextList },
+                _ => new[] { ExportFormat.TextList, ExportFormat.ManaBoxCsv, ExportFormat.SpreadsheetCsv },
+            };
+            return fits.Select(f => AllFormats.First(a => a.Format == f)).ToList();
+        }
 
         private bool _settingFormats;
 
@@ -485,7 +535,9 @@ namespace BreakersOfE.Views.Pages
             try
             {
                 Clipboard.SetText(_export.Text);
-                ExportText.Text = $"Copied {_export.Lines:N0} lines to the clipboard — paste them into the website.";
+                ExportText.Text = ExportFormatNow == ExportFormat.ArenaText
+                    ? $"Copied {_export.Lines:N0} lines to the clipboard — in Arena, open Decks and click Import."
+                    : $"Copied {_export.Lines:N0} lines to the clipboard — paste them into the website.";
             }
             catch (Exception ex)
             {
@@ -498,11 +550,15 @@ namespace BreakersOfE.Views.Pages
             var export = _export;
             if (export == null || export.Lines == 0 || _busy) return;
             var format = ExportFormatNow;
-            bool csv = format != ExportFormat.TextList;
             var dlg = new Microsoft.Win32.SaveFileDialog
             {
                 Title = "Save the export",
-                Filter = csv ? "CSV file (*.csv)|*.csv" : "Text file (*.txt)|*.txt",
+                Filter = format switch
+                {
+                    ExportFormat.TextList or ExportFormat.ArenaText => "Text file (*.txt)|*.txt",
+                    ExportFormat.MtgoDek => "MTGO deck file (*.dek)|*.dek",
+                    _ => "CSV file (*.csv)|*.csv",
+                },
                 FileName = export.FileName,
                 InitialDirectory = Directory.Exists(AppFolderService.ExportsFolder) ? AppFolderService.ExportsFolder : "",
             };
@@ -537,8 +593,11 @@ namespace BreakersOfE.Views.Pages
             AddRadio.IsEnabled = ReplaceRadio.IsEnabled = !deck;
             if (deck) AddRadio.IsChecked = true;
             bool wants = Target == ImportTarget.WantList;
-            LanguageBox.IsEnabled = ConditionBox.IsEnabled = !wants && !deck;     // want rows and deck lines have none
-            RecomputeAll();
+            bool online = GameOf(Target) != null;
+            LanguageBox.IsEnabled = ConditionBox.IsEnabled = !wants && !deck && !online;     // want rows, deck lines and online cards have none
+            // Paper ↔ MTGO ↔ Arena: each has its own card pool, so the list is matched again.
+            if (_lastText.Length > 0 && !_busy && GameOf(Target) != _readFor) _ = Read(_lastText, _sourceName);
+            else RecomputeAll();
         }
 
         private void FormatBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

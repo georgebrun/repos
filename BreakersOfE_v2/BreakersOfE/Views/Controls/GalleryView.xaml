@@ -7,29 +7,28 @@
          page can host it: the View tables and the Edit pages. The host
          feeds it cards in display order and reacts to CardClicked/CardOpened. -->
     <UserControl.Resources>
-        <!-- Round + / − buttons on the tiles (Edit pages) -->
-        <Style x:Key="TileButton" TargetType="Button">
-            <Setter Property="Width" Value="30"/>
-            <Setter Property="Height" Value="30"/>
+        <!-- Small − / + inside a finish's count box (Edit pages) -->
+        <Style x:Key="SlotButton" TargetType="Button">
+            <Setter Property="Width" Value="22"/>
+            <Setter Property="Height" Value="22"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" CornerRadius="15" Background="#E0202020"
-                                BorderBrush="#A0FFFFFF" BorderThickness="1">
+                        <Border x:Name="Bd" CornerRadius="4" Background="Transparent">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                              Margin="0,-3,0,0"
-                                              TextElement.Foreground="White"
-                                              TextElement.FontSize="18"
+                                              Margin="0,-2,0,0"
+                                              TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                              TextElement.FontSize="15"
                                               TextElement.FontWeight="Bold"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#FF5A5A5A"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#40808080"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#FF808080"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#80808080"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -98,14 +97,19 @@
                                     </Style>
                                 </Border.Style>
                                 <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <!-- The picture: nothing drawn on it -->
+                                    <Grid Grid.Row="0">
                                     <!-- Placeholder: card name until the image arrives
                                          (stays if offline). The image covers it. -->
                                     <TextBlock Text="{Binding Name}" TextWrapping="Wrap"
                                                TextAlignment="Center" FontSize="12"
                                                VerticalAlignment="Center" Margin="8"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                    <!-- Set checklist: printings you don't own are dimmed
-                                         (the price badge stays bright). -->
+                                    <!-- Set checklist: printings you don't own are dimmed. -->
                                     <Image Source="{Binding Image}" Stretch="Uniform"
                                            RenderOptions.BitmapScalingMode="HighQuality">
                                         <Image.Style>
@@ -132,59 +136,90 @@
                                                        FontSize="20" FontWeight="SemiBold" Foreground="#202020"/>
                                         </Viewbox>
                                     </Grid>
-                                    <!-- Owned marker + finish pill sit just below the title bar
-                                         (at the top of the art), so the name and mana cost stay
-                                         readable. Proportional rows keep them there at any card size. -->
-                                    <Grid>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="11*"/>
-                                            <RowDefinition Height="89*"/>
-                                        </Grid.RowDefinitions>
-                                        <!-- Count marker (top-left): owned (pool), quantity (collection), copies in deck (deck) -->
-                                        <Border Grid.Row="1" HorizontalAlignment="Left" VerticalAlignment="Top"
-                                                Margin="8,2,0,0" CornerRadius="8" Padding="7,1"
-                                                Background="#D0202020"
-                                                ToolTip="{Binding OwnedTip}"
-                                                Visibility="{Binding HasOwned, Converter={StaticResource BoolToVisibilityConverter}}">
-                                            <TextBlock Text="{Binding OwnedText}" FontSize="12"
-                                                       FontWeight="Bold" Foreground="White"/>
-                                        </Border>
-                                        <!-- Finish pill (top-right): gold "F" = foil row or
-                                             foil-only printing, "E" = etched -->
-                                        <Border Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top"
-                                                Margin="0,2,8,0" CornerRadius="8" Padding="7,1"
-                                                Background="#D0202020"
-                                                Visibility="{Binding HasFinishPill, Converter={StaticResource BoolToVisibilityConverter}}">
-                                            <TextBlock Text="{Binding FinishPill}" FontSize="12"
-                                                       FontWeight="Bold" Foreground="#FFC000"/>
-                                        </Border>
                                     </Grid>
-                                    <!-- Edit pages: + / − on the right edge, like a tally.
-                                         + adds Qty (Shift = foil, Ctrl = etched), − removes. -->
-                                    <Grid Visibility="{Binding ShowEditButtons, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}">
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="55*"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="12*"/>
-                                        </Grid.RowDefinitions>
-                                        <Button Grid.Row="1" Content="+" Style="{StaticResource TileButton}"
-                                                HorizontalAlignment="Right" Margin="0,0,8,6"
-                                                Click="TileAdd_Click"
-                                                ToolTip="Add Qty (Shift+click = foil, Ctrl+click = etched). Right-click the card for more."/>
-                                        <Button Grid.Row="2" Content="−" Style="{StaticResource TileButton}"
-                                                HorizontalAlignment="Right" Margin="0,0,8,0"
-                                                Click="TileRemove_Click"
-                                                ToolTip="Remove Qty (Shift+click = foil, Ctrl+click = etched). Right-click the card for more."/>
-                                    </Grid>
-                                    <!-- Price badge -->
-                                    <Border HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                                            Margin="0,0,0,6" CornerRadius="8" Padding="8,2"
-                                            Background="#D0202020"
-                                            Visibility="{Binding HasPrice, Converter={StaticResource BoolToVisibilityConverter}}">
-                                        <TextBlock Text="{Binding PriceText}" FontSize="11"
-                                                   FontWeight="SemiBold" Foreground="White"/>
-                                    </Border>
+
+                                    <!-- Under the picture: one column per finish. Price of one
+                                         copy (hover: count × price = total), then the count;
+                                         Edit pages put − / + around it. Gold = foil (F) / etched (E).
+                                         Too many columns for a small card: the strip shrinks. -->
+                                    <Viewbox Grid.Row="1" Height="{Binding StripHeight}"
+                                             Stretch="Uniform" StretchDirection="DownOnly"
+                                             HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <ItemsControl ItemsSource="{Binding Slots}" Focusable="False">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <UniformGrid Rows="1"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Margin="3,1,3,2" HorizontalAlignment="Center">
+                                                        <TextBlock Text="{Binding PriceText}" ToolTip="{Binding PriceTip}"
+                                                                   HorizontalAlignment="Center" FontSize="11" FontWeight="SemiBold"
+                                                                   Margin="0,0,0,2">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsGold}" Value="True">
+                                                                            <Setter Property="Foreground" Value="{DynamicResource BoeGoldBrush}"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding IsUnlisted}" Value="True">
+                                                                            <Setter Property="Foreground" Value="{DynamicResource BoeWarningBrush}"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding PriceText}" Value="">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                        <!-- Amber box: a finish you have that Scryfall doesn't list (ISA-101: needs a look) -->
+                                                        <Border CornerRadius="6" BorderThickness="1" Padding="2,0"
+                                                                HorizontalAlignment="Center" MinWidth="40"
+                                                                Background="#20808080"
+                                                                ToolTip="{Binding CountTip}">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsUnlisted}" Value="True">
+                                                                            <Setter Property="BorderBrush" Value="{DynamicResource BoeWarningBrush}"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                                <Button Content="−" Style="{StaticResource SlotButton}"
+                                                                        Click="SlotRemove_Click"
+                                                                        Visibility="{Binding ShowEditButtons, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                                <TextBlock Text="{Binding CountText}" FontSize="12" FontWeight="Bold"
+                                                                           VerticalAlignment="Center" TextAlignment="Center"
+                                                                           MinWidth="22" Margin="2,2">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsGold}" Value="True">
+                                                                                    <Setter Property="Foreground" Value="{DynamicResource BoeGoldBrush}"/>
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding IsUnlisted}" Value="True">
+                                                                                    <Setter Property="Foreground" Value="{DynamicResource BoeWarningBrush}"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+                                                                <Button Content="+" Style="{StaticResource SlotButton}"
+                                                                        Click="SlotAdd_Click"
+                                                                        Visibility="{Binding ShowEditButtons, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Viewbox>
                                 </Grid>
                             </Border>
                         </DataTemplate>

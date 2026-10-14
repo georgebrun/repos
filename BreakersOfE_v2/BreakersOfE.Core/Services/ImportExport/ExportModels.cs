@@ -9,6 +9,10 @@ namespace BreakersOfE.Services
         Deck,
         WantList,
         TradeBinder,
+        /// <summary>Online → Collection → MTGO.</summary>
+        MtgoCollection,
+        /// <summary>Online → Collection → Arena.</summary>
+        ArenaCollection,
     }
 
     /// <summary>The file an export writes.</summary>
@@ -22,6 +26,12 @@ namespace BreakersOfE.Services
         SpreadsheetCsv,
         /// <summary>BoE's own backup: every paper collection table, every field (Import → Replace restores it).</summary>
         BoeFull,
+        /// <summary>Magic Online's .dek file (XML, each card by its MTGO id): a deck, or the MTGO collection.</summary>
+        MtgoDek,
+        /// <summary>Magic Online's collection CSV layout (Card Name, Quantity, ID #, …).</summary>
+        MtgoCsv,
+        /// <summary>MTG Arena's import text: "4 Lightning Bolt (STA) 42" under Commander / Deck / Sideboard.</summary>
+        ArenaText,
     }
 
     /// <summary>What to export and how.</summary>
@@ -63,6 +73,10 @@ namespace BreakersOfE.Services
         public string Notes { get; init; } = "";
         public string Storage { get; init; } = "";
         public bool IsToken { get; init; }
+        /// <summary>MTGO: the id of this printing in this finish (CatID).</summary>
+        public int? MtgoId { get; init; }
+        /// <summary>Scryfall's layout ("transform", "split" …): Arena names double-faced cards by their front.</summary>
+        public string Layout { get; init; } = "";
     }
 
     /// <summary>The finished export.</summary>

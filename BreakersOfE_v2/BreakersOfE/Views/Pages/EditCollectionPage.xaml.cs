@@ -37,10 +37,18 @@ namespace BreakersOfE.Views.Pages
         private readonly PoolPage _top = new();
         private readonly PoolPage _bottom = new();
         private string _poolTag = "Cards";
-        private string CollTag => CollectionEditService.CollectionTagFor(_poolTag);
+        /// <summary>
+        /// Edit → Sets: the set and release tiles on top (full page, no collection
+        /// table); each part's cards go to their own collection table.
+        /// </summary>
+        private bool _setsMode;
+        private string _setsShownTag = "";
+        /// <summary>The pool table on top: the one picked, or (Edit → Sets) the part open now.</summary>
+        private string PoolTag => _setsMode && _top.CurrentTag is { Length: > 0 } t ? t : _poolTag;
+        private string CollTag => CollectionEditService.CollectionTagFor(PoolTag);
         /// <summary>Online → Collection (MTGO or Arena): no language, condition or etched.</summary>
         private bool IsOnline => CollectionEditService.IsOnline(CollTag);
-        private bool IsArena => _poolTag == "ArenaCards";
+        private bool IsArena => PoolTag == "ArenaCards";
 
         // The table the user worked in last, and the card shown / counted.
         private PoolPage? _active;
@@ -61,6 +69,14 @@ namespace BreakersOfE.Views.Pages
             InitializeComponent();
             new WindowKeyHook(this, (_, e) => EditKeys(e, QtyBox, DoUndo));   // Ctrl+Z / Ctrl+Q from anywhere in the window
             RememberSizes(this, TopRow, BottomRow, DetailColumn);
+            Loaded += (_, _) =>
+            {
+                // The saved table sizes were just put back: Edit → Sets keeps the whole height.
+                if (!_setsMode) return;
+                _topHeight = TopRow.Height; _bottomHeight = BottomRow.Height;
+                TopRow.Height = GridLength.Auto;
+                BottomRow.Height = new GridLength(1, GridUnitType.Star);
+            };
             WireQtyBox(QtyBox, () => DoAdd(null));                           // Enter adds the default finish
 
             // Pool on top starts as card pictures (+ / − on each), the collection
@@ -72,6 +88,20 @@ namespace BreakersOfE.Views.Pages
 
             _top.SelectedCardChanged += card => OnSelected(_top, card);
             _bottom.SelectedCardChanged += card => OnSelected(_bottom, card);
+            // Both tables as pictures: the boxes under each picture replace the finish buttons.
+            _top.ViewModeChanged += ShowModeControls;
+            _bottom.ViewModeChanged += ShowModeControls;
+            // Edit → Sets: another part opened (Cards ↔ Tokens …): the bar follows it.
+            _top.ItemsReloaded += () =>
+            {
+                if (!_setsMode || _top.CurrentTag == _setsShownTag) return;
+                _setsShownTag = _top.CurrentTag;
+                _active = null;
+                _current = null;
+                _currentPool = null;
+                Detail.ShowCard(null);
+                RefreshCounts();
+            };
 
             // Gallery tiles: + adds Qty (Shift = foil, Ctrl = etched), − removes.
             _top.GalleryAdd += (card, keys) => { _active = _top; SetCurrent(card); DoAdd(FinishFromKeys(keys), _top); };
@@ -142,6 +172,7 @@ namespace BreakersOfE.Views.Pages
         public void LoadPair(string poolTag)
         {
             if (string.IsNullOrEmpty(poolTag)) poolTag = "Cards";
+            SetsLayout(false);
             _poolTag = poolTag;
             _active = null;
             _current = null;
@@ -155,17 +186,78 @@ namespace BreakersOfE.Views.Pages
         }
 
         /// <summary>
+        /// Edit → Sets: every release as a tile (like View → Sets); a set opens
+        /// as card pictures with − / + under each. Cards go to the matching
+        /// collection table: Cards, Tokens, Oversized …
+        /// </summary>
+        public void LoadSets()
+        {
+            SetsLayout(true);
+            _poolTag = "Cards";
+            _active = null;
+            _current = null;
+            _currentPool = null;
+            Detail.ShowCard(null);
+            ShowModeControls();
+            _setsShownTag = "Cards";
+            _top.ShowSetsForEdit();
+            RefreshCounts();
+            ShowStatus("", false);
+        }
+
+        // The two-table layout's row sizes, kept while Edit → Sets uses the whole height.
+        private GridLength _topHeight, _bottomHeight;
+        private double _topMin, _bottomMin;
+
+        /// <summary>
+        /// Edit → Sets: the bar on top, the cards below it (whole height), no
+        /// collection table. Back to two tables for Pool → Collection.
+        /// </summary>
+        private void SetsLayout(bool sets)
+        {
+            if (sets == _setsMode) return;
+            _setsMode = sets;
+            if (sets)
+            {
+                _topHeight = TopRow.Height; _bottomHeight = BottomRow.Height;
+                _topMin = TopRow.MinHeight; _bottomMin = BottomRow.MinHeight;
+                Grid.SetRow(BarPanel, 0);
+                Grid.SetRow(TopFrame, 2);
+                TopRow.MinHeight = 0;
+                TopRow.Height = GridLength.Auto;
+                BottomRow.MinHeight = 140;
+                BottomRow.Height = new GridLength(1, GridUnitType.Star);
+                TableSplitter.Visibility = Visibility.Collapsed;
+                BottomFrame.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                Grid.SetRow(TopFrame, 0);
+                Grid.SetRow(BarPanel, 2);
+                TopRow.Height = _topHeight; BottomRow.Height = _bottomHeight;
+                TopRow.MinHeight = _topMin; BottomRow.MinHeight = _bottomMin;
+                TableSplitter.Visibility = Visibility.Visible;
+                BottomFrame.Visibility = Visibility.Visible;
+            }
+        }
+
+        /// <summary>
         /// Online pages have no language, condition, storage or etched; Arena
         /// has no foils either. Those controls and menu items are hidden there.
+        /// Both tables in Gallery: the Add / Remove finish buttons are hidden too
+        /// (each picture has its own − / + per finish); Remove All… and Undo stay.
         /// </summary>
         private void ShowModeControls()
         {
             var paper = IsOnline ? Visibility.Collapsed : Visibility.Visible;
             var foil = IsArena ? Visibility.Collapsed : Visibility.Visible;
+            bool tiles = _setsMode || (_top.ShowingGallery && _bottom.ShowingGallery);
+            Visibility Btn(Visibility v) => tiles ? Visibility.Collapsed : v;
             LanguageLabel.Visibility = LanguageBox.Visibility = paper;
             ConditionLabel.Visibility = ConditionBox.Visibility = paper;
-            BtnAddEtched.Visibility = BtnRemoveEtched.Visibility = paper;
-            BtnAddFoil.Visibility = BtnRemoveFoil.Visibility = foil;
+            BtnAddNonFoil.Visibility = BtnRemoveNonFoil.Visibility = Btn(Visibility.Visible);
+            BtnAddEtched.Visibility = BtnRemoveEtched.Visibility = Btn(paper);
+            BtnAddFoil.Visibility = BtnRemoveFoil.Visibility = Btn(foil);
 
             foreach (var entry in _menuEntries)
             {
@@ -239,8 +331,11 @@ namespace BreakersOfE.Views.Pages
             BtnRemoveEtched.IsEnabled = many || (_counts.Etched > 0 && Own(CardFinish.Etched));
             BtnRemoveAll.IsEnabled = many || _counts.Total > 0;
 
-            if (_current == null)
-                ModeText.Text = $"{(IsOnline ? "Online" : "Pool")} → Collection · {DisplayName(_poolTag)}. Select a card in either table " +
+            if (_current == null && _setsMode)
+                ModeText.Text = $"Sets → Collection · {DisplayName(PoolTag)}. Open a set, then use − / + under each card " +
+                                $"(they go in as {AddsAs()}).";
+            else if (_current == null)
+                ModeText.Text = $"{(IsOnline ? "Online" : "Pool")} → Collection · {DisplayName(PoolTag)}. Select a card in either table " +
                                 "(Ctrl+click or Shift+click for several).";
             else if (many)
                 ModeText.Text = $"{selected} rows selected in the {(_active == _bottom ? "collection" : "pool")} table" +
@@ -617,7 +712,7 @@ namespace BreakersOfE.Views.Pages
             var poolRows = _top.FindAllLoaded(r => r is IOwnedCard && wanted.Contains(Str(r, "ScryfallId"))).ToArray();
             if (poolRows.Length > 0)
             {
-                OwnedCountService.Fill(_poolTag, poolRows);
+                OwnedCountService.Fill(PoolTag, poolRows);
                 _top.RefreshGalleryCards(poolRows);      // gallery tiles show the new counts
             }
 
@@ -625,7 +720,10 @@ namespace BreakersOfE.Views.Pages
             // (or a row of the same printing if those are gone).
             var keys = new HashSet<RowKey>(result.Touched);
             var printings = new HashSet<string>(sids);
-            _bottom.ReloadRows(r => keys.Contains(KeyOf(r)), r => printings.Contains(Str(r, "ScryfallId")));
+            if (_setsMode)
+                _top.SetCountsChanged();          // the set tiles' owned counts, rebuilt on the way back
+            else
+                _bottom.ReloadRows(r => keys.Contains(KeyOf(r)), r => printings.Contains(Str(r, "ScryfallId")));
 
             RefreshCounts();
         }

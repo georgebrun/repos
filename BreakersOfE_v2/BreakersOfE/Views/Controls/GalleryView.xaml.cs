@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Windows;
@@ -27,10 +27,17 @@ namespace BreakersOfE.Views.Controls
         public event Action<object>? CardOpened;
         /// <summary>Right-click on a tile (before its menu opens).</summary>
         public event Action<object>? CardRightClicked;
-        /// <summary>Edit pages: the tile's + (with the keys held: Shift = foil, Ctrl = etched).</summary>
+        /// <summary>
+        /// Edit pages: a finish's + under the tile. The keys say which finish:
+        /// Alt = non-foil, Shift = foil, Ctrl = etched; None = a collection
+        /// row's own tile (that row).
+        /// </summary>
         public event Action<object, System.Windows.Input.ModifierKeys>? CardAdd;
-        /// <summary>Edit pages: the tile's −.</summary>
+        /// <summary>Edit pages: a finish's − (keys as for <see cref="CardAdd"/>).</summary>
         public event Action<object, System.Windows.Input.ModifierKeys>? CardRemove;
+
+        /// <summary>"mtgo" / "arena" for the online tables (tix prices / no prices); null = paper.</summary>
+        public string? Game { get; set; }
 
         /// <summary>Show the + / − buttons on the tiles (Edit pages).</summary>
         public static readonly DependencyProperty ShowEditButtonsProperty = DependencyProperty.Register(
@@ -58,6 +65,8 @@ namespace BreakersOfE.Views.Controls
 
         private const double TileMargin = 8;          // 4 each side (matches XAML)
         private const double CardAspect = 680.0 / 488.0;
+        private const double StripEdit = 52;          // price + count box with − / +
+        private const double StripView = 40;          // price + count
 
         public GalleryView()
         {
@@ -97,7 +106,7 @@ namespace BreakersOfE.Views.Controls
             {
                 if (card == null) continue;
                 if (!_items.TryGetValue(card, out var gi))
-                    gi = GalleryItem.FromCard(card);
+                    gi = GalleryItem.FromCard(card, Game);
                 keep[card] = gi;
                 gi.IsDimmed = DimWhen?.Invoke(card) ?? false;
                 _ordered.Add(gi);
@@ -144,7 +153,9 @@ namespace BreakersOfE.Views.Controls
         /// <summary>Re-read a tile's count marker (after an edit).</summary>
         public void RefreshCard(object card)
         {
-            if (_items.TryGetValue(card, out var gi)) gi.RefreshCounts();
+            if (!_items.TryGetValue(card, out var gi)) return;
+            gi.RefreshCounts();
+            gi.IsDimmed = DimWhen?.Invoke(card) ?? false;     // set checklist: just added = no longer dimmed
         }
 
         /// <summary>
@@ -192,7 +203,8 @@ namespace BreakersOfE.Views.Controls
                 anchorIndex = (int)(sv.VerticalOffset / _rowHeight) * _perRow;
 
             double tileW = GallerySizeSlider.Value;
-            double tileH = Math.Round(tileW * CardAspect);
+            double strip = ShowEditButtons ? StripEdit : StripView;
+            double tileH = Math.Round(tileW * CardAspect) + strip;
             int perRow = PerRowForWidth();
 
             _perRow = perRow;
@@ -202,7 +214,7 @@ namespace BreakersOfE.Views.Controls
             for (int i = 0; i < _ordered.Count; i += perRow)
             {
                 var chunk = _ordered.GetRange(i, Math.Min(perRow, _ordered.Count - i));
-                foreach (var gi in chunk) { gi.TileWidth = tileW; gi.TileHeight = tileH; }
+                foreach (var gi in chunk) { gi.TileWidth = tileW; gi.TileHeight = tileH; gi.StripHeight = strip; }
                 rows.Add(new GalleryRow(chunk));
             }
             _rows = rows;
@@ -261,18 +273,31 @@ namespace BreakersOfE.Views.Controls
             }
         }
 
-        private void TileAdd_Click(object sender, RoutedEventArgs e)
+        // A finish's − / + under a tile. The finish travels as a key the host
+        // already understands (Shift = foil, Ctrl = etched), plus Alt = non-foil.
+        // A collection row's tile sends None: the host acts on that row.
+        private static System.Windows.Input.ModifierKeys KeysFor(FinishSlot slot) =>
+            slot.RowTile ? System.Windows.Input.ModifierKeys.None : slot.Finish switch
+            {
+                Models.CardFinish.Foil => System.Windows.Input.ModifierKeys.Shift,
+                Models.CardFinish.Etched => System.Windows.Input.ModifierKeys.Control,
+                _ => System.Windows.Input.ModifierKeys.Alt,
+            };
+
+        private void SlotAdd_Click(object sender, RoutedEventArgs e)
         {
             e.Handled = true;
-            if ((sender as FrameworkElement)?.DataContext is GalleryItem gi)
-                CardAdd?.Invoke(gi.Card, System.Windows.Input.Keyboard.Modifiers);
+            if ((sender as FrameworkElement)?.DataContext is not FinishSlot slot) return;
+            GalleryList.Focus();
+            CardAdd?.Invoke(slot.Owner.Card, KeysFor(slot));
         }
 
-        private void TileRemove_Click(object sender, RoutedEventArgs e)
+        private void SlotRemove_Click(object sender, RoutedEventArgs e)
         {
             e.Handled = true;
-            if ((sender as FrameworkElement)?.DataContext is GalleryItem gi)
-                CardRemove?.Invoke(gi.Card, System.Windows.Input.Keyboard.Modifiers);
+            if ((sender as FrameworkElement)?.DataContext is not FinishSlot slot) return;
+            GalleryList.Focus();
+            CardRemove?.Invoke(slot.Owner.Card, KeysFor(slot));
         }
 
         // ── Downloads pill ──────────────────────────────────────────────

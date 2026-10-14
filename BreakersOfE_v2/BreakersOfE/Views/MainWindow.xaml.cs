@@ -217,6 +217,7 @@ namespace BreakersOfE.Views
             // Edit items
             var editVis = open == NavSection.Edit ? Visibility.Visible : Visibility.Collapsed;
             NavEditPoolToCollection.Visibility = editVis;
+            NavEditSets.Visibility = editVis;
             NavEditOnline.Visibility = editVis;
             NavEditDecks.Visibility = editVis;
             NavEditLists.Visibility = editVis;
@@ -504,7 +505,12 @@ namespace BreakersOfE.Views
                 EditDeckPage => "decks",
                 EditTradeBinderPage => "trade-binder",
                 EditWantListPage => "want-list",
-                EditCollectionPage => tag is "Edit:MtgoCards" or "Edit:ArenaCards" ? "online" : "edit-collection",
+                EditCollectionPage => tag switch
+                {
+                    "Edit:MtgoCards" or "Edit:ArenaCards" => "online",
+                    "Edit:Sets" => "sets",
+                    _ => "edit-collection",
+                },
                 PoolPage => tag switch
                 {
                     "Sets" => "sets",
@@ -533,7 +539,8 @@ namespace BreakersOfE.Views
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
                     string tag = (sender.SelectedItem as NavigationViewItem)?.Tag as string ?? "";
-                    editPage.LoadPair(tag.StartsWith("Edit:") ? tag.Substring(5) : "Cards");
+                    if (tag == "Edit:Sets") editPage.LoadSets();       // Edit → Sets: release tiles, one page
+                    else editPage.LoadPair(tag.StartsWith("Edit:") ? tag.Substring(5) : "Cards");
                 }), System.Windows.Threading.DispatcherPriority.Loaded);
                 return;
             }

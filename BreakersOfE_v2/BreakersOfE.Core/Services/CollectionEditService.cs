@@ -775,14 +775,28 @@ namespace BreakersOfE.Services
         private static bool _backedUp;
         private const int BackupsKept = 10;
 
+        /// <summary>Back up collection.db once per session, before the first change.</summary>
         public static void EnsureBackup()
         {
             if (_backedUp) return;
+            BackupNow();
+        }
+
+        /// <summary>
+        /// Back up collection.db now, whatever happened earlier in the session
+        /// (a Replace import: it removes rows, so it always gets its own copy).
+        /// Two in the same second: the second is "…-2.db", never written over.
+        /// The newest 10 backups are kept.
+        /// </summary>
+        public static void BackupNow()
+        {
             string source = AppFolderService.CollectionDatabasePath;
             if (!File.Exists(source)) { _backedUp = true; return; }
 
-            string target = Path.Combine(AppFolderService.BackupsFolder,
-                $"collection_{DateTime.Now:yyyyMMdd_HHmmss}.db");
+            string stamp = $"collection_{DateTime.Now:yyyyMMdd_HHmmss}";
+            string target = Path.Combine(AppFolderService.BackupsFolder, stamp + ".db");
+            for (int n = 2; File.Exists(target); n++)
+                target = Path.Combine(AppFolderService.BackupsFolder, $"{stamp}-{n}.db");
             using (var src = new SqliteConnection($"Data Source={source};Mode=ReadOnly;Pooling=False"))
             using (var dst = new SqliteConnection($"Data Source={target};Pooling=False"))
             {

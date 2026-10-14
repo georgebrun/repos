@@ -1055,6 +1055,7 @@ namespace BreakersOfE.Services
             try
             {
                 string json = await _http.GetStringAsync("https://api.scryfall.com/sets", ct);
+                SetFamilies.Save(json);          // which set belongs to which release (the Sets page)
                 using var doc = JsonDocument.Parse(json);
                 if (doc.RootElement.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
                     foreach (var set in data.EnumerateArray())

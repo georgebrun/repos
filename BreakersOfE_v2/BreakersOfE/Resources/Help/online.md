@@ -8,4 +8,7 @@
 - **MTGO**: foil means Premium. Prices are in event tickets (tix), for non-foil copies.
 - **Arena**: non-foil only, and no prices.
 
-Note: Online collections can't be imported or exported yet.
+## Import and export
+**Edit → Import / Export** brings cards into your MTGO or Arena collection (MTGO .dek and CSV files, or text lists) and sends them out again, and turns a deck into Arena import text or an MTGO .dek. See [[import-export]].
+
+Note: Arena can't export a whole collection, so the Arena collection is filled by hand or from a pasted list.

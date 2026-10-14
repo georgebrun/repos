@@ -49,7 +49,7 @@
                                           SelectionChanged="Defaults_SelectionChanged"
                                           ToolTip="Condition for lines without one"/>
                                 <Button x:Name="BtnOpen" Content="Open File…" Padding="10,4" Margin="0,0,6,0" Click="BtnOpen_Click"
-                                        ToolTip="A .csv or .txt card list from BoE or another app"/>
+                                        ToolTip="A .csv, .txt or MTGO .dek card list from BoE or another app"/>
                                 <Button x:Name="BtnPaste" Content="Paste Text" Padding="10,4" Margin="0,0,12,0" Click="BtnPaste_Click"
                                         ToolTip="Paste a list, e.g. a deck an AI or a website gave you"/>
                                 <TextBlock x:Name="SourceText" VerticalAlignment="Center" FontSize="12" TextTrimming="CharacterEllipsis" MaxWidth="520"

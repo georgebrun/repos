@@ -90,6 +90,12 @@ namespace BreakersOfE.Views.Pages
         /// <summary>The table shown ("Cards", "Collection", "CollTokens", …).</summary>
         public string CurrentTag => _currentTag;
 
+        /// <summary>Edit pages: this table is showing card pictures (Gallery), not rows.</summary>
+        public bool ShowingGallery => _viewMode == PoolViewMode.Gallery;
+
+        /// <summary>Grid ↔ Gallery (Edit pages hide their finish buttons when every table shows pictures).</summary>
+        public event Action? ViewModeChanged;
+
         /// <summary>Edit pages: a tile's + / − (the card is selected first).</summary>
         public event Action<object, System.Windows.Input.ModifierKeys>? GalleryAdd;
         public event Action<object, System.Windows.Input.ModifierKeys>? GalleryRemove;
