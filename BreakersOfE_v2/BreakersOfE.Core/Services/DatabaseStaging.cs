@@ -86,8 +86,19 @@ namespace BreakersOfE.Services
                 SqliteConnection.ClearAllPools();
             }
             throw new IOException(
-                $"The update finished but the new database could not replace the old one " +
-                $"(the file is in use). Your old database is unchanged. {last?.Message}", last);
+                $"The update finished, but the new {Path.GetFileName(RealPath)} could not replace the old one: " +
+                $"{InUseName(last)} is in use. Close anything else that has it open (Breakers of E v1, another " +
+                $"Breakers of E window, a database viewer), then run the update again. Your old database is unchanged.", last);
+        }
+
+        /// <summary>The file named in the error ("breakersofe.db-wal"), else the database's own name.</summary>
+        private string InUseName(Exception? ex)
+        {
+            string msg = ex?.Message ?? "";
+            string db = Path.GetFileName(RealPath);
+            foreach (var suffix in new[] { "-wal", "-shm", "-journal" })
+                if (msg.Contains(db + suffix, StringComparison.OrdinalIgnoreCase)) return db + suffix;
+            return db;
         }
 
         /// <summary>Cancelled or failed: throw the temp copy away. Never throws.</summary>

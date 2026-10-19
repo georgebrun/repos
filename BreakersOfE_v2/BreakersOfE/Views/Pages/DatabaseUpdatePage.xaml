@@ -28,7 +28,7 @@
 
             <!-- ═══ HEADER ═══ -->
             <TextBlock Text="Update Database" Style="{StaticResource BoePageTitle}"/>
-            <TextBlock Text="Download card data, prices and symbols from Scryfall."
+            <TextBlock Text="Download card data, prices, symbols and rulings from Scryfall, and combos from Commander Spellbook."
                        Style="{StaticResource BoeHint}" Margin="0,0,0,12"/>
 
             <!-- ═══ LAST UPDATE INFO ═══ -->
@@ -72,7 +72,7 @@
                 <StackPanel>
                     <TextBlock Text="Update" Style="{StaticResource BoeSectionTitle}"/>
                     <TextBlock Style="{StaticResource BoeHint}" Margin="0,0,0,8"
-                               Text="Update Database gets everything: card data, prices, symbols and rulings. The buttons below get one part on its own."/>
+                               Text="Update Database gets everything: card data, prices, symbols, card tags, combos and rulings. The buttons below get one part on its own."/>
                     <!-- The start buttons are disabled while an update runs; Cancel sits
                          OUTSIDE that panel (a disabled panel disables everything in it). -->
                     <WrapPanel>
@@ -131,7 +131,7 @@
                                  Minimum="0" Maximum="100"
                                  Height="8"
                                  Margin="0,4,0,8" />
-                    <TextBlock Text="{Binding DetailText}" Style="{StaticResource BoeHint}"/>
+                    <TextBlock Text="{Binding DetailText}" Style="{StaticResource BoeHint}" TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>
 

@@ -94,9 +94,17 @@ namespace BreakersOfE.ViewModels
             await StartFullUpdate();
             // Only continue to rulings if the full update succeeded (a flag, not the
             // status text: a late progress report could have changed the text).
-            if (_fullUpdateOk)
-                await DownloadRulings();
+            if (!_fullUpdateOk) return;
+
+            // Rulings write their own status; keep the update summary above them.
+            string summary = DetailText;
+            await DownloadRulings();
+            string rulings = _rulingsOk ? DetailText : StatusText + " " + DetailText;
+            if (_rulingsOk) StatusText = "Update complete!";
+            DetailText = summary + "\nRulings: " + rulings;
         }
+
+        private bool _rulingsOk;
 
         private bool _fullUpdateOk;
 
@@ -110,6 +118,7 @@ namespace BreakersOfE.ViewModels
         {
             _fullUpdateOk = false;
             if (!PreflightCheck()) return;
+            if (!await WaitForKeywordRebuild()) return;
 
             IsRunning = true;
             CanStart = false;
@@ -152,9 +161,13 @@ namespace BreakersOfE.ViewModels
                     StatusText = "Updating card text in your collection…";
                     await Task.Run(RefreshCollectionCardText);
 
+                    // Card tags and combos for deck building. Extras: a failure
+                    // here never undoes the card update above.
+                    string extras = await DownloadDeckData(progress, token);
+
                     StatusText = "Update complete!";
                     ProgressPercent = 100;
-                    DetailText = BuildCompletionSummary(result);
+                    DetailText = BuildCompletionSummary(result) + extras;
 
                     _coordinator.RecordPoolUpdate();
                     _coordinator.RecordPriceUpdate();
@@ -164,7 +177,9 @@ namespace BreakersOfE.ViewModels
                     Services.ManaCostConverter.ClearCache();
 
                     // Fire keyword rebuild in background (low priority)
-                    _ = Task.Run(() => RebuildKeywordDictionaryBackground(), CancellationToken.None);
+                    // Remembered: the next card or price update waits for it, since it
+                    // reads the card database (the swap can't replace a file in use).
+                    _keywordRebuild = Task.Run(() => RebuildKeywordDictionaryBackground(), CancellationToken.None);
 
                     if (sorted.Any) ShowSortReport(sorted);
                 }
@@ -218,6 +233,7 @@ namespace BreakersOfE.ViewModels
         private async Task StartPriceUpdate()
         {
             if (!PreflightCheck()) return;
+            if (!await WaitForKeywordRebuild()) return;
 
             IsRunning = true;
             CanStart = false;
@@ -305,6 +321,7 @@ namespace BreakersOfE.ViewModels
         [RelayCommand]
         private async Task DownloadRulings()
         {
+            _rulingsOk = false;
             if (!PreflightCheck()) return;
 
             IsRunning = true;
@@ -327,6 +344,7 @@ namespace BreakersOfE.ViewModels
                 StatusText = "Rulings download complete!";
                 DetailText = $"{count:N0} rulings imported into rulings.db";
                 ProgressPercent = 100;
+                _rulingsOk = true;
             }
             catch (OperationCanceledException)
             {
@@ -357,6 +375,40 @@ namespace BreakersOfE.ViewModels
         /// Checks if the agent is already running an update.
         /// Returns false (and sets warning text) if we shouldn't start.
         /// </summary>
+        /// <summary>
+        /// The keyword dictionary rebuild started by the last update (it reads the
+        /// card database in the background). Static: one for the whole app.
+        /// </summary>
+        private static Task _keywordRebuild = Task.CompletedTask;
+
+        /// <summary>
+        /// Before an update that replaces the card database: let the last
+        /// update's keyword rebuild finish, or the new database can't be swapped
+        /// in (breakersofe.db would still be open). False if it's still going
+        /// after 10 minutes (it usually takes a few).
+        /// </summary>
+        private async Task<bool> WaitForKeywordRebuild()
+        {
+            if (_keywordRebuild.IsCompleted) return true;
+            IsRunning = true;
+            CanStart = false;
+            StatusText = "Finishing the keyword dictionary from the last update…";
+            DetailText = "The update starts by itself as soon as it's done.";
+            try
+            {
+                var done = await Task.WhenAny(_keywordRebuild, Task.Delay(TimeSpan.FromMinutes(10)));
+                if (done == _keywordRebuild) return true;
+                StatusText = "The keyword dictionary is still updating.";
+                DetailText = "Try the update again in a minute.";
+                return false;
+            }
+            finally
+            {
+                IsRunning = false;
+                CanStart = true;
+            }
+        }
+
         private bool PreflightCheck()
         {
             if (_coordinator.IsAgentUpdating())
@@ -669,6 +721,51 @@ namespace BreakersOfE.ViewModels
         /// <summary>
         /// Builds a summary string after a successful full update.
         /// </summary>
+        /// <summary>
+        /// Full update, last step: Scryfall's card tags (tags.db) and Commander
+        /// Spellbook's combos (combos.db). Each is swapped in only when complete;
+        /// a failure or Cancel leaves that file as it was and the card update stands.
+        /// Returns a line for the summary.
+        /// </summary>
+        private async Task<string> DownloadDeckData(IProgress<ImportProgress> progress, CancellationToken token)
+        {
+            var parts = new List<string>();
+            CanCancel = true;                                   // these two can still be stopped
+            try
+            {
+                try
+                {
+                    var (tags, links) = await Task.Run(() => DeckDataService.DownloadTagsAsync(progress, token));
+                    parts.Add($"Card tags: {tags:N0} ({links:N0} card links)");
+                }
+                catch (OperationCanceledException) { parts.Add("Card tags: cancelled (unchanged)"); throw; }
+                catch (Exception ex) { parts.Add($"Card tags: not updated ({ex.Message})"); }
+
+                try
+                {
+                    int combos = await Task.Run(() => DeckDataService.DownloadCombosAsync(progress, token));
+                    parts.Add($"Combos: {combos:N0} (Commander Spellbook)");
+                }
+                catch (OperationCanceledException) { parts.Add("Combos: cancelled (unchanged)"); throw; }
+                catch (Exception ex) { parts.Add($"Combos: not updated ({ex.Message})"); }
+
+                try
+                {
+                    int salt = await Task.Run(() => EdhrecService.DownloadSaltAsync(progress, token));
+                    parts.Add($"Salt scores: {salt:N0} cards (EDHREC)");
+                }
+                catch (OperationCanceledException) { parts.Add("Salt scores: cancelled (unchanged)"); throw; }
+                catch (Exception ex) { parts.Add($"Salt scores: not updated ({ex.Message})"); }
+            }
+            catch (OperationCanceledException)
+            {
+                if (parts.Count == 1 && parts[0].StartsWith("Card tags: cancelled")) parts.Add("Combos: skipped (unchanged)");
+                if (parts.Count == 2 && !parts[1].StartsWith("Salt")) parts.Add("Salt scores: skipped (unchanged)");
+            }
+            finally { CanCancel = false; }
+            return "\n" + string.Join("\n", parts);
+        }
+
         private static string BuildCompletionSummary(ImportResult result)
         {
             return $"Pool: {result.PoolCardsImported:N0}  " +

@@ -80,6 +80,12 @@
             <TextBlock x:Name="DetailOracle" Style="{StaticResource DetailValue}"
                        FontSize="12" TextWrapping="Wrap"/>
 
+            <!-- What the card does (Scryfall's Tagger), from Update Database -->
+            <TextBlock Text="TAGS" Style="{StaticResource DetailLabel}"/>
+            <WrapPanel x:Name="DetailTags" Margin="0,2,0,2"/>
+            <TextBlock x:Name="DetailTagsHint" Style="{StaticResource DetailValue}" FontSize="12"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+
             <TextBlock Text="FLAVOR TEXT" Style="{StaticResource DetailLabel}"/>
             <TextBlock x:Name="DetailFlavor" Style="{StaticResource DetailValue}"
                        FontSize="12" FontStyle="Italic" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -94,6 +100,15 @@
             <TextBlock Text="PRICES (USD)" Style="{StaticResource DetailLabel}"/>
             <TextBlock x:Name="DetailPrices" Style="{StaticResource DetailValue}"
                        FontSize="12"/>
+
+            <!-- How much players dislike facing it (EDHREC's salt vote) -->
+            <TextBlock Text="SALT" Style="{StaticResource DetailLabel}"
+                       ToolTip="EDHREC's yearly vote on how much Commander players dislike playing against a card (0 to 4)."/>
+            <TextBlock x:Name="DetailSalt" Style="{StaticResource DetailValue}" FontSize="12"/>
+
+            <!-- The card on EDHREC, Scryfall and Commander Spellbook -->
+            <TextBlock Text="LINKS" Style="{StaticResource DetailLabel}"/>
+            <TextBlock x:Name="DetailLinks" Style="{StaticResource DetailValue}" FontSize="12"/>
 
             <!-- Your decks with this card (any printing), from the deck files -->
             <TextBlock Text="IN DECKS" Style="{StaticResource DetailLabel}"/>

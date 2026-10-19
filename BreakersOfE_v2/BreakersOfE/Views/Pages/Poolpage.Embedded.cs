@@ -135,6 +135,8 @@ namespace BreakersOfE.Views.Pages
         /// <summary>Right-click menu for the grid rows and the gallery tiles (Edit actions).</summary>
         public void SetRowContextMenu(ContextMenu menu)
         {
+            AddPrintSlipItem(menu);
+            AddLinksItem(menu);
             PoolGrid.ContextMenu = menu;
             Gallery.TileContextMenu = menu;
         }

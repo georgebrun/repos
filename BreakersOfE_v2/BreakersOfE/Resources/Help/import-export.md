@@ -25,9 +25,9 @@ Note: BoE deck files open in Edit → Decks, not here. MTG Studio files can't be
 Each game is matched against its own cards, so switching **Import into** between paper, MTGO and Arena reads the list again.
 
 ## Export
-1. **Export**: **My collection** (your cards, including the oversized ones), **A deck**, **Want List**, **Trade Binder**, **MTGO collection** or **Arena collection**.
+1. **Export**: **My collection** (your cards; tokens and oversized cards when you tick them), **A deck**, **Want List**, **Trade Binder**, **MTGO collection** or **Arena collection**.
 2. **as**: a **Text list** (to paste into Moxfield, Archidekt, MTG Deck Tools…), a **ManaBox CSV**, a **Spreadsheet CSV** with every detail, or a **BoE full backup** of the whole collection.
-3. Options: **Only copies I can use** leaves out copies claimed by decks or the binder; **Include tokens**; **Mark foil and etched (*F* / *E*)**.
+3. Options: **Only copies I can use** leaves out copies claimed by decks or the binder; **Include tokens**; **Include oversized cards** (the big display cards: leave it off for a deck builder, since they aren't playable); **Mark foil and etched (*F* / *E*)**.
 4. **Copy to Clipboard** to paste into a website, or **Save File…** (to the Exports folder).
 
 A deck can also go out as **Arena** (copy, then in Arena: Decks → Import) or **MTGO .dek** (load it in Magic Online). Each card becomes a printing that game has: when it doesn't have the deck's printing, the newest one it has of the same card. The summary lists any card the game doesn't have, and tokens are left out. The **MTGO collection** goes out as a **.dek**, an **MTGO CSV** or a text list; the **Arena collection** as Arena text or a text list.

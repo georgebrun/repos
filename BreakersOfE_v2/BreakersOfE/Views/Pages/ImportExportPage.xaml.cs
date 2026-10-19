@@ -477,6 +477,7 @@ namespace BreakersOfE.Views.Pages
             bool full = format == ExportFormat.BoeFull;   // the backup is always everything
             ExportOnlyFree.IsEnabled = source == ExportSource.Collection && !full;
             ExportTokens.IsEnabled = (source is ExportSource.Collection or ExportSource.Deck) && !full;
+            ExportOversized.IsEnabled = source == ExportSource.Collection && !full;
             ExportMarkFinish.IsEnabled = format == ExportFormat.TextList;
 
             if (source == ExportSource.Deck && !_decksLoaded)
@@ -499,6 +500,7 @@ namespace BreakersOfE.Views.Pages
                 DeckPath = deckPath,
                 OnlyFree = source == ExportSource.Collection && !full && ExportOnlyFree.IsChecked == true,
                 IncludeTokens = (source is ExportSource.Collection or ExportSource.Deck) && ExportTokens.IsChecked == true,
+                IncludeOversized = source == ExportSource.Collection && !full && ExportOversized.IsChecked == true,
                 MarkFinish = format == ExportFormat.TextList && ExportMarkFinish.IsChecked == true,
             };
             ExportResult result;

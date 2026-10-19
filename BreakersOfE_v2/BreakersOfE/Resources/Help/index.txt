@@ -56,3 +56,4 @@ Reference
   keyboard-shortcuts.md
   data-folder.md
   troubleshooting.md
+  credits.md

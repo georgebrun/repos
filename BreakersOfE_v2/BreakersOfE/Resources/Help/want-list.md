@@ -7,6 +7,7 @@ The card pool is on top and your Want List below. Each want row is one printing 
 - **Add Non-Foil / Add Foil / Add Etched** ([Enter], [Shift+Enter], [Ctrl+Enter]): put Qty copies on the list. With both tables in Gallery these buttons (and **Remove**) are hidden: use the − / + boxes under each picture.
 - **Remove** ([Delete]): take Qty off. [Shift+Delete] removes all of the selected rows.
 - **Got It…**: you got the cards. Qty copies go into your collection, in the **Language** and **Condition** picked beside the button, and come off the Want List. Undo takes back both.
+- **Print Slip…** (right-click): proxy slips of the selected rows, as many as each row wants, to play with until the real cards arrive, if your group agrees. See [[view-and-edit]].
 
 ## Offer and notes
 - **Offer**: what you'd pay per copy. Double-click the Offer cell (or right-click → **Set Offer…**) and type a price like 4.50; leave it empty for none.

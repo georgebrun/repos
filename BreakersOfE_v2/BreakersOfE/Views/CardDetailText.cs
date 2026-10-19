@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Windows.Media;
 
@@ -136,6 +137,111 @@ namespace BreakersOfE.Views
             return otherDecksOnly
                 ? $"Not in any of your other {scanned:N0} decks."
                 : $"Not in any of your {scanned:N0} decks.";
+        }
+
+        // ── Links: the card on EDHREC, Scryfall and Commander Spellbook ──
+
+        /// <summary>The card's page: 0 EDHREC, 1 Scryfall (this printing), 2 Commander Spellbook.</summary>
+        public static string LinkFor(object card, int site)
+        {
+            string name = Get(card, "Name");
+            return site switch
+            {
+                0 => Services.CardLinks.Edhrec(name, Get(card, "Layout")),
+                1 => Services.CardLinks.Scryfall(name, Get(card, "SetCode"), Get(card, "CollectorNumber")),
+                _ => Services.CardLinks.Spellbook(name),
+            };
+        }
+
+        /// <summary>Fill a text block with "EDHREC · Scryfall · Commander Spellbook" links (empty for no card).</summary>
+        public static void FillLinks(System.Windows.Controls.TextBlock target, object? card)
+        {
+            target.Inlines.Clear();
+            if (card == null || Get(card, "Name").Length == 0) return;
+            string[] labels = { "EDHREC", "Scryfall", "Commander Spellbook" };
+            for (int i = 0; i < labels.Length; i++)
+            {
+                if (i > 0) target.Inlines.Add(new System.Windows.Documents.Run("  ·  "));
+                int site = i;
+                var link = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(labels[i]))
+                {
+                    ToolTip = LinkFor(card, site),
+                };
+                link.Click += (_, _) => Services.CardLinks.Open(LinkFor(card, site));
+                target.Inlines.Add(link);
+            }
+        }
+
+        // ── Salt (EDHREC's vote, downloaded with Update Database) ──
+
+        /// <summary>"2.98 of 4 · #2 saltiest on EDHREC", "Low (under 0.5)", or how to get the scores.</summary>
+        public static string SaltText(object? card)
+        {
+            if (card == null) return "";
+            if (!Services.EdhrecService.HasSalt) return "Run Update Database to get salt scores.";
+            var s = Services.EdhrecService.SaltOf(Get(card, "Name"));
+            return s is { } info
+                ? $"{info.Score:0.00} of 4 · #{info.Rank:N0} saltiest on EDHREC"
+                : $"Low (under {Services.EdhrecService.SaltLowest:0.0} of 4)";
+        }
+
+        // ── Card tags (Scryfall's Tagger, downloaded with Update Database) ──
+
+        private static readonly ConcurrentDictionary<string, string> OracleByName = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// The card's tags (ramp, removal, card draw …). Cards without an
+        /// oracle id of their own (deck lines) are looked up in the pool by name.
+        /// </summary>
+        public static List<Services.CardTag> Tags(object card)
+        {
+            string oid = Get(card, "OracleId");
+            if (oid.Length == 0) oid = OracleIdOf(Get(card, "Name"));
+            return Services.DeckDataService.TagsFor(oid);
+        }
+
+        private static string OracleIdOf(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return "";
+            if (OracleByName.TryGetValue(name, out var known)) return known;
+            string oid = "";
+            try
+            {
+                using var db = new Data.AppDbContext();
+                oid = db.PoolCards.Where(p => p.Name == name && p.OracleId != "")
+                                  .Select(p => p.OracleId).FirstOrDefault() ?? "";
+            }
+            catch { /* no pool yet */ }
+            OracleByName[name] = oid;
+            return oid;
+        }
+
+        /// <summary>
+        /// Fill a panel with the card's tags as small chips (the description
+        /// as the tooltip). Returns the hint to show when there are none.
+        /// </summary>
+        public static string FillTags(System.Windows.Controls.Panel panel, object? card, double fontSize = 11)
+        {
+            panel.Children.Clear();
+            if (card == null) return "";
+            if (!Services.DeckDataService.HasTags) return "Run Update Database to get card tags.";
+            var tags = Tags(card);
+            if (tags.Count == 0) return "No tags for this card.";
+            foreach (var t in tags)
+            {
+                var text = new System.Windows.Controls.TextBlock { Text = t.Label, FontSize = fontSize };
+                text.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+                panel.Children.Add(new System.Windows.Controls.Border
+                {
+                    Child = text,
+                    CornerRadius = new System.Windows.CornerRadius(8),
+                    Padding = new System.Windows.Thickness(7, 1, 7, 2),
+                    Margin = new System.Windows.Thickness(0, 0, 4, 4),
+                    Background = new SolidColorBrush(Color.FromArgb(0x30, 0x80, 0x80, 0x80)),
+                    ToolTip = string.IsNullOrWhiteSpace(t.Description) ? t.Label : $"{t.Label}: {t.Description}",
+                });
+            }
+            return "";
         }
     }
 }

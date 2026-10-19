@@ -222,6 +222,16 @@
                                FontSize="14" TextWrapping="Wrap"/>
                     </Border>
 
+                    <!-- ── CARD TAGS (Scryfall's Tagger, from Update Database) ── -->
+                    <TextBlock Text="▸ CARD TAGS" Style="{StaticResource SectionHeader}"/>
+                    <Border Background="{DynamicResource BoePanelBrush}" CornerRadius="8" Padding="12,8,12,4" Margin="0,0,0,4">
+                        <StackPanel>
+                            <WrapPanel x:Name="TagsPanel"/>
+                            <TextBlock x:Name="TagsHint" FontSize="12" Margin="0,0,0,4" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- ── FLAVOR TEXT ── -->
                     <TextBlock x:Name="FlavorHeader" Text="▸ FLAVOR TEXT" Style="{StaticResource SectionHeader}"/>
                     <Border x:Name="FlavorBorder" Background="{DynamicResource BoePanelBrush}" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
@@ -261,6 +271,21 @@
                             <TextBlock x:Name="CardSetDetail" FontSize="12"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
+                    </Border>
+
+                    <!-- ── LINKS: the card on EDHREC, Scryfall and Commander Spellbook ── -->
+                    <TextBlock Text="▸ LINKS" Style="{StaticResource SectionHeader}"/>
+                    <Border Background="{DynamicResource BoePanelBrush}" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
+                        <TextBlock x:Name="LinksText" FontSize="13" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    </Border>
+
+                    <!-- ── SALT: EDHREC's vote on how much players dislike facing it ── -->
+                    <TextBlock Text="▸ SALT" Style="{StaticResource SectionHeader}"
+                               ToolTip="EDHREC's yearly vote on how much Commander players dislike playing against a card (0 to 4)."/>
+                    <Border Background="{DynamicResource BoePanelBrush}" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
+                        <TextBlock x:Name="SaltText" FontSize="13" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                     </Border>
 
                     <!-- ── FORMAT LEGALITY ── -->

@@ -95,6 +95,18 @@ namespace BreakersOfE.Views
             // Format legality badges
             PopulateLegality();
 
+            // Links: EDHREC, Scryfall (this printing), Commander Spellbook
+            CardDetailText.FillLinks(LinksText, _card);
+            SaltText.Text = CardDetailText.SaltText(_card);
+
+            // Card tags (Scryfall's Tagger): hover a tag for what it means
+            try
+            {
+                string hint = CardDetailText.FillTags(TagsPanel, _card, 12);
+                TagsHint.Text = hint.Length > 0 ? hint : "Hover a tag for what it means.";
+            }
+            catch (Exception ex) { TagsPanel.Children.Clear(); TagsHint.Text = $"Couldn't read the tags: {ex.Message}"; }
+
             // Card image
             ShowPicture(back: false);
             BtnFlipFace.Visibility = CardDetailText.HasBack(_card) ? Visibility.Visible : Visibility.Collapsed;

@@ -60,6 +60,11 @@ namespace BreakersOfE.Views.Controls
                 DetailInDecks.Text = "";
             }
 
+            // Card tags (Scryfall's Tagger) and links (EDHREC, Scryfall, Spellbook)
+            ShowTags(card);
+            CardDetailText.FillLinks(DetailLinks, card);
+            DetailSalt.Text = CardDetailText.SaltText(card);
+
             // Set symbol (rarity-tinted)
             DetailSetSymbol.Source = CardDetailText.SetSymbol(card);
 
@@ -81,6 +86,21 @@ namespace BreakersOfE.Views.Controls
             DetailPTLabel.Text = face.Stats?.Label ?? "";
             DetailPT.Text = face.Stats?.Value ?? "";
             DetailPTLabel.Visibility = DetailPT.Visibility = face.Stats != null ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void ShowTags(object? card)
+        {
+            try
+            {
+                string hint = CardDetailText.FillTags(DetailTags, card);
+                DetailTagsHint.Text = hint;
+                DetailTagsHint.Visibility = hint.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            }
+            catch
+            {
+                DetailTags.Children.Clear();
+                DetailTagsHint.Visibility = Visibility.Collapsed;
+            }
         }
 
         private int _picVersion;
@@ -130,6 +150,9 @@ namespace BreakersOfE.Views.Controls
             DetailFinishes.Text = "";
             DetailPrices.Text = "";
             DetailInDecks.Text = "";
+            ShowTags(null);
+            CardDetailText.FillLinks(DetailLinks, null);
+            DetailSalt.Text = "";
             DetailManaCost.Items.Clear();
             BtnShowBackFace.Visibility = Visibility.Collapsed;
         }

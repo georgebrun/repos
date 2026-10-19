@@ -155,6 +155,9 @@
                                 <CheckBox x:Name="ExportTokens" Content="Include tokens" Margin="0,0,20,0" VerticalAlignment="Center"
                                           Checked="ExportOption_Changed" Unchecked="ExportOption_Changed"
                                           ToolTip="Collection: your tokens too. Deck: the deck's Tokens part."/>
+                                <CheckBox x:Name="ExportOversized" Content="Include oversized cards" Margin="0,0,20,0" VerticalAlignment="Center"
+                                          Checked="ExportOption_Changed" Unchecked="ExportOption_Changed"
+                                          ToolTip="The big display cards. Leave off for deck builders; they aren't playable."/>
                                 <CheckBox x:Name="ExportMarkFinish" Content="Mark foil and etched (*F* / *E*)" Margin="0,0,20,0" VerticalAlignment="Center"
                                           Checked="ExportOption_Changed" Unchecked="ExportOption_Changed"
                                           ToolTip="Adds *F* or *E* after foil and etched lines (Moxfield, Archidekt and BoE read it). Leave off for sites that don't."/>

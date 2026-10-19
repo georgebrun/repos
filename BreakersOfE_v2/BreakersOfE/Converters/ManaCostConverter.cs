@@ -116,6 +116,14 @@ namespace BreakersOfE.Services
         /// <summary>Forget the drawn symbols (after Update Database downloads new ones).</summary>
         public static void ClearCache() => _symbols.Clear();
 
+        /// <summary>One symbol's picture ("{G}", "{T}", "{2/W}"), or null when there's no file for it.</summary>
+        public static ImageSource? SymbolImage(string token)
+        {
+            string key = token.Replace("{", "").Replace("}", "").Replace("/", "-");
+            string path = Path.Combine(ManaFolder, $"{key}.png");
+            return File.Exists(path) ? CachedSymbol(path) : null;
+        }
+
         private static ImageSource? CachedSymbol(string path)
         {
             if (_symbols.TryGetValue(path, out var hit)) return hit;

@@ -127,6 +127,14 @@ namespace BreakersOfE.Services
         public static string RulingsDatabasePath =>
             Path.Combine(RootFolder, "rulings.db");
 
+        /// <summary>Scryfall's oracle tags (what each card does), from the full Database Update.</summary>
+        public static string TagsDatabasePath =>
+            Path.Combine(RootFolder, "tags.db");
+
+        /// <summary>Commander Spellbook's combos, from the full Database Update.</summary>
+        public static string CombosDatabasePath =>
+            Path.Combine(RootFolder, "combos.db");
+
         // ── Set symbol lookup (cached: the grid asks for every row) ───────────
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _setSymbolCache =
             new(StringComparer.OrdinalIgnoreCase);

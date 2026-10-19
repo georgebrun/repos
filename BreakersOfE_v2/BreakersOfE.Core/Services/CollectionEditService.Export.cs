@@ -55,7 +55,7 @@ namespace BreakersOfE.Services
                         rows = BinderExportRows();
                         break;
                     default:
-                        rows = CollectionExportRows(o.OnlyFree, o.IncludeTokens);
+                        rows = CollectionExportRows(o.OnlyFree, o.IncludeTokens, o.IncludeOversized);
                         break;
                 }
                 var result = ExportWriter.Write(rows, o, deckName);
@@ -83,13 +83,17 @@ namespace BreakersOfE.Services
             return set;
         }
 
-        private static List<ExportRow> CollectionExportRows(bool onlyFree, bool tokens)
+        private static List<ExportRow> CollectionExportRows(bool onlyFree, bool tokens, bool oversized)
         {
             var eo = EtchedOnlySids();
             var list = new List<ExportRow>();
             using var db = new CollectionDbContext();
-            // Oversized cards go with the cards (they were in Cards before they had their own table).
-            foreach (string table in tokens ? new[] { CardsTable, OversizedTable, TokensTable } : new[] { CardsTable, OversizedTable })
+            // Cards always; Oversized and Tokens only when asked for. Oversized are display
+            // cards, not playable, so a deck builder would treat them as real copies.
+            var tables = new List<string> { CardsTable };
+            if (oversized) tables.Add(OversizedTable);
+            if (tokens) tables.Add(TokensTable);
+            foreach (string table in tables)
             {
                 foreach (var r in RowsMany(db, table, AllSids(db, table)))
                 {

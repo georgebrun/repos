@@ -39,6 +39,9 @@ namespace BreakersOfE.Services
         /// </summary>
         public bool ShowTour { get; set; } = true;
 
+        /// <summary>The printer last used for slips (picked first next time; "" = Windows' default).</summary>
+        public string SlipPrinter { get; set; } = "";
+
         /// <summary>
         /// At startup, look for a newer release of BoE on GitHub (quietly: a
         /// message only when there is one). Settings → About can turn it off.

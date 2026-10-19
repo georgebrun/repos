@@ -33,7 +33,9 @@ namespace BreakersOfE.Views.Dialogs
             {
                 NoteText.Text = emptyMessage;
                 QtyPanel.Visibility = Visibility.Collapsed;
+                TickPanel.Visibility = Visibility.Collapsed;
                 BtnAdd.Visibility = Visibility.Collapsed;
+                BtnPrint.Visibility = Visibility.Collapsed;
                 BtnCancel.Content = "Close";
             }
             else
@@ -68,6 +70,43 @@ namespace BreakersOfE.Views.Dialogs
             TokenList.ItemsSource = _items;
         }
         private void None_Click(object sender, RoutedEventArgs e) => SetAll(false);
+
+        /// <summary>Only the tokens you don't own (the ones to print).</summary>
+        private void NotOwned_Click(object sender, RoutedEventArgs e)
+        {
+            foreach (var s in _items) s.IsChecked = s.Owned == 0;
+            TokenList.ItemsSource = null;
+            TokenList.ItemsSource = _items;
+        }
+
+        /// <summary>Paper slips of the ticked tokens, Copies of each. The window stays open (print, then add, or both).</summary>
+        private void Print_Click(object sender, RoutedEventArgs e)
+        {
+            var ticked = _items.Where(s => s.IsChecked).ToList();
+            if (ticked.Count == 0) { ShowPrintStatus("Tick the tokens to print first."); return; }
+            int copies = Math.Clamp(int.TryParse(QtyBox.Text, out int n) ? n : 1, 1, 99);
+            var slips = new List<Slip>();
+            foreach (var s in ticked)
+            {
+                var sides = Slip.FromToken(s.Token);
+                for (int c = 0; c < copies; c++) slips.AddRange(sides);
+            }
+            try
+            {
+                string done = SlipPrinter.Print(this, slips);
+                if (done.Length > 0) ShowPrintStatus(done);
+            }
+            catch (Exception ex)
+            {
+                ShowPrintStatus($"Could not print: {ex.Message}");
+            }
+        }
+
+        private void ShowPrintStatus(string text)
+        {
+            PrintStatus.Text = text;
+            PrintStatus.Visibility = Visibility.Visible;
+        }
 
         private void QtyBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
         {

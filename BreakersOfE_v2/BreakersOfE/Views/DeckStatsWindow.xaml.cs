@@ -61,7 +61,9 @@ namespace BreakersOfE.Views
             BuildMana();
             BuildDrawOdds();
             BuildSampleHand();
+            BuildCombos();
             BuildBracket();
+            if (!_hasLeader || _commanders.Count == 0) EdhrecTab.Visibility = Visibility.Collapsed;
             BuildFormatCheck();
         }
 
@@ -121,6 +123,36 @@ namespace BreakersOfE.Views
                 .OrderByDescending(x => x.count).ThenBy(x => x.label)
                 .Take(10).ToList();
             EditionBars.ItemsSource = ToBars(editions);
+
+            BuildSalt();
+        }
+
+        /// <summary>The main deck's saltiest cards (EDHREC's 0–4 vote), top 10.</summary>
+        private void BuildSalt()
+        {
+            if (!Services.EdhrecService.HasSalt)
+            {
+                SaltList.ItemsSource = null;
+                SaltNote.Text = "Salt scores aren't downloaded yet — run Update Database.";
+                return;
+            }
+            var salty = _main.Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(n => (name: n, salt: Services.EdhrecService.SaltOf(n)))
+                .Where(x => x.salt != null)
+                .OrderByDescending(x => x.salt!.Value.Score)
+                .ToList();
+            SaltList.ItemsSource = salty.Take(10).Select(x => new StatBar
+            {
+                Label = x.name,
+                CountText = x.salt!.Value.Score.ToString("0.00"),
+                BarWidth = Math.Max(2, MaxBar * x.salt.Value.Score / 4),
+            }).ToList();
+            double lowest = Services.EdhrecService.SaltLowest;
+            SaltNote.Text = salty.Count == 0
+                ? $"No card in the main deck scores {lowest:0.0} or more: a friendly deck to sit across from."
+                : $"{salty.Count} card{(salty.Count == 1 ? "" : "s")} in the main deck score {lowest:0.0} or more (of 4) on EDHREC's salt vote" +
+                  (salty.Count > 10 ? "; the 10 saltiest are shown." : ".") +
+                  " Salt is how much Commander players dislike facing a card — worth a mention before the game.";
         }
 
         // ══════════════════════════════════════════════════════════════════
@@ -482,6 +514,186 @@ namespace BreakersOfE.Views
         }
 
         // ══════════════════════════════════════════════════════════════════
+        // COMBOS — Commander Spellbook's combos (combos.db, from Update
+        // Database): the ones the main deck already has, and the ones it's a
+        // single card short of, with how many free copies of that card you own.
+        // ══════════════════════════════════════════════════════════════════
+        private const int NearShown = 100;
+        private List<Services.Combo> _completeCombos = new();
+        private List<ComboRow> _nearRows = new();
+
+        private void BuildCombos()
+        {
+            if (!Services.DeckDataService.HasCombos)
+            {
+                ComboHeadline.Text = "Combos not downloaded yet";
+                ComboReason.Text = "Run Update Database: it downloads the combos from Commander Spellbook.";
+                CompleteHeader.Visibility = NearHeader.Visibility = NearOptions.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            // The main deck's names (commander included), and the colors a combo may use.
+            var names = _main.Select(c => c.Name).Where(n => !string.IsNullOrWhiteSpace(n))
+                             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var have = new HashSet<string>(names.Select(Services.DeckDataService.FrontName), StringComparer.OrdinalIgnoreCase);
+            var identitySource = _hasLeader && _commanders.Count > 0 ? _commanders : _main;
+            var identity = new HashSet<char>(identitySource.SelectMany(c => c.ColorIdentity));
+            bool Fits(Services.Combo c) =>
+                c.Identity.Where(ch => "WUBRG".Contains(ch)).All(identity.Contains) &&
+                (!_isCommander || c.CommanderLegal);
+
+            var all = Services.DeckDataService.CombosNear(names, 1);
+            _completeCombos = all.Where(c => c.Cards.All(n => have.Contains(Services.DeckDataService.FrontName(n)))).ToList();
+
+            // One card away: exactly one card missing, in the deck's colors.
+            var near = all.Where(c => !_completeCombos.Contains(c) && Fits(c))
+                          .Select(c => (combo: c, missing: c.Cards.Where(n => !have.Contains(Services.DeckDataService.FrontName(n)))
+                                                                  .Distinct(StringComparer.OrdinalIgnoreCase).ToList()))
+                          .Where(x => x.missing.Count == 1)
+                          .ToList();
+            var owned = Services.CollectionEditService.OwnedByName(near.Select(x => x.missing[0]));
+            _nearRows = near.Select(x =>
+            {
+                string miss = x.missing[0];
+                var o = owned.GetValueOrDefault(Services.DeckDataService.FrontName(miss));
+                var row = ComboRow.From(x.combo);
+                row.MissingText = o.Free > 0 ? $"Missing: {miss} — {o.Free} free in your collection"
+                                : o.Owned > 0 ? $"Missing: {miss} — you own {o.Owned}, all in use"
+                                : $"Missing: {miss} — not in your collection";
+                row.MissingLevel = o.Free > 0 ? "legal" : o.Owned > 0 ? "banned" : "not_legal";
+                row.FreeCopies = o.Free;
+                return row;
+            })
+            .OrderByDescending(r => r.FreeCopies > 0).ThenByDescending(r => r.Popularity)
+            .ToList();
+
+            CompleteCombos.ItemsSource = _completeCombos.Select(ComboRow.From).ToList();
+            CompleteEmpty.Text = _completeCombos.Count == 0 ? "No complete combos in the main deck." : "";
+            CompleteEmpty.Visibility = _completeCombos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+            int free = _nearRows.Count(r => r.FreeCopies > 0);
+            ComboHeadline.Text = $"{_completeCombos.Count:N0} combo{(_completeCombos.Count == 1 ? "" : "s")} in the deck";
+            ComboReason.Text = $"{_nearRows.Count:N0} more are one card away" +
+                (_nearRows.Count > 0 ? $"; {free:N0} of those you could finish from your collection's free copies." : ".");
+            ShowNear();
+        }
+
+        private void NearFreeOnly_Click(object sender, RoutedEventArgs e) => ShowNear();
+
+        private void ShowNear()
+        {
+            if (NearCombos == null) return;
+            var rows = NearFreeOnly.IsChecked == true ? _nearRows.Where(r => r.FreeCopies > 0).ToList() : _nearRows;
+            NearCombos.ItemsSource = rows.Take(NearShown).ToList();
+            NearNote.Text = rows.Count == 0
+                ? (NearFreeOnly.IsChecked == true ? "None you have free copies for." : "None in the deck's colors.")
+                : rows.Count > NearShown ? $"Showing the {NearShown} most popular of {rows.Count:N0}. Free in your collection first." : "";
+            NearNote.Visibility = NearNote.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void ComboLink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); }
+            catch { /* no browser */ }
+            e.Handled = true;
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // EDHREC — the commander's recommended cards (EdhrecService: saved for
+        // 7 days), marked in the deck / free / in use / not owned. Loaded the
+        // first time the tab is opened, so the window opens without waiting.
+        // ══════════════════════════════════════════════════════════════════
+        private bool _edhrecLoaded;
+        private bool _edhrecLoading;
+        private List<EdhrecRow> _edhrecRows = new();
+
+        private void StatsTabs_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (!ReferenceEquals(e.OriginalSource, StatsTabs)) return;     // a combo box or grid inside a tab
+            if (StatsTabs.SelectedItem == EdhrecTab && !_edhrecLoaded) _ = LoadEdhrecAsync(refresh: false);
+        }
+
+        private void EdhrecRefresh_Click(object sender, RoutedEventArgs e) => _ = LoadEdhrecAsync(refresh: true);
+
+        private async System.Threading.Tasks.Task LoadEdhrecAsync(bool refresh)
+        {
+            if (_edhrecLoading) return;
+            _edhrecLoading = true;
+            BtnEdhrecRefresh.IsEnabled = false;
+            var names = _commanders.Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            EdhrecHeadline.Text = "EDHREC";
+            EdhrecInfo.Text = refresh ? "Getting the latest from EDHREC…" : "Loading…";
+            try
+            {
+                var page = await Services.EdhrecService.GetCommanderAsync(names, refresh, System.Threading.CancellationToken.None);
+
+                // Mark each card: in the deck, else what you own (off the UI thread: the collection lookup).
+                var have = new HashSet<string>(_deck.Cards.Select(c => Services.DeckDataService.FrontName(c.Name)), StringComparer.OrdinalIgnoreCase);
+                var owned = await System.Threading.Tasks.Task.Run(() =>
+                    Services.CollectionEditService.OwnedByName(page.Cards.Select(c => c.Name)));
+                _edhrecRows = page.Cards.Select(c =>
+                {
+                    string front = Services.DeckDataService.FrontName(c.Name);
+                    var o = owned.GetValueOrDefault(front);
+                    return EdhrecRow.From(c, have.Contains(front), o.Owned, o.Free);
+                }).ToList();
+
+                EdhrecPageLink.NavigateUri = new Uri(page.Url);
+                EdhrecHeadline.Text = $"{string.Join(" + ", names)} on EDHREC";
+                int notIn = _edhrecRows.Count(r => !r.InDeck);
+                int free = _edhrecRows.Count(r => !r.InDeck && r.Free > 0);
+                EdhrecInfo.Text =
+                    (page.Decks > 0 ? $"About {page.Decks:N0} decks · " : "") +
+                    $"{_edhrecRows.Count:N0} cards recommended · {notIn:N0} not in your deck, {free:N0} of those free in your collection. " +
+                    (page.Note.Length > 0 ? page.Note : $"Saved {page.Fetched:g}.");
+
+                var sections = new List<string> { "All sections" };
+                sections.AddRange(page.Sections);
+                EdhrecSectionFilter.ItemsSource = sections;
+                EdhrecSectionFilter.SelectedIndex = 0;
+                _edhrecLoaded = true;
+                ShowEdhrec();
+            }
+            catch (Exception ex)
+            {
+                EdhrecHeadline.Text = "EDHREC unavailable";
+                EdhrecInfo.Text = ex.Message + " Try Refresh later.";
+                EdhrecGrid.ItemsSource = null;
+            }
+            finally
+            {
+                _edhrecLoading = false;
+                BtnEdhrecRefresh.IsEnabled = true;
+            }
+        }
+
+        private void EdhrecFilter_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (IsInitialized) ShowEdhrec();
+        }
+
+        private void ShowEdhrec()
+        {
+            if (EdhrecGrid == null || EdhrecStatusFilter == null || EdhrecSectionFilter == null) return;
+            IEnumerable<EdhrecRow> rows = _edhrecRows;
+            rows = EdhrecStatusFilter.SelectedIndex switch
+            {
+                1 => rows.Where(r => !r.InDeck),
+                2 => rows.Where(r => !r.InDeck && r.Free > 0),
+                3 => rows.Where(r => r.InDeck),
+                _ => rows,
+            };
+            if (EdhrecSectionFilter.SelectedIndex > 0 && EdhrecSectionFilter.SelectedItem is string section)
+                rows = rows.Where(r => r.Section == section);
+            EdhrecGrid.ItemsSource = rows.ToList();
+        }
+
+        private void EdhrecGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (EdhrecGrid.SelectedItem is EdhrecRow row) Services.CardLinks.Open(Services.CardLinks.Edhrec(row.Name));
+        }
+
+        // ══════════════════════════════════════════════════════════════════
         // BRACKET — Commander Brackets (beta) estimate from the cards:
         // Game Changers (Scryfall flag), extra turns and mass land denial
         // (rules text). Gives the MINIMUM bracket the cards allow; intent
@@ -540,7 +752,7 @@ namespace BreakersOfE.Views
 
             // Mass land denial (possible)
             checks.Add(landDenial.Count == 0
-                ? new CheckResult { Title = "Mass land denial", IsOk = true, Status = "None found",
+                ? new CheckResult { Title = "Mass land denial", IsOk = true, Status = "None",
                                     Summary = "No cards that look like mass land denial." }
                 : new CheckResult { Title = "Mass land denial", Status = "Check", Level = "banned",
                                     Summary = $"{landDenial.Count} card(s) might be mass land denial (Bracket 4+ if they are). Check them:",
@@ -557,9 +769,18 @@ namespace BreakersOfE.Views
                                         : $"{extraTurns.Count} extra-turn cards — enough to chain; Bracket 3 or higher.",
                                     Details = extraTurns.Select(Line).ToList() });
 
-            // Combos: not checked yet
-            checks.Add(new CheckResult { Title = "Two-card combos", Status = "Not checked", Level = "",
-                                         Summary = "Not checked yet — planned for the deck builder. Brackets 1–3 expect no early two-card infinite combos." });
+            // Two-card combos (Commander Spellbook): infinite or game-winning pairs.
+            var twoCard = _completeCombos.Where(c => c.Cards.Count == 2 && Services.DeckDataService.IsInfiniteOrWin(c)).ToList();
+            if (!Services.DeckDataService.HasCombos)
+                checks.Add(new CheckResult { Title = "Two-card combos", Status = "Not checked", Level = "",
+                                             Summary = "Combos aren't downloaded yet — run Update Database. Brackets 1–2 allow no two-card infinite combos; Bracket 3 only late in the game." });
+            else if (twoCard.Count == 0)
+                checks.Add(new CheckResult { Title = "Two-card combos", IsOk = true, Status = "None",
+                                             Summary = "No two-card infinite or game-winning combos found." });
+            else
+                checks.Add(new CheckResult { Title = "Two-card combos", Status = "Bracket 3+", Level = "banned",
+                                             Summary = $"{twoCard.Count} two-card combo(s). Brackets 1–2 don't allow them; Bracket 3 only if they can't come together early in the game — early ones mean Bracket 4.",
+                                             Details = twoCard.Select(c => $"{string.Join(" + ", c.Cards)} — {string.Join("; ", c.Results)}").ToList() });
 
             BracketChecks.ItemsSource = checks;
 
@@ -569,6 +790,7 @@ namespace BreakersOfE.Views
             if (gc > 3) { min = 4; reasons.Add($"{gc} Game Changers"); }
             else if (gc > 0) { min = 3; reasons.Add($"{gc} Game Changer{(gc == 1 ? "" : "s")}"); }
             if (extraTurns.Count > 2 && min < 3) { min = 3; reasons.Add($"{extraTurns.Count} extra-turn cards"); }
+            if (twoCard.Count > 0 && min < 3) { min = 3; reasons.Add($"{twoCard.Count} two-card combo{(twoCard.Count == 1 ? "" : "s")}"); }
 
             BracketHeadline.Text = min switch
             {
@@ -688,6 +910,77 @@ namespace BreakersOfE.Views
             public string Check { get; init; } = "";
             public Brush ChipBackground { get; init; } = Brushes.Transparent;
             public Brush ChipForeground { get; init; } = Brushes.Gray;
+        }
+
+        /// <summary>One EDHREC recommendation on the EDHREC tab.</summary>
+        public sealed class EdhrecRow
+        {
+            public string Name { get; init; } = "";
+            public string Section { get; init; } = "";
+            public double Inclusion { get; init; }
+            public double Synergy { get; init; }
+            public bool InDeck { get; init; }
+            public int Owned { get; init; }
+            public int Free { get; init; }
+            public string DecksText => Inclusion < 0 ? "—" : $"{Inclusion:0}%";
+            public string SynergyText => $"{Synergy * 100:+0;-0;0}%";
+            public string StatusText => InDeck ? "In the deck"
+                : Free > 0 ? $"{Free} free in your collection"
+                : Owned > 0 ? $"Own {Owned}, all in use"
+                : "Not owned";
+            /// <summary>Sort order for the You column: free first, then in use, not owned, in the deck.</summary>
+            public int StatusOrder => InDeck ? 3 : Free > 0 ? 0 : Owned > 0 ? 1 : 2;
+            private string Level => InDeck ? "" : Free > 0 ? "legal" : Owned > 0 ? "banned" : "not_legal";
+            public Brush StatusBackground => LegalityInfo.BackgroundBrush(Level);
+            public Brush StatusForeground => LegalityInfo.ForegroundBrush(Level);
+
+            public static EdhrecRow From(Services.EdhrecCard c, bool inDeck, int owned, int free) => new()
+            {
+                Name = c.Name, Section = c.Section, Inclusion = c.InclusionPercent, Synergy = c.Synergy,
+                InDeck = inDeck, Owned = owned, Free = free,
+            };
+        }
+
+        /// <summary>One combo on the Combos tab.</summary>
+        public sealed class ComboRow
+        {
+            public string Results { get; init; } = "";
+            public string CardsText { get; init; } = "";
+            public string RequiresText { get; init; } = "";
+            public string ManaText { get; init; } = "";
+            public string Prerequisites { get; init; } = "";
+            public string Steps { get; init; } = "";
+            public string TagText { get; init; } = "";
+            public string PopularityText { get; init; } = "";
+            public int Popularity { get; init; }
+            public Uri? Url { get; init; }
+            public string MissingText { get; set; } = "";
+            public string MissingLevel { get; set; } = "";
+            public int FreeCopies { get; set; }
+
+            public System.Windows.Visibility RequiresVisibility => RequiresText.Length > 0 ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+            public System.Windows.Visibility MissingVisibility => MissingText.Length > 0 ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+            public System.Windows.Visibility TagVisibility => TagText.Length > 0 ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+            public Brush MissingBackground => LegalityInfo.BackgroundBrush(MissingLevel);
+            public Brush MissingForeground => LegalityInfo.ForegroundBrush(MissingLevel);
+
+            public static ComboRow From(Services.Combo c)
+            {
+                string tag = Services.DeckDataService.BracketTagName(c.BracketTag);
+                return new ComboRow
+                {
+                    Results = c.Results.Count > 0 ? string.Join(" · ", c.Results) : "Combo",
+                    CardsText = string.Join("  +  ", c.Cards),
+                    RequiresText = c.Requires.Count > 0 ? "Also needs: " + string.Join("; ", c.Requires) : "",
+                    ManaText = string.IsNullOrWhiteSpace(c.ManaNeeded) ? "" : $"Mana needed: {c.ManaNeeded}",
+                    Prerequisites = c.Prerequisites,
+                    Steps = c.Steps,
+                    TagText = tag.Length > 0 ? $"Spellbook: {tag}" : "",
+                    Popularity = c.Popularity,
+                    PopularityText = c.Popularity > 0 ? $"In {c.Popularity:N0} decks on EDHREC" : "",
+                    Url = Uri.TryCreate(c.Url, UriKind.Absolute, out var u) ? u : null,
+                };
+            }
         }
 
         public sealed class CheckResult

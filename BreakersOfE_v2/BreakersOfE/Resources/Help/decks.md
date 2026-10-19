@@ -36,6 +36,8 @@ The line under the buttons shows how much of the deck is claimed, e.g. "Main 60 
 ## Tokens
 **Suggested Tokens…** lists the tokens the deck's cards make; tick them and **Add Ticked**. Tokens you own are claimed. Tokens sit in the deck's Tokens part and no deck rules apply to them.
 
+**Print Ticked…** prints paper slips of the ticked tokens instead, for the ones you don't have (**Not Owned** ticks just those). Each slip is the token's name, type, rules text and power/toughness on plain white, with its color shown in the empty picture box (W, U, B, R, G, M for multicolor, N for colorless). **Copies of each** sets how many of every token. Nine fit on a US Letter page, each a little smaller than a card, so it slides into a sleeve in front of any card. Cut along the thin grey lines. To keep a PDF instead, pick **Microsoft Print to PDF** as the printer. A two-sided token prints one slip per side. Slips are for casual play at home; tournaments allow only real cards.
+
 ## Tear Down
 **Tear Down…** gives every claimed copy back to Available and moves the deck file to the **Deleted Decks** folder (you can copy it back by hand). It can't be undone on the page. See [[howto-tear-down]].
 

@@ -95,6 +95,54 @@
                 </StackPanel>
             </Grid>
         </DataTemplate>
+
+        <!-- One combo: what it does, its cards, the missing card (one away), how it works, link -->
+        <DataTemplate x:Key="ComboItem">
+            <Border CornerRadius="8" Padding="12,8" Margin="0,0,0,8" Background="{DynamicResource BoePanelBrush}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                        <TextBlock Text="{Binding Results}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <TextBlock Text="{Binding CardsText}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <TextBlock Text="{Binding RequiresText}" Visibility="{Binding RequiresVisibility}"
+                                   FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <Border Visibility="{Binding MissingVisibility}" Background="{Binding MissingBackground}"
+                                CornerRadius="4" Padding="8,1" Margin="0,4,0,0" HorizontalAlignment="Left">
+                            <TextBlock Text="{Binding MissingText}" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{Binding MissingForeground}" TextWrapping="Wrap"/>
+                        </Border>
+                        <Expander Header="How it works" Margin="0,4,0,0" FontSize="12">
+                            <StackPanel Margin="0,4,0,0">
+                                <TextBlock Text="{Binding ManaText}" FontSize="12" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Text="{Binding Prerequisites}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Text="{Binding Steps}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            </StackPanel>
+                        </Expander>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                        <Border Visibility="{Binding TagVisibility}" CornerRadius="4" Padding="8,1"
+                                HorizontalAlignment="Right" Background="#30808080">
+                            <TextBlock Text="{Binding TagText}" FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        </Border>
+                        <TextBlock Text="{Binding PopularityText}" FontSize="12" Margin="0,4,0,0" TextAlignment="Right"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock FontSize="12" Margin="0,4,0,0" TextAlignment="Right">
+                            <Hyperlink NavigateUri="{Binding Url}" RequestNavigate="ComboLink_RequestNavigate">Commander Spellbook ↗</Hyperlink>
+                        </TextBlock>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
     </ui:FluentWindow.Resources>
 
     <Grid>
@@ -114,7 +162,15 @@
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
         </StackPanel>
 
-        <TabControl Grid.Row="2" Margin="16,0,16,0">
+        <TabControl Grid.Row="2" Margin="16,0,16,0" x:Name="StatsTabs" SelectionChanged="StatsTabs_SelectionChanged">
+            <!-- Tabs sized to their names, so all of them fit on one row (two rows
+                 swap places whenever a tab on the other row is clicked). -->
+            <TabControl.ItemContainerStyle>
+                <Style TargetType="TabItem" BasedOn="{StaticResource {x:Type TabItem}}">
+                    <Setter Property="MinWidth" Value="0"/>
+                    <Setter Property="Padding" Value="12,6"/>
+                </Style>
+            </TabControl.ItemContainerStyle>
 
             <!-- ═══ OVERVIEW ═══ -->
             <TabItem Header="Overview">
@@ -167,6 +223,33 @@
                                 <ItemsControl x:Name="EditionBars" ItemTemplate="{StaticResource BarRow}"/>
                             </StackPanel>
                         </Grid>
+                        <!-- Saltiest cards (EDHREC's vote) -->
+                        <TextBlock x:Name="SaltHeader" Text="Saltiest cards" Style="{StaticResource SectionHeader}"/>
+                        <ItemsControl x:Name="SaltList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,2" MaxWidth="560" HorizontalAlignment="Left">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="260"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="50"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding Label}" TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding Label}" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                        <Border Grid.Column="1" Height="14" Background="#20808080" CornerRadius="3"
+                                                VerticalAlignment="Center" Margin="0,0,8,0" ClipToBounds="True">
+                                            <Border HorizontalAlignment="Left" CornerRadius="3" Width="{Binding BarWidth}"
+                                                    Background="{DynamicResource AccentFillColorDefaultBrush}"/>
+                                        </Border>
+                                        <TextBlock Grid.Column="2" Text="{Binding CountText}" TextAlignment="Right" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock x:Name="SaltNote" Style="{StaticResource Note}" Margin="0,4,0,12"/>
+
                         <TextBlock Style="{StaticResource Note}"
                                    Text="Main deck only (commander included, sideboard not). Bars show card counts; the right-hand number is value. Lands count under Land, not their color. A card counts once in Type (Artifact Creature → Creature)."/>
                     </StackPanel>
@@ -326,6 +409,97 @@
                 </DockPanel>
             </TabItem>
 
+            <!-- ═══ COMBOS (Commander Spellbook, from Update Database) ═══ -->
+            <TabItem Header="Combos" x:Name="CombosTab">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,8,0">
+                    <StackPanel>
+                        <Border CornerRadius="8" Padding="12,8" Margin="0,0,0,8" Background="{DynamicResource BoePanelBrush}">
+                            <StackPanel>
+                                <TextBlock x:Name="ComboHeadline" FontSize="20" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                <TextBlock x:Name="ComboReason" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock x:Name="CompleteHeader" Text="In the deck" Margin="0,8,0,8" Style="{StaticResource SectionHeader}"/>
+                        <ItemsControl x:Name="CompleteCombos" ItemTemplate="{StaticResource ComboItem}"/>
+                        <TextBlock x:Name="CompleteEmpty" FontSize="12" Margin="0,0,0,8" Visibility="Collapsed"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+
+                        <TextBlock x:Name="NearHeader" Text="One card away" Margin="0,8,0,4" Style="{StaticResource SectionHeader}"/>
+                        <WrapPanel x:Name="NearOptions" Margin="0,0,0,8">
+                            <CheckBox x:Name="NearFreeOnly" Content="Only cards I have free copies of" Click="NearFreeOnly_Click"/>
+                        </WrapPanel>
+                        <ItemsControl x:Name="NearCombos" ItemTemplate="{StaticResource ComboItem}"/>
+                        <TextBlock x:Name="NearNote" FontSize="12" Margin="0,0,0,8" Visibility="Collapsed" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+
+                        <TextBlock Style="{StaticResource Note}"
+                                   Text="Combos come from Commander Spellbook (commanderspellbook.com), downloaded with Update Database. Main deck only, commander included. One card away lists combos in the deck's colors (and legal in Commander, for Commander decks); free copies are ones no deck or the Trade Binder has claimed. Requirements like &quot;a creature with power 3 or more&quot; aren't checked against the deck: read each combo's Also needs line."/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══ EDHREC (decks with a commander): recommendations, loaded when opened ═══ -->
+            <TabItem Header="EDHREC" x:Name="EdhrecTab">
+                <DockPanel Margin="0,12,0,0">
+                    <Border DockPanel.Dock="Top" CornerRadius="8" Padding="12,8" Margin="0,0,0,8" Background="{DynamicResource BoePanelBrush}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock VerticalAlignment="Center" Margin="0,0,12,0" FontSize="12">
+                                    <Hyperlink x:Name="EdhrecPageLink" RequestNavigate="ComboLink_RequestNavigate">Open on EDHREC ↗</Hyperlink>
+                                </TextBlock>
+                                <Button x:Name="BtnEdhrecRefresh" Content="Refresh" Padding="10,4" Click="EdhrecRefresh_Click"/>
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock x:Name="EdhrecHeadline" FontSize="20" FontWeight="SemiBold" Text="EDHREC"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                <TextBlock x:Name="EdhrecInfo" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                        <TextBlock Text="Show" VerticalAlignment="Center" Margin="0,0,8,0"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <ComboBox x:Name="EdhrecStatusFilter" Width="230" Margin="0,0,16,0" SelectionChanged="EdhrecFilter_Changed">
+                            <ComboBoxItem Content="Everything" IsSelected="True"/>
+                            <ComboBoxItem Content="Not in the deck"/>
+                            <ComboBoxItem Content="Free in my collection"/>
+                            <ComboBoxItem Content="In the deck"/>
+                        </ComboBox>
+                        <TextBlock Text="Section" VerticalAlignment="Center" Margin="0,0,8,0"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <ComboBox x:Name="EdhrecSectionFilter" Width="230" SelectionChanged="EdhrecFilter_Changed"/>
+                    </WrapPanel>
+                    <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Note}"
+                               Text="Recommendations come from EDHREC (edhrec.com), saved on this computer and fetched again after 7 days or when you click Refresh. Decks: the share of this commander's decks on EDHREC that run the card. Synergy: how much more this commander's decks run it than other decks of its colors. Free: copies in your collection no deck or the Trade Binder has claimed. Click a column header to sort; double-click a card to open it on EDHREC."/>
+                    <DataGrid x:Name="EdhrecGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                              HeadersVisibility="Column" GridLinesVisibility="None" RowHeaderWidth="0" RowHeight="28"
+                              CanUserReorderColumns="False" SelectionMode="Single"
+                              MouseDoubleClick="EdhrecGrid_MouseDoubleClick">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Card" Binding="{Binding Name}" Width="2*"/>
+                            <DataGridTextColumn Header="Section" Binding="{Binding Section}" Width="1.4*"/>
+                            <DataGridTextColumn Header="Decks" Binding="{Binding DecksText}" SortMemberPath="Inclusion" Width="80"/>
+                            <DataGridTextColumn Header="Synergy" Binding="{Binding SynergyText}" SortMemberPath="Synergy" Width="80"/>
+                            <DataGridTemplateColumn Header="You" SortMemberPath="StatusOrder" Width="1.6*">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Border CornerRadius="4" Padding="8,1" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                Background="{Binding StatusBackground}">
+                                            <TextBlock Text="{Binding StatusText}" FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{Binding StatusForeground}"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+
             <!-- ═══ BRACKET (Commander decks only) ═══ -->
             <TabItem Header="Bracket" x:Name="BracketTab">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,8,0">
@@ -340,7 +514,7 @@
                         </Border>
                         <ItemsControl x:Name="BracketChecks" ItemTemplate="{StaticResource CheckRow}"/>
                         <TextBlock Style="{StaticResource Note}"
-                                   Text="Based on the Commander Brackets (beta): Bracket 1–2 no Game Changers; Bracket 3 up to 3; Bracket 4–5 any, plus mass land denial. Game Changers come from Scryfall (run Update Database to refresh them). Extra turns and land denial are read from rules text; land denial is a best guess, so check the cards listed. Two-card combos aren't checked yet. 1 vs 2 and 4 vs 5 depend on how the deck is meant to play, which cards can't tell."/>
+                                   Text="Based on the Commander Brackets (beta): Bracket 1–2 no Game Changers; Bracket 3 up to 3; Bracket 4–5 any, plus mass land denial. Game Changers come from Scryfall (run Update Database to refresh them). Extra turns and land denial are read from rules text; land denial is a best guess, so check the cards listed. Two-card combos come from Commander Spellbook (see the Combos tab); whether one can come together early is up to you. 1 vs 2 and 4 vs 5 depend on how the deck is meant to play, which cards can't tell."/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

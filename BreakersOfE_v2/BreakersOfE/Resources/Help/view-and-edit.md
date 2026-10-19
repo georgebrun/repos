@@ -18,6 +18,19 @@ The side menu has two sections. Only one is open at a time; click **View** or **
 - **Import / Export**: bring lists in, send them out. See [[import-export]].
 - **Online → Collection**: your MTGO and Arena collections.
 
+## Open on EDHREC, Scryfall or Commander Spellbook
+On the Edit pages, right-click a card → **Open on** → **EDHREC**, **Scryfall** or **Commander Spellbook** to see it there in your browser. Every page has the same links under **LINKS** in the card panel. See [[card-details]].
+
+## Print Slip
+On the Edit pages, right-click rows and pick **Print Slip…** (or **Print Slips (n)…**) for paper slips to sleeve over a card. It's on three kinds of table:
+- **Want List** (Edit → Lists → Pool → Want List): the cards you're getting, as **proxies**, each row's quantity.
+- **The deck** in Edit → Decks: the deck's lines as **proxies**, each line's count. Basic lands are left out.
+- **Tokens** (the Tokens pool and your token collection): one plain slip per row. For a deck's tokens, use **Suggested Tokens…** and **Print Ticked…**.
+
+A card with two faces prints one slip per face. Nine fit on a US Letter page. BoE starts on the printer you used last time; pick **Microsoft Print to PDF** to keep a PDF.
+
+Warning: Proxies are for casual games your playgroup agrees to. They're marked **PROXY**, as the tournament rules require of any stand-in card, and are **never** allowed at Friday Night Magic or any sanctioned event, where only real cards (or a judge's own proxy for a damaged card) may be played. See [[credits]].
+
 ## Grid or Gallery
 The **Grid / Gallery** switch at the top of the side menu shows cards as a table or as pictures across the app. On the Edit pages each table has its own **Show as Gallery** / **Show as Grid** button instead, remembered per table.
 

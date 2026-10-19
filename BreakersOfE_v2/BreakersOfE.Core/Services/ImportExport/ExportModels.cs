@@ -45,6 +45,8 @@ namespace BreakersOfE.Services
         public bool OnlyFree { get; init; }
         /// <summary>Collection and decks: tokens too.</summary>
         public bool IncludeTokens { get; init; }
+        /// <summary>Collection: the Oversized table too (display cards — not playable, so off for deck builders).</summary>
+        public bool IncludeOversized { get; init; }
         /// <summary>Text list: " *F*" / " *E*" after foil and etched lines.</summary>
         public bool MarkFinish { get; init; }
     }
