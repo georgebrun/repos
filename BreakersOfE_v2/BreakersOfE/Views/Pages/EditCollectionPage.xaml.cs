@@ -514,6 +514,50 @@ namespace BreakersOfE.Views.Pages
             if (skipped.Length > 0) ShowStatus(ActionText.Text + "  " + skipped, true);
         }
 
+        // ── Want List (for the Collection) ──────────────────────────────
+        /// <summary>
+        /// Right-click → Add to Want List: Qty copies of each selected card,
+        /// as wants for the Collection (a collection row: its own finish; a pool
+        /// card: its default). Cards only. Undo takes it back.
+        /// </summary>
+        private void DoAddToWantList(PoolPage table)
+        {
+            if (CollTag != CollectionEditService.CardsTable)
+            {
+                ShowStatus("The Want List holds cards: use Add to Want List on Collection → Cards.", true);
+                return;
+            }
+            var rows = Targets(table);
+            if (rows.Count == 0) { ShowStatus("Select a card first.", true); return; }
+            if (TooMany(rows)) return;
+            int qty = Qty;
+            var plan = new List<(object? Pool, string Sid, string Finish, string Name)>();
+            foreach (var row in rows)
+            {
+                bool fromCollection = IsCollectionRow(row);
+                string sid = Str(row, "ScryfallId");
+                var pool = fromCollection ? CollectionEditService.FindPoolCard(CollTag, sid) : row;
+                string fin = fromCollection ? FinishOf(row) : DefaultFinish(pool);
+                if (!plan.Any(p => p.Sid == sid && p.Finish == fin)) plan.Add((pool, sid, fin, Str(row, "Name")));
+            }
+            if (plan.Count > 1 &&
+                !Confirm($"Put {qty} {(qty == 1 ? "copy" : "copies")} of each of the {plan.Count} selected cards on the Want List, for the Collection?",
+                         "Add to the Want List"))
+                return;
+
+            var sids = plan.Select(p => p.Sid).Distinct().ToList();
+            var snap = CollectionEditService.Snapshot(CollectionEditService.WantTable, sids);
+            var result = Combine($"Want List +{qty}", plan.Select(p => p.Pool == null
+                    ? new EditResult { Message = $"{p.Name}: not in the card pool.", Warning = true }
+                    : CollectionEditService.AddToWantList(p.Pool, p.Finish, qty)).ToList());
+            if (result.Changed > 0 && snap != null)
+            {
+                CollectionEditService.MarkAfter(snap);
+                PushUndo(snap, result.Message);
+            }
+            ShowStatus(result.Message, result.Warning);
+        }
+
         /// <summary>Default finish for Enter: non-foil, else foil, else etched.</summary>
         private string DefaultFinish(object? pool)
         {
@@ -769,6 +813,9 @@ namespace BreakersOfE.Views.Pages
             Item(_topMenu, "Remove Etched", "", () => DoRemove(CardFinish.Etched, _top), () => BtnRemoveEtched.IsEnabled, true);
             Item(_topMenu, "Remove All (every finish, language, condition)", "", () => DoRemoveAllOfPrintings(_top), () => BtnRemoveAll.IsEnabled);
             _topMenu.Items.Add(new Separator());
+            Item(_topMenu, "Add to Want List (for the Collection)", "", () => DoAddToWantList(_top),
+                 () => CollTag == CollectionEditService.CardsTable, true);
+            _topMenu.Items.Add(new Separator());
             _undoTop = Item(_topMenu, "Undo", "Ctrl+Z", DoUndo, () => _undo.Count > 0);
 
             // Bottom: the collection table.
@@ -814,6 +861,8 @@ namespace BreakersOfE.Views.Pages
 
             Item(_bottomMenu, "Edit Notes…", "", () => EditText(TextField.Notes));
             Item(_bottomMenu, "Edit Storage…", "", () => EditText(TextField.Storage));
+            Item(_bottomMenu, "Add to Want List (for the Collection)", "", () => DoAddToWantList(_bottom),
+                 () => CollTag == CollectionEditService.CardsTable, true);
             _favoriteItem = Item(_bottomMenu, "Mark as Favorite", "", ToggleFavorite);
             _bottomMenu.Items.Add(new Separator());
             _undoBottom = Item(_bottomMenu, "Undo", "Ctrl+Z", DoUndo, () => _undo.Count > 0);

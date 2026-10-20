@@ -1605,6 +1605,7 @@ namespace BreakersOfE.Views.Pages
             _deckMenu.Items.Add(new Separator());
 
             _addTokensItem = Item(_deckMenu, "Add its tokens…", "", () => SuggestTokens(selectedOnly: true));
+            Item(_deckMenu, "Add Missing to Want List (for this deck)", "", AddMissingToWantList);
             _deckMenu.Items.Add(new Separator());
             _makeLeaderItem = Item(_deckMenu, "Set as Commander", "", MakeLeader);
             _unLeaderItem = Item(_deckMenu, "Move out of the command zone", "",
@@ -1622,6 +1623,7 @@ namespace BreakersOfE.Views.Pages
             Item(_claimDeckMenu, "Free Claimed Copies", "Delete", FreeCopies, () => BtnFreeCopies.IsEnabled);
             _claimDeckMenu.Items.Add(new Separator());
             _addTokensItem2 = Item(_claimDeckMenu, "Add its tokens…", "", () => SuggestTokens(selectedOnly: true));
+            Item(_claimDeckMenu, "Add Missing to Want List (for this deck)", "", AddMissingToWantList);
             _claimDeckMenu.Items.Add(new Separator());
             _undoItems.Add(Item(_claimDeckMenu, "Undo", "Ctrl+Z", DoUndo, () => DeckUndo.Count > 0));
             Item(_claimSrcMenu, "Use This Row for the Deck", "Enter", UseThisRow, () => BtnUseRow.IsEnabled);

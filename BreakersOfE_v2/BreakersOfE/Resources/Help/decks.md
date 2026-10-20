@@ -30,6 +30,7 @@ If an add would break a deck rule (too many copies of a card, not legal in the f
 - **Free Copies** ([Delete]): give claimed copies back to Available; the cards stay in the deck.
 - **Whole Deck: Use Copies I Own…** and **Whole Deck: Add as New…** do the whole deck after a preview.
 - **Find Missing…**: switch cards to a printing you own, or add what's missing to the Want List. See [[howto-find-missing]].
+- **Add Missing to Want List (for this deck)** (right-click deck lines): just the selected lines' missing copies go on the Want List, as wants for this deck. Already wanted copies aren't added twice.
 
 The line under the buttons shows how much of the deck is claimed, e.g. "Main 60 of 60 · Sideboard 15 of 15".
 

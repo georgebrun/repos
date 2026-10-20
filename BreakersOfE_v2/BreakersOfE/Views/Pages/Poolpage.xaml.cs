@@ -69,6 +69,7 @@ namespace BreakersOfE.Views.Pages
             ["Asking"] = "AskingPriceDisplay",
             ["Trade Value"] = "TradeValueDisplay",
             ["Offer"] = "OfferPriceDisplay",
+            ["For"] = "ForDisplay",
         };
 
         // ── Table kinds ─────────────────────────────────────────────────
@@ -145,6 +146,7 @@ namespace BreakersOfE.Views.Pages
             map["Asking"] = new[] { B };
             map["Trade Value"] = new[] { B };
             map["Offer"] = new[] { W };
+            map["For"] = new[] { W };
             foreach (var h in new[] { "USD", "Foil $", "Etched $" })
                 map[h] = pd;
             foreach (var h in new[] { "SB", "Non-Foil", "Foil", "Etched", "Total", "Claimed", "Free", "Missing", "Wanted", "Other Decks" })

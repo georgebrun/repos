@@ -396,6 +396,11 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
+                    <!-- WANT LIST ONLY: who the want is for (a deck, or the Collection) -->
+                    <DataGridTextColumn Header="For" Binding="{Binding ForDisplay}" Width="150"
+                                    Visibility="Collapsed"
+                                    HeaderTemplate="{StaticResource FilterableHeader}" />
+
                     <!-- COLLECTION ONLY: the rest of v1's collection columns, v1 order.
                      (MTG Studio's Buy At / Sell At / Sell At Value / Needed / Excess /
                      Target were dropped from the grid; the fields stay in the database

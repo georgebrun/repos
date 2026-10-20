@@ -237,7 +237,7 @@ namespace BreakersOfE.Services
         // ══════════════════════════════════════════════════════════════════
         /// <summary>
         /// Import into the Want List (cards; a want row is printing + finish).
-        /// Replace makes the whole Want List match the file.
+        /// Replace makes the Collection's wants match the file (wants for decks stay).
         /// </summary>
         public static (EditResult Result, ImportUndo? Undo) ImportIntoWantList(
             IReadOnlyList<ImportItem> items, ImportMode mode, string description)
@@ -265,7 +265,9 @@ namespace BreakersOfE.Services
                 int added = 0, removed = 0;
                 using (var db = new CollectionDbContext())
                 {
+                    // Imports are the Collection's wants: wants for decks are never matched or replaced.
                     var rows = db.WantListEntries.ToList()
+                        .Where(e => string.IsNullOrEmpty(e.ForDeckId))
                         .Where(e => mode == ImportMode.Replace || fileSids.Contains(e.ScryfallId, StringComparer.OrdinalIgnoreCase)).ToList();
                     var touched = new HashSet<WantListEntry>();
                     foreach (var ((sid, finish), (first, qty)) in wanted)

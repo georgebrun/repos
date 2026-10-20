@@ -27,4 +27,9 @@
     <Folder Include="Filtering\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The deck builder's engine (plain C#): Core gathers the cards and hands them over. -->
+    <ProjectReference Include="..\BreakersOfE.DeckBuilder\BreakersOfE.DeckBuilder.csproj" />
+  </ItemGroup>
+
 </Project>

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The deck builder's engine: picks cards for a deck from the cards it's
+       given, within your constraints, with a reason for every pick. Plain C#
+       with no database, screen or web code, so it can be tested on its own.
+       The app (BreakersOfE.Core) gathers the cards and hands them over. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>BreakersOfE.DeckBuilder</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

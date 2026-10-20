@@ -93,8 +93,23 @@ namespace BreakersOfE.Views
         }
 
         /// <summary>The finishes the printing exists in (Scryfall "finishes").</summary>
-        public static string Finishes(object card) =>
-            Models.CardFinish.AvailableText(Flag(card, "IsNonFoil"), Flag(card, "IsFoil"), Flag(card, "IsEtched"));
+        public static string Finishes(object card)
+        {
+            // Want List and Trade Binder rows: their IsFoil says which finish the ROW is, not
+            // which finishes the printing comes in — ask the card pool (their own flags if it's not there).
+            if (card is Models.WantListEntry or Models.TradeBinderEntry)
+            {
+                var pool = Services.CollectionEditService.FindPoolCard(Services.CollectionEditService.CardsTable, Get(card, "ScryfallId"));
+                if (pool != null) card = pool;
+                else
+                {
+                    bool etched = Flag(card, "IsEtched");
+                    return Models.CardFinish.AvailableText(Flag(card, "IsNonFoilAvailable"),
+                        Flag(card, "IsFoilAvailable") && !Flag(card, "PrintingEtchedOnly"), etched);
+                }
+            }
+            return Models.CardFinish.AvailableText(Flag(card, "IsNonFoil"), Flag(card, "IsFoil"), Flag(card, "IsEtched"));
+        }
 
         /// <summary>One price per finish: "Non-Foil: $1.23", "Foil: …", "Etched: …", "MTGO: 0.05 tix" (online cards).</summary>
         public static List<string> Prices(object card)

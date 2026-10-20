@@ -1099,8 +1099,17 @@ namespace BreakersOfE.Models
         public string Notes { get; set; } = string.Empty;
         public DateTime DateAdded { get; set; } = DateTime.Now;
 
+        /// <summary>Who it's for: a deck's stable id, or "" for the Collection.
+        /// One row per printing + finish + For, so several decks can want the same card.</summary>
+        public string ForDeckId { get; set; } = string.Empty;
+        /// <summary>That deck's name when last seen (display only; "" for the Collection).</summary>
+        public string ForDeckName { get; set; } = string.Empty;
+
         // ── Display-only (not stored): lets the shared grid, gallery, detail
         //    panel, and totals row show these rows like the main collection. ──
+        /// <summary>"Collection", or the deck it's for.</summary>
+        [NotMapped] public string ForDisplay => string.IsNullOrEmpty(ForDeckId) ? "Collection"
+            : string.IsNullOrWhiteSpace(ForDeckName) ? "(a deck)" : ForDeckName;
         /// <summary>Filled from the pool on load: the printing exists as etched /
         /// exists ONLY as etched (v1 stored those copies as foil rows).</summary>
         [NotMapped] public bool IsEtched { get; set; }

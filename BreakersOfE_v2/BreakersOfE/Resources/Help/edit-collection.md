@@ -30,6 +30,9 @@ Double-click a cell of a collection row:
 
 Right-click a row for the same and more: **Set quantity…**, **Change Finish / Language / Condition**, **Edit Notes…**, **Edit Storage…**, **Mark as Favorite**.
 
+## Want more of a card?
+On **Collection → Cards**, right-click a card (in the pool or your collection) → **Add to Want List (for the Collection)**: Qty copies go on the Want List, in the row's own finish (a pool card: its default finish). **Undo** takes it back. See [[want-list]].
+
 ## Several cards at once
 [Ctrl]+click or [Shift]+click to select several rows. A change then applies to each row, in that row's own finish, after you confirm.
 

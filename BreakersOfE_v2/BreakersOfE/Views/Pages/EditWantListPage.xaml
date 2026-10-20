@@ -75,6 +75,11 @@
                             <TextBox x:Name="QtyBox" Text="1" Width="56" Margin="0,0,14,0"
                                  VerticalAlignment="Center" TextAlignment="Center"
                                  ToolTip="How many copies each button adds, removes or moves (Ctrl+Q). Enter adds the default finish."/>
+                            <TextBlock Text="For" VerticalAlignment="Center" Margin="0,0,6,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <ComboBox x:Name="ForBox" Width="200" Margin="0,0,14,0" VerticalAlignment="Center"
+                                  DisplayMemberPath="Name"
+                                  ToolTip="Who new wants are for: the Collection, or one of your decks (Got It claims the copies for that deck)"/>
 
                             <Button x:Name="BtnAddNonFoil" Content="Add Non-Foil" Padding="10,4" Margin="0,0,6,0"
                                 Click="BtnAddNonFoil_Click" ToolTip="Put Qty non-foil copies on the Want List (Enter)"/>
@@ -87,7 +92,7 @@
 
                             <Button x:Name="BtnGotIt" Content="Got It…" Padding="10,4" Margin="0,0,6,0"
                                 Click="BtnGotIt_Click"
-                                ToolTip="You got Qty copies: they go into your collection (with the language and condition picked here) and come off the Want List"/>
+                                ToolTip="You got some copies: pick how many and which wants they fill. They go into your collection (with the language and condition picked here), are claimed for the decks they were for, and come off the Want List"/>
                             <TextBlock Text="as" VerticalAlignment="Center" Margin="0,0,6,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                             <ComboBox x:Name="LanguageBox" SelectionChanged="Defaults_SelectionChanged" Width="170" Margin="0,0,6,0" VerticalAlignment="Center"

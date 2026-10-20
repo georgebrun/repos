@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using BreakersOfE.Models;
 using BreakersOfE.Services;
+using BreakersOfE.Views.Dialogs;
 using static BreakersOfE.Views.Pages.EditPageKit;
 
 namespace BreakersOfE.Views.Pages
@@ -45,7 +46,14 @@ namespace BreakersOfE.Views.Pages
         private readonly ContextMenu _bottomMenu = new();
 
         private const int UndoSteps = 20;
-        private readonly UndoStack<List<EditSnapshot>> _undo = new(UndoSteps);
+        private readonly UndoStack<UndoStep> _undo = new(UndoSteps);
+
+        /// <summary>One Undo step: the rows (want list, and the collection for Got It), plus every deck's
+        /// claims on those cards when Got It claimed copies for decks.</summary>
+        private sealed record UndoStep(List<EditSnapshot> Snaps, UsageSnapshot? Usages);
+
+        /// <summary>One choice in the For box / menu: a deck (its id) or the Collection ("").</summary>
+        private sealed record ForChoice(string Id, string Name);
 
         public EditWantListPage()
         {
@@ -114,10 +122,46 @@ namespace BreakersOfE.Views.Pages
             _current = null;
             _currentPool = null;
             Detail.ShowCard(null);
+            // Wants from before the For column ("For: Deck" in Notes) become wants for that deck.
+            int converted = CollectionEditService.ConvertForNotes();
+            CollectionEditService.RefreshWantDeckNames();
+            FillForChoices();
             _top.LoadPool(PoolTag);
             _bottom.LoadPool(CollectionEditService.WantTable);
             RefreshCounts();
-            ShowStatus("", false);
+            ShowStatus(converted > 0 ? $"{converted} want(s) with \"For: deck\" in their notes are now wants for that deck (see the For column)." : "", false);
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // FOR: the Collection, or a deck
+        // ══════════════════════════════════════════════════════════════════
+        private List<ForChoice> _forChoices = new();
+
+        private void FillForChoices()
+        {
+            var keep = (ForBox.SelectedItem as ForChoice)?.Id ?? "";
+            _forChoices = new List<ForChoice> { new("", "Collection") };
+            _forChoices.AddRange(DeckIndexService.AllDecks()
+                .Where(d => !string.IsNullOrEmpty(d.Deck.DeckId))
+                .GroupBy(d => d.Deck.DeckId).Select(g => g.First())
+                .Select(d => new ForChoice(d.Deck.DeckId, string.IsNullOrWhiteSpace(d.Deck.Name)
+                    ? System.IO.Path.GetFileNameWithoutExtension(d.Path) : d.Deck.Name))
+                .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase));
+            ForBox.ItemsSource = _forChoices;
+            ForBox.SelectedItem = _forChoices.FirstOrDefault(c => c.Id == keep) ?? _forChoices[0];
+        }
+
+        private ForChoice AddFor => ForBox.SelectedItem as ForChoice ?? new ForChoice("", "Collection");
+
+        private static string ForOf(object row) => row is WantListEntry w ? w.ForDeckId ?? "" : "";
+
+        /// <summary>Right-click → For ▸: move the selected want rows to the Collection or a deck.</summary>
+        private void SetFor(ForChoice choice)
+        {
+            var rows = Targets(_bottom).OfType<WantListEntry>().ToList();
+            if (rows.Count == 0) { ShowStatus("Select rows in the Want List table first.", true); return; }
+            Run($"For {choice.Name}", rows.Select(w => w.ScryfallId), () =>
+                new List<EditResult> { CollectionEditService.SetWantFor(rows.Select(w => w.WantListEntryId).ToList(), choice.Id, choice.Name) });
         }
 
         // ══════════════════════════════════════════════════════════════════
@@ -243,24 +287,25 @@ namespace BreakersOfE.Views.Pages
         /// row is itself; a pool card is its want row when only one finish of it
         /// is wanted. Pool cards that don't resolve are reported.
         /// </summary>
-        private List<(string Sid, string Finish, string Name)> WantKeysOf(List<object> rows, out string? problem)
+        /// <remarks>For: a want row's own (deck or Collection); a pool card's is null (every want of that finish).</remarks>
+        private List<(string Sid, string Finish, string Name, string? For)> WantKeysOf(List<object> rows, out string? problem)
         {
             problem = null;
-            var list = new List<(string Sid, string Finish, string Name)>();
+            var list = new List<(string Sid, string Finish, string Name, string? For)>();
             foreach (var r in rows)
             {
                 string sid = Str(r, "ScryfallId");
                 string name = Str(r, "Name");
                 if (IsWantRow(r))
                 {
-                    var k = (sid, FinishOf(r), name);
-                    if (!list.Any(p => p.Sid == k.sid && p.Finish == k.Item2)) list.Add(k);
+                    var k = (sid, FinishOf(r), name, (string?)ForOf(r));
+                    if (!list.Any(p => p.Sid == k.sid && p.Finish == k.Item2 && p.For == k.Item4)) list.Add(k);
                     continue;
                 }
                 var wanted = CollectionEditService.WantedCopies(sid, EtchedOnly(r)).Where(kv => kv.Value > 0).ToList();
                 if (wanted.Count == 1)
                 {
-                    if (!list.Any(p => p.Sid == sid && p.Finish == wanted[0].Key)) list.Add((sid, wanted[0].Key, name));
+                    if (!list.Any(p => p.Sid == sid && p.Finish == wanted[0].Key)) list.Add((sid, wanted[0].Key, name, null));
                 }
                 else
                     problem ??= wanted.Count == 0
@@ -279,15 +324,18 @@ namespace BreakersOfE.Views.Pages
             var printings = sids.Where(s => s.Length > 0).Distinct().ToList();
             var wants = CollectionEditService.Snapshot(CollectionEditService.WantTable, printings);
             var cards = collection ? CollectionEditService.Snapshot(CollectionEditService.CardsTable, printings) : null;
+            // Got It can claim copies for decks: every deck's claims on these cards too.
+            var usages = collection ? CollectionEditService.TakeUsageSnapshot(printings) : null;
             var result = Combine(what, work());
             if (result.Changed > 0)
             {
-                if (wants != null && (cards != null || !collection))
+                if (wants != null && (!collection || (cards != null && usages != null)))
                 {
                     var snaps = new List<EditSnapshot> { wants };
                     if (cards != null) snaps.Add(cards);
                     foreach (var s in snaps) CollectionEditService.MarkAfter(s);
-                    PushUndo(snaps, result.Message);
+                    if (usages != null) CollectionEditService.MarkUsagesAfter(usages);
+                    PushUndo(new UndoStep(snaps, usages), result.Message);
                 }
                 else
                 {
@@ -316,7 +364,7 @@ namespace BreakersOfE.Views.Pages
             if (TooMany(rows)) return;
             int qty = Qty;
 
-            var plan = new List<(object? Pool, string Sid, string Finish, string Name)>();
+            var plan = new List<(object? Pool, string Sid, string Finish, string Name, string ForId, string ForName)>();
             var cannot = new List<string>();                // pool cards that don't come in the finish
             foreach (var r in rows)
             {
@@ -329,7 +377,10 @@ namespace BreakersOfE.Views.Pages
                     cannot.Add(CardText(r));
                     continue;
                 }
-                if (!plan.Any(p => p.Sid == sid && p.Finish == fin)) plan.Add((pool, sid, fin, Str(r, "Name")));
+                // A want row adds to its own want (its deck or the Collection); a pool card to the For box's.
+                string forId = IsWantRow(r) ? ForOf(r) : AddFor.Id;
+                string forName = IsWantRow(r) ? Str(r, "ForDeckName") : AddFor.Name;
+                if (!plan.Any(p => p.Sid == sid && p.Finish == fin && p.ForId == forId)) plan.Add((pool, sid, fin, Str(r, "Name"), forId, forName));
             }
             string skipped = cannot.Count == 0 ? ""
                 : $"{cannot.Count} of the selected cards {(cannot.Count == 1 ? "doesn't" : "don't")} come in " +
@@ -341,7 +392,7 @@ namespace BreakersOfE.Views.Pages
             if ((plan.Count > 1 || cannot.Count > 0) &&
                 !Confirm((ownFinish
                             ? OwnFinishQuestion("Add", qty, plan.Select(p => p.Finish).ToList(), "to")
-                            : $"Put {qty} {finishText}{Copies(qty)} of each of the {plan.Count} selected cards on the Want List?") +
+                            : $"Put {qty} {finishText}{Copies(qty)} of each of the {plan.Count} selected cards on the Want List, for {(AddFor.Id.Length == 0 ? "the Collection" : AddFor.Name)}?") +
                          (skipped.Length > 0 ? "\n\n" + skipped : ""),
                          "Add to the Want List"))
                 return;
@@ -349,7 +400,7 @@ namespace BreakersOfE.Views.Pages
             Run($"Added {qty} {finishText}to the Want List", plan.Select(p => p.Sid), () =>
                 plan.Select(p => p.Pool == null
                     ? new EditResult { Message = $"{p.Name}: not in the card pool.", Warning = true }
-                    : CollectionEditService.AddToWantList(p.Pool, p.Finish, qty)).ToList());
+                    : CollectionEditService.AddToWantList(p.Pool, p.Finish, qty, p.ForId, p.ForName)).ToList());
             if (skipped.Length > 0) ShowStatus(ActionText.Text + "  " + skipped, true);
         }
 
@@ -377,11 +428,16 @@ namespace BreakersOfE.Views.Pages
                 if (!Confirm($"Take {what} of {of} off the Want List?", "Remove from the Want List")) return;
             }
             Run(all ? "Removed from the Want List" : $"Removed {qty} from the Want List", plan.Select(p => p.Sid), () =>
-                plan.Select(p => CollectionEditService.RemoveFromWantList(p.Sid, p.Finish, qty, p.Name)).ToList());
+                plan.Select(p => CollectionEditService.RemoveFromWantList(p.Sid, p.Finish, qty, p.Name, p.For)).ToList());
             if (problem != null && plan.Count > 0 && rows.Count > plan.Count) ShowStatus(ActionText.Text + "  " + problem, true);
         }
 
-        // ── Got It (into the collection) ────────────────────────────────
+        // ── Got It (into the collection, claimed for the decks it was for) ──
+        /// <summary>
+        /// One printing + finish (one row, or a pool card): the Got It window —
+        /// copies received, and a tick per want (decks first, then the Collection).
+        /// Several rows, or "all": each row's copies go to its own want.
+        /// </summary>
         private void DoGotIt(PoolPage? table, bool all)
         {
             var rows = Targets(table ?? _active);
@@ -389,19 +445,55 @@ namespace BreakersOfE.Views.Pages
             if (TooMany(rows)) return;
             var plan = WantKeysOf(rows, out var problem);
             if (plan.Count == 0) { ShowStatus(problem ?? "Nothing on the Want List.", true); return; }
-            int qty = all ? int.MaxValue : Qty;
             string lang = AddLanguage, cond = AddCondition;
-            if (all || plan.Count > 1)
+
+            // One card (in one finish), not "all": ask how many arrived and which wants they fill.
+            var printings = plan.Select(p => (p.Sid, p.Finish)).Distinct().ToList();
+            if (!all && printings.Count == 1)
             {
-                string what = all ? "every wanted copy" : $"{qty} {Copies(qty)}";
-                string of = plan.Count == 1 ? $"{plan[0].Name} ({CardFinish.Display(plan[0].Finish)})"
-                    : $"each of the {plan.Count} selected rows ({FinishBreakdown(plan.Select(p => p.Finish))}), in each row's own finish";
-                if (!Confirm($"Got {what} of {of}?\n\nThey go into your collection as {lang} · {cond} and come off the Want List.",
-                             "Got It"))
-                    return;
+                var (sid, finish) = printings[0];
+                var wants = CollectionEditService.WantsFor(sid, finish);
+                if (wants.Count == 0) { ShowStatus($"{plan[0].Name} isn't on the Want List.", true); return; }
+                // A want row picked: its want first, the rest after (still decks before the Collection).
+                string? picked = plan.Count == 1 ? plan[0].For : null;
+                if (picked != null)
+                    wants = wants.OrderBy(w => w.ForDeckId == picked ? 0 : 1).ToList();
+                var dlg = GotItDialog.Ask(Window.GetWindow(this),
+                    $"{plan[0].Name} ({CardFinish.Display(finish)}) · into your collection as {lang} · {cond}",
+                    wants, Math.Max(Qty, 1));
+                if (dlg == null) return;
+                Run("Got it", new[] { sid }, () => new List<EditResult>
+                {
+                    CollectionEditService.GotIt(sid, finish, dlg.Received, dlg.Assign, plan[0].Name, lang, cond),
+                }, collection: true);
+                return;
             }
+
+            // Several rows: each row (its own deck or the Collection) gets Qty copies, or all it wants.
+            int qty = all ? int.MaxValue : Qty;
+            string what = all ? "every wanted copy" : $"{qty} {Copies(qty)}";
+            if (!Confirm($"Got {what} of each of the {plan.Count} selected wants ({FinishBreakdown(plan.Select(p => p.Finish))})?\n\n" +
+                         $"They go into your collection as {lang} · {cond}, are claimed for the decks they're for, " +
+                         "and come off the Want List.", "Got It"))
+                return;
             Run("Got it", plan.Select(p => p.Sid), () =>
-                plan.Select(p => CollectionEditService.GotIt(p.Sid, p.Finish, qty, p.Name, lang, cond)).ToList(),
+                plan.Select(p =>
+                {
+                    var wants = CollectionEditService.WantsFor(p.Sid, p.Finish)
+                        .Where(w => p.For == null || w.ForDeckId == p.For).ToList();
+                    int wanted = wants.Sum(w => w.Wanted);
+                    if (wanted <= 0) return new EditResult { Message = $"{p.Name}: no longer on the Want List.", Warning = true };
+                    int received = Math.Min(qty, wanted);
+                    var assign = new List<(WantNeed, int)>();
+                    int left = received;
+                    foreach (var w in wants)
+                    {
+                        int give = Math.Min(left, w.Wanted);
+                        if (give > 0) assign.Add((w, give));
+                        left -= give;
+                    }
+                    return CollectionEditService.GotIt(p.Sid, p.Finish, received, assign, p.Name, lang, cond);
+                }).ToList(),
                 collection: true);
             if (problem != null && rows.Count > plan.Count) ShowStatus(ActionText.Text + "  " + problem, true);
         }
@@ -451,18 +543,20 @@ namespace BreakersOfE.Views.Pages
         }
 
         // ── Undo ────────────────────────────────────────────────────────
-        private void PushUndo(List<EditSnapshot> snaps, string text)
+        private void PushUndo(UndoStep step, string text)
         {
-            _undo.Push(snaps, text);
+            _undo.Push(step, text);
             UpdateUndo();
         }
 
         private void DoUndo()
         {
-            if (!_undo.TryPop(out var snaps, out var text)) { ShowStatus("Nothing to undo.", false); return; }
-            var result = CollectionEditService.RestoreAll(snaps, text);
+            if (!_undo.TryPop(out var step, out var text)) { ShowStatus("Nothing to undo.", false); return; }
+            var result = step.Usages != null
+                ? CollectionEditService.RestoreWithUsages(step.Usages, step.Snaps, text)
+                : CollectionEditService.RestoreAll(step.Snaps, text);
             UpdateUndo();
-            AfterEdit(result, snaps.SelectMany(s => s.Printings).Distinct().ToList());
+            AfterEdit(result, step.Snaps.SelectMany(s => s.Printings).Distinct().ToList());
         }
 
         private void UpdateUndo()
@@ -538,6 +632,9 @@ namespace BreakersOfE.Views.Pages
             Item(_bottomMenu, "Got It", "", () => DoGotIt(_bottom, all: false), () => BtnGotIt.IsEnabled, true);
             Item(_bottomMenu, "Got It — all of the selected rows", "", () => DoGotIt(_bottom, all: true), () => BtnGotIt.IsEnabled);
             _bottomMenu.Items.Add(new Separator());
+            _forMenu = new MenuItem { Header = "For" };
+            _bottomMenu.Items.Add(_forMenu);
+            _bottomMenu.Items.Add(new Separator());
             Item(_bottomMenu, "Set Offer…", "", () => EditWantCell("Offer"));
             Item(_bottomMenu, "Clear Offer", "", ClearOffer);
             Item(_bottomMenu, "Edit Notes…", "", () => EditWantCell("Notes"));
@@ -550,9 +647,35 @@ namespace BreakersOfE.Views.Pages
             _bottom.SetRowContextMenu(_bottomMenu);
         }
 
+        private MenuItem? _forMenu;
+
+        /// <summary>For ▸ Collection / each deck (the current one ticked).</summary>
+        private void FillForMenu()
+        {
+            if (_forMenu == null) return;
+            _forMenu.Items.Clear();
+            var rows = Targets(_bottom).OfType<WantListEntry>().ToList();
+            _forMenu.IsEnabled = rows.Count > 0;
+            var current = rows.Select(w => w.ForDeckId ?? "").Distinct().ToList();
+            foreach (var choice in _forChoices)
+            {
+                var mi = new MenuItem
+                {
+                    Header = choice.Name,
+                    IsCheckable = false,
+                    IsChecked = current.Count == 1 && current[0] == choice.Id,
+                };
+                var c = choice;
+                mi.Click += (_, _) => SetFor(c);
+                _forMenu.Items.Add(mi);
+                if (choice.Id.Length == 0 && _forChoices.Count > 1) _forMenu.Items.Add(new Separator());
+            }
+        }
+
         private void MenuOpened(PoolPage table)
         {
             _active = table;
+            if (table == _bottom) FillForMenu();
             if (table.SelectedCard is { } card) SetCurrent(card);
             else UpdateButtons();
 

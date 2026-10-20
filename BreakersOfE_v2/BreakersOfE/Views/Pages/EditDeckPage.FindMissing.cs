@@ -26,6 +26,27 @@ namespace BreakersOfE.Views.Pages
 
         private void BtnFindMissing_Click(object sender, RoutedEventArgs e) => FindMissing();
 
+        /// <summary>
+        /// Right-click on deck lines → Add Missing to Want List: what the
+        /// selected lines still miss (not claimed from your collection) goes on
+        /// the Want List as wants for this deck, topped up, never doubled.
+        /// Cards only (the Want List doesn't hold tokens). One Undo step.
+        /// </summary>
+        private void AddMissingToWantList()
+        {
+            if (_deck == null || _deckPath == null) { ShowStatus("Pick a deck first.", true); return; }
+            var lines = _deckT.SelectedCards.OfType<DeckCard>().Where(l => !l.IsFooter && !l.IsTokenLine).ToList();
+            if (lines.Count == 0) { ShowStatus("Select card lines in the deck first.", true); return; }
+            var needs = Needs(lines).Where(n => n.Needed > 0 && n.Table == CollectionEditService.CardsTable).ToList();
+            if (needs.Count == 0) { ShowStatus("Nothing missing: the selected lines are claimed from your collection.", false); return; }
+            var deck = _deck;
+            Edit("Want List", () => needs.Select(n =>
+                    PoolFor(n.ScryfallId) is { } pool
+                        ? FromEdit(CollectionEditService.TopUpWantList(pool, n.Finish, n.Needed, deck))
+                        : DeckEditResult.Refused($"{n.Text}: not in the card pool.")).ToList(),
+                wantList: needs.Select(n => n.ScryfallId).Distinct().ToList());
+        }
+
         private static string Money(decimal? v) => v.HasValue ? $"${v.Value:F2}" : "no price";
 
         /// <summary>The deck's price per copy for a printing + finish (from its line).</summary>
@@ -78,13 +99,14 @@ namespace BreakersOfE.Views.Pages
                     });
                 }
                 bool eo = EtchedOnly(n.ScryfallId, false);
-                int wanted = CollectionEditService.WantedCopies(n.ScryfallId, eo).GetValueOrDefault(n.Finish);
+                // This deck's wants only: another deck wanting the same card doesn't cover this one.
+                int wanted = CollectionEditService.WantedCopies(n.ScryfallId, eo, _deck.DeckId ?? "").GetValueOrDefault(n.Finish);
                 string cost = listed.HasValue ? $"{Money(listed)} each, {Money(listed * n.Needed)} for {n.Needed}" : "no price";
                 wants.Add(new FindMissingItem
                 {
                     IsChecked = wanted < n.Needed,
                     Title = $"{n.Needed} × {n.Text}",
-                    Detail = $"{cost}  ·  on the Want List now: {wanted}" + (wanted >= n.Needed ? " — already covered" : ""),
+                    Detail = $"{cost}  ·  on the Want List for this deck now: {wanted}" + (wanted >= n.Needed ? " — already covered" : ""),
                     Tag = n,
                 });
             }
@@ -138,7 +160,7 @@ namespace BreakersOfE.Views.Pages
                     var pool = PoolFor(w.ScryfallId);
                     results.Add(pool == null
                         ? DeckEditResult.Refused($"{w.Text}: not in the card pool.")
-                        : FromEdit(CollectionEditService.TopUpWantList(pool, w.Finish, remaining, _deck!.Name)));
+                        : FromEdit(CollectionEditService.TopUpWantList(pool, w.Finish, remaining, _deck!)));
                 }
                 return results;
             }, claimPrintings, pickedWants.Select(w => w.ScryfallId).ToList());

@@ -405,6 +405,10 @@ namespace BreakersOfE.Data
                 AddColumnIfMissing(table, "Finish", "TEXT NOT NULL DEFAULT 'nonfoil'");
                 AddColumnIfMissing(table, "Price", "REAL");
             }
+
+            // ── v2.1: who a want is for (a deck's id, or "" = the Collection) ──
+            AddColumnIfMissing("WantListEntries", "ForDeckId", "TEXT NOT NULL DEFAULT ''");
+            AddColumnIfMissing("WantListEntries", "ForDeckName", "TEXT NOT NULL DEFAULT ''");
         }
 
 
