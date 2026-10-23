@@ -1,0 +1,91 @@
+<ui:FluentWindow x:Class="BreakersOfE.Views.Dialogs.GuidedBuildWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:ctl="clr-namespace:BreakersOfE.Views.Controls"
+        Title="Guided Build"
+        Width="1180" Height="760" MinWidth="820" MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        ShowInTaskbar="False"
+        ExtendsContentIntoTitleBar="True"
+        Background="{DynamicResource ApplicationBackgroundBrush}"
+        Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+
+    <!-- Build → Guided Build: one step per guide role (then the deck's plan).
+         Each step lists the best options with the reason for each; the top
+         ones are ticked to start. Tick what you want, Next. Finish keeps what
+         you chose (locked) and the builder fills the rest. -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <ui:TitleBar Grid.Row="0" x:Name="WindowTitleBar" Title="Guided Build"/>
+
+        <Grid Grid.Row="1" Margin="16,0,16,14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="240"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <ctl:CardDetailPanel x:Name="Detail" Grid.Column="0" Margin="0,0,12,0"/>
+
+            <DockPanel Grid.Column="1">
+                <!-- The step -->
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                    <TextBlock x:Name="StepTitle" FontSize="18" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="StepHint" Style="{StaticResource BoeHint}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    <WrapPanel x:Name="StepDots" Margin="0,8,0,0"/>
+                    <TextBlock x:Name="CountText" FontSize="13" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                </StackPanel>
+
+                <!-- Buttons -->
+                <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <ui:Button x:Name="BtnBack" Content="Back" MinWidth="80" Margin="0,0,8,0" Click="Back_Click"/>
+                        <ui:Button x:Name="BtnNext" Content="Next" MinWidth="80" Margin="0,0,8,0" Appearance="Primary" Click="Next_Click"/>
+                        <ui:Button x:Name="BtnFinish" Content="Finish — fill the rest" Margin="0,0,8,0" Click="Finish_Click"
+                                   ToolTip="Keep everything you've chosen (locked) and let the builder fill the rest of the deck"/>
+                        <ui:Button Content="Cancel" MinWidth="80" IsCancel="True"/>
+                    </StackPanel>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock x:Name="StatusText" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <ProgressBar x:Name="BusyBar" IsIndeterminate="True" Height="4" Margin="0,4,12,0" Visibility="Collapsed"/>
+                    </StackPanel>
+                </DockPanel>
+
+                <!-- Options for this step -->
+                <DataGrid x:Name="OptionsGrid" AutoGenerateColumns="False" HeadersVisibility="Column"
+                          GridLinesVisibility="None" RowHeaderWidth="0" SelectionMode="Single"
+                          CanUserAddRows="False" CanUserDeleteRows="False"
+                          SelectionChanged="OptionsGrid_SelectionChanged">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="Use" Width="50" SortMemberPath="Use">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsChecked="{Binding Use, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              HorizontalAlignment="Center" Click="Use_Click" MinWidth="0"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="210" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Source" Binding="{Binding SourceText}" Width="110" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Why" Binding="{Binding Reason}" Width="*" IsReadOnly="True">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="ToolTip" Value="{Binding Reason}"/>
+                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="160" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="MV" Binding="{Binding ManaValue}" Width="45" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Price" Binding="{Binding PriceText}" Width="70" IsReadOnly="True"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </Grid>
+    </Grid>
+</ui:FluentWindow>

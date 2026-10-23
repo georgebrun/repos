@@ -295,6 +295,36 @@ namespace BreakersOfE.Services
             return list;
         }
 
+        /// <summary>Tag slugs for many cards at once (oracle id → slugs); empty when tags.db isn't there.</summary>
+        public static Dictionary<string, List<string>> TagsForMany(IEnumerable<string> oracleIds)
+        {
+            var map = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            var ids = oracleIds.Where(o => !string.IsNullOrEmpty(o)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (ids.Count == 0 || !File.Exists(TagsPath)) return map;
+            try
+            {
+                using var con = OpenRead(TagsPath);
+                Exec(con, "CREATE TEMP TABLE IF NOT EXISTS Ids (Id TEXT PRIMARY KEY); DELETE FROM Ids;");
+                using (var tx = con.BeginTransaction())
+                using (var add = Prepare(con, tx, "INSERT OR IGNORE INTO Ids (Id) VALUES ($a)", 1))
+                {
+                    foreach (var id in ids) Run(add, id);
+                    tx.Commit();
+                }
+                using var cmd = con.CreateCommand();
+                cmd.CommandText = "SELECT OracleId, Slug FROM CardTags WHERE OracleId IN (SELECT Id FROM Ids)";
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    string oid = r.GetString(0);
+                    if (!map.TryGetValue(oid, out var list)) map[oid] = list = new List<string>();
+                    list.Add(r.GetString(1));
+                }
+            }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Tags (many): {ex.Message}"); }
+            return map;
+        }
+
         /// <summary>
         /// Every combo whose cards are all in <paramref name="cardNames"/>
         /// (front-face names are fine), most popular first. Requirements like

@@ -29,6 +29,7 @@ If an add would break a deck rule (too many copies of a card, not legal in the f
 - **Use This Row**: claim the free copies of the selected collection row.
 - **Free Copies** ([Delete]): give claimed copies back to Available; the cards stay in the deck.
 - **Whole Deck: Use Copies I Own…** and **Whole Deck: Add as New…** do the whole deck after a preview.
+- **Build** (the fourth item under Decks): a draft Commander deck from your collection. See [[build]].
 - **Find Missing…**: switch cards to a printing you own, or add what's missing to the Want List. See [[howto-find-missing]].
 - **Add Missing to Want List (for this deck)** (right-click deck lines): just the selected lines' missing copies go on the Want List, as wants for this deck. Already wanted copies aren't added twice.
 

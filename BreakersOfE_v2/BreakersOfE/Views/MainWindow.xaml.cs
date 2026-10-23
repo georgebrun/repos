@@ -505,6 +505,7 @@ namespace BreakersOfE.Views
                 EditDeckPage => "decks",
                 EditTradeBinderPage => "trade-binder",
                 EditWantListPage => "want-list",
+                EditBuildPage => "build",
                 EditCollectionPage => tag switch
                 {
                     "Edit:MtgoCards" or "Edit:ArenaCards" => "online",
@@ -571,6 +572,13 @@ namespace BreakersOfE.Views
             if (args.Page is EditTradeBinderPage binderPage)
             {
                 Dispatcher.BeginInvoke(new Action(binderPage.Start), System.Windows.Threading.DispatcherPriority.Loaded);
+                return;
+            }
+
+            // Edit → Decks → Build.
+            if (args.Page is EditBuildPage buildPage)
+            {
+                Dispatcher.BeginInvoke(new Action(buildPage.Start), System.Windows.Threading.DispatcherPriority.Loaded);
                 return;
             }
 

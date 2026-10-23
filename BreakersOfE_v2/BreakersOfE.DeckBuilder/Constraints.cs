@@ -43,6 +43,21 @@ namespace BreakersOfE.DeckBuilder
         public bool AllowTwoCardCombos => Bracket >= 4;
         /// <summary>Mass land denial and chained extra turns (Bracket 4–5 only).</summary>
         public bool AllowLandDenialAndExtraTurns => Bracket >= 4;
+
+        /// <summary>The same constraints with other locked cards (Guided Build: the cards chosen so far).</summary>
+        public BuildConstraints WithLocked(IReadOnlyCollection<string> locked) => new()
+        {
+            Commanders = Commanders, ColorIdentity = ColorIdentity, DeckSize = DeckSize, Bracket = Bracket,
+            Sources = Sources, SpendLimit = SpendLimit, DeckValueCap = DeckValueCap,
+            Locked = locked, Excluded = Excluded, UseGuide = UseGuide, Guide = Guide,
+        };
+
+        /// <summary>"3 — Upgraded".</summary>
+        public static string BracketName(int bracket) => bracket switch
+        {
+            1 => "1 — Exhibition", 2 => "2 — Core", 3 => "3 — Upgraded", 4 => "4 — Optimized", 5 => "5 — cEDH",
+            _ => bracket.ToString(),
+        };
     }
 
     /// <summary>One guide target: how many cards of a role, and whether it's on.</summary>

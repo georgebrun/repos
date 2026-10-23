@@ -324,6 +324,18 @@ namespace BreakersOfE.Services
                 $"EDHREC has no page for {string.Join(" + ", commanderNames)} (looked for \"{slugs[0]}\").");
         }
 
+        /// <summary>The saved page for these commanders, however old, without going online (null when there isn't one).</summary>
+        public static EdhrecPage? Saved(IReadOnlyList<string> commanderNames)
+        {
+            if (commanderNames.Count == 0) return null;
+            var slugs = new List<string> { CommanderSlug(commanderNames) };
+            if (commanderNames.Count > 1)
+                slugs.Add(string.Join("-", commanderNames.Select(n => Slug(n)).OrderByDescending(s => s, StringComparer.Ordinal)));
+            foreach (var slug in slugs)
+                if (Load(slug, note: "") is { } page) return page;
+            return null;
+        }
+
         /// <summary>A saved page, or null.</summary>
         private static EdhrecPage? Load(string slug, string note)
         {

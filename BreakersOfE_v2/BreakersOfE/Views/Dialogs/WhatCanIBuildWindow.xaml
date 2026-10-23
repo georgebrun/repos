@@ -1,0 +1,70 @@
+<ui:FluentWindow x:Class="BreakersOfE.Views.Dialogs.WhatCanIBuildWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="What Can I Build?"
+        Width="1100" Height="700" MinWidth="760" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        ShowInTaskbar="False"
+        ExtendsContentIntoTitleBar="True"
+        Background="{DynamicResource ApplicationBackgroundBrush}"
+        Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+
+    <!-- Build → What can I build?: the commanders you own, ranked by how much
+         of a deck your free cards already make for them. Build This One picks
+         the commander on the Build page. -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <ui:TitleBar Grid.Row="0" Title="What Can I Build?"/>
+
+        <DockPanel Grid.Row="1" Margin="16,0,16,14">
+            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                <TextBlock Text="What Can I Build?" FontSize="18" FontWeight="SemiBold"/>
+                <TextBlock Style="{StaticResource BoeHint}" TextWrapping="Wrap" Margin="0,2,0,8"
+                           Text="Your commanders, best first: how many free spells you have in their colors, how far those go toward the guide's roles, and — when EDHREC's page for the commander is saved — how many of its 100 most-played cards you have free. Only your collection is read; nothing is downloaded. Ready is a rough mix of the three."/>
+                <CheckBox x:Name="InUseCheck" Content="Include commanders whose copies are in a deck" Click="InUseCheck_Click"/>
+            </StackPanel>
+
+            <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <ui:Button x:Name="BtnStop" Content="Stop" MinWidth="72" Margin="0,0,8,0" Click="Stop_Click" Visibility="Collapsed"/>
+                    <ui:Button x:Name="BtnUse" Content="Build This One" Appearance="Primary" Margin="0,0,8,0" Click="Use_Click" IsEnabled="False"
+                               ToolTip="Pick this commander on the Build page"/>
+                    <ui:Button Content="Close" MinWidth="72" IsCancel="True"/>
+                </StackPanel>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock x:Name="StatusText" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <ProgressBar x:Name="BusyBar" IsIndeterminate="True" Height="4" Margin="0,4,12,0" Visibility="Collapsed"/>
+                </StackPanel>
+            </DockPanel>
+
+            <DataGrid x:Name="IdeasGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
+                      GridLinesVisibility="None" RowHeaderWidth="0" SelectionMode="Single"
+                      SelectionChanged="IdeasGrid_SelectionChanged" MouseDoubleClick="IdeasGrid_MouseDoubleClick">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Commander" Binding="{Binding Name}" Width="240"/>
+                    <DataGridTextColumn Header="Colors" Binding="{Binding Colors}" Width="70"/>
+                    <DataGridTextColumn Header="Copy" Binding="{Binding CommanderText}" Width="100"/>
+                    <DataGridTextColumn Header="Ready" Binding="{Binding ReadyText}" Width="70" SortMemberPath="Score"/>
+                    <DataGridTextColumn Header="Free spells" Binding="{Binding SpellsText}" Width="110" SortMemberPath="Spells"/>
+                    <DataGridTextColumn Header="Free lands" Binding="{Binding Lands}" Width="85"/>
+                    <DataGridTextColumn Header="Roles" Binding="{Binding RolesText}" Width="65" SortMemberPath="RoleFill"/>
+                    <DataGridTextColumn Header="EDHREC" Binding="{Binding EdhrecText}" Width="130"/>
+                    <DataGridTextColumn Header="Short of" Binding="{Binding ShortText}" Width="*">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="ToolTip" Value="{Binding ShortText}"/>
+                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </DockPanel>
+    </Grid>
+</ui:FluentWindow>

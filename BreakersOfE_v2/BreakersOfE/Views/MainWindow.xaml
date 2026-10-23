@@ -459,6 +459,11 @@
                                                TargetPageTag="editdeck-d2c"
                                                TargetPageType="{x:Type pages:EditDeckPage}"
                                                Icon="{ui:SymbolIcon ArrowLeft24}" />
+                        <!-- Build: the deck builder (a draft from your constraints, then Accept) -->
+                        <ui:NavigationViewItem Content="Build"
+                                               Tag="EditBuild"
+                                               TargetPageType="{x:Type pages:EditBuildPage}"
+                                               Icon="{ui:SymbolIcon Edit24}" />
                     </ui:NavigationViewItem.MenuItems>
                 </ui:NavigationViewItem>
 
