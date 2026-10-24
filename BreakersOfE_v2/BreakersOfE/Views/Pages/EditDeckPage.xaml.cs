@@ -379,7 +379,7 @@ namespace BreakersOfE.Views.Pages
             bool side = _deck != null && _mode != DeckEditMode.DeckToCollection &&
                         (rule.SideboardMax != null || rule.Type == DeckType.Limited);
             AddToLabel.Visibility = AddToBox.Visibility = side ? Visibility.Visible : Visibility.Collapsed;
-            BtnDeckSettings.IsEnabled = BtnCloseDeck.IsEnabled = BtnSuggestTokens.IsEnabled =
+            BtnDeckSettings.IsEnabled = BtnCloseDeck.IsEnabled = BtnSuggestTokens.IsEnabled = BtnVersions.IsEnabled =
                 BtnTearDown.IsEnabled = BtnWholeOwned.IsEnabled = BtnWholeNew.IsEnabled = _deck != null;
         }
 
@@ -607,7 +607,10 @@ namespace BreakersOfE.Views.Pages
             var side = _deck.Cards.Where(c => c.Category == DeckCardCategory.Sideboard).ToList();
             var tokens = _deck.Cards.Where(c => c.IsTokenLine).ToList();
             var parts = new List<string> { Part("Main", main) };
-            if (side.Count > 0) parts.Add(Part("Sideboard", side));
+            // The sideboard holds swap options, which aren't claimed (unless you claimed some yourself).
+            int sideClaimed = side.Sum(c => c.ClaimedCount);
+            if (side.Count > 0)
+                parts.Add(sideClaimed > 0 ? Part("Sideboard", side) : $"Sideboard {side.Sum(c => c.TotalQuantity)} (swap options, not claimed)");
             if (tokens.Count > 0) parts.Add(Part("Tokens", tokens));
             return "Claimed from your collection: " + string.Join("  ·  ", parts);
         }
@@ -1058,28 +1061,24 @@ namespace BreakersOfE.Views.Pages
 
             int copies = dlg.Copies;
             var picked = dlg.Picked;
-            // The tokens go to the deck's Tokens part; the copies you own are claimed.
-            Edit($"Added {copies} of each token", () => picked.Select(s =>
-            {
-                var t = DeckService.FromTokenCard(s.Token);
-                string fin = DefaultFinish(t);
-                var added = DeckEditService.Add(_deck!, t, fin, copies, DeckCardCategory.Tokens);
-                if (added.Changed <= 0 || s.Owned == 0) return added;
-                var claimed = CollectionEditService.ClaimOwned(CollectionEditService.TokensTable, _deck!,
-                                                               t.ScryfallId, fin, copies, t.Name);
-                return claimed.Changed > 0
-                    ? new DeckEditResult
-                    {
-                        Changed = added.Changed,
-                        Touched = added.Touched,
-                        Warning = claimed.Warning,
-                        Message = $"{added.Message} {claimed.Message}"
-                    }
-                    : added;
-            }).ToList(), picked.Select(s => (CollectionEditService.TokensTable, s.Token.ScryfallId)));
+            // The tokens go to the deck's Tokens part; the copies you own are claimed (shared with the Build page).
+            Edit($"Added {copies} of each token", () => DeckTokenService.AddTokens(_deck!, picked, copies),
+                 picked.Select(s => (CollectionEditService.TokensTable, s.Token.ScryfallId)));
         }
 
         private void BtnSuggestTokens_Click(object sender, RoutedEventArgs e) => SuggestTokens(selectedOnly: false);
+
+        /// <summary>Versions…: save, compare and restore saved versions of the deck. A restore reopens it (its Undo starts over).</summary>
+        private void BtnVersions_Click(object sender, RoutedEventArgs e)
+        {
+            if (_deck == null || _deckPath == null) { ShowStatus("Pick a deck first.", true); return; }
+            var dlg = new DeckVersionsWindow(_deck, Window.GetWindow(this));
+            if (dlg.ShowDialog() != true || dlg.Restored == null) return;
+            string path = _deckPath;
+            _undo.Remove(path);
+            OpenDeck(path);
+            ShowStatus(dlg.Restored, dlg.RestoreWarning);
+        }
 
         // ══════════════════════════════════════════════════════════════════
         // DECK → COLLECTION: claim copies you own, or add new ones
@@ -1093,9 +1092,9 @@ namespace BreakersOfE.Views.Pages
             p.GetType().GetProperty("IsFoil")?.GetValue(p) is not true;
 
         /// <summary>What the deck still needs, per printing + finish (optionally only these lines' printings).</summary>
-        private List<ClaimLine> Needs(IEnumerable<DeckCard>? only = null)
+        private List<ClaimLine> Needs(IEnumerable<DeckCard>? only = null, bool withSideboard = true)
         {
-            var status = CollectionEditService.ClaimStatus(_deck!);
+            var status = CollectionEditService.ClaimStatus(_deck!, withSideboard);
             if (only != null)
             {
                 // The selected lines' printings, in the finishes those lines list.
@@ -1248,6 +1247,17 @@ namespace BreakersOfE.Views.Pages
                          "so it can be recovered by hand. This can't be undone here.", "Tear Down Deck"))
                 return;
 
+            // Its Want List rows: tick the ones to keep (for the Collection); the rest are removed.
+            var wants = CollectionEditService.WantsForDeck(_deck.DeckId);
+            if (wants.Count > 0 &&
+                !DeckWantsDialog.Ask(Window.GetWindow(this), $"\"{_deck.Name}\" has {wants.Sum(w => w.Quantity)} card(s) on the Want List",
+                    "Ticked cards stay on the Want List, for the Collection (they join a Collection want for the same printing). " +
+                    "Unticked cards are removed. Cancel stops the tear-down.", "Tear Down", wants))
+            {
+                ShowStatus("Tear down cancelled. Nothing changed.", false);
+                return;
+            }
+
             string name = _deck.Name, path = _deckPath;
             int freed = CollectionEditService.ReleaseAll(_deck.DeckId);
             if (freed < 0)
@@ -1273,11 +1283,13 @@ namespace BreakersOfE.Views.Pages
                 FillDecks(null);
                 return;
             }
+            var settled = wants.Count > 0 ? CollectionEditService.SettleDeckWants(wants) : null;
             _undo.Remove(path);
             FillDecks(null);
             ReloadSource();
             ShowStatus($"Tore down \"{name}\": {freed} {(freed == 1 ? "copy" : "copies")} back to Available; " +
-                       $"the deck file is in {Path.GetDirectoryName(moved)}.", false);
+                       $"the deck file is in {Path.GetDirectoryName(moved)}." +
+                       (settled != null && settled.Message.Length > 0 ? $" Want List: {settled.Message}" : ""), settled?.Warning == true);
         }
 
         private void BtnUseOwned_Click(object sender, RoutedEventArgs e) => ClaimLines(useOwned: true);
@@ -1405,10 +1417,55 @@ namespace BreakersOfE.Views.Pages
         {
             if (_deck == null) return;
             // Tokens stay in the deck's Tokens part.
-            var keys = Targets(_deckT).OfType<DeckCard>().Where(l => !l.IsTokenLine)
-                                       .Select(DeckLineKey.Of).Distinct().ToList();
+            var lines = Targets(_deckT).OfType<DeckCard>().Where(l => !l.IsTokenLine).ToList();
+            var keys = lines.Select(DeckLineKey.Of).Distinct().ToList();
             if (keys.Count == 0) { ShowStatus("Select a card (not a token) in the deck table first.", true); return; }
-            Edit(what, () => keys.Select(k => DeckEditService.MoveLine(_deck!, k, to)).ToList());
+
+            // The sideboard holds swap options, which aren't claimed: a card swapped in
+            // claims your free copies (the rest go on the Want List for the deck); a card
+            // swapped out frees its claimed copies.
+            var finishes = new[] { CardFinish.NonFoil, CardFinish.Foil, CardFinish.Etched };
+            var moves = lines.Where(l => DeckEditService.SectionOf(l) != to)
+                .SelectMany(l => finishes.Select(f => (Table: CollectionEditService.TableOf(l), Sid: l.ScryfallId, Finish: f,
+                                                       N: l.CountOf(f), l.Name,
+                                                       In: l.Category == DeckCardCategory.Sideboard && to != DeckCardCategory.Sideboard,
+                                                       Out: to == DeckCardCategory.Sideboard)))
+                .Where(m => m.N > 0 && (m.In || m.Out) && !string.IsNullOrEmpty(m.Sid)).ToList();
+            var status = moves.Count > 0 ? CollectionEditService.ClaimStatus(_deck) : new List<ClaimLine>();
+            int Claimed(string table, string sid, string f) =>
+                status.FirstOrDefault(s => s.Table == table && s.ScryfallId == sid && s.Finish == f)?.Claimed ?? 0;
+            // Copies of the same printing the rest of the deck (not the sideboard, not these lines) still uses:
+            // those claims stay where they are.
+            var moving = new HashSet<DeckCard>(lines);
+            int Others(string table, string sid, string f) =>
+                _deck.Cards.Where(c => !moving.Contains(c) && c.Category != DeckCardCategory.Sideboard &&
+                                       CollectionEditService.TableOf(c) == table &&
+                                       string.Equals(c.ScryfallId, sid, StringComparison.OrdinalIgnoreCase))
+                           .Sum(c => c.CountOf(f));
+            var deck = _deck;
+            Edit(what, () =>
+            {
+                var results = keys.Select(k => DeckEditService.MoveLine(deck, k, to)).ToList();
+                foreach (var m in moves)
+                {
+                    int claimed = Claimed(m.Table, m.Sid, m.Finish), others = Others(m.Table, m.Sid, m.Finish);
+                    if (m.Out)
+                    {
+                        int n = Math.Min(m.N, Math.Max(0, claimed - others));
+                        if (n > 0) results.Add(FromEdit(CollectionEditService.Release(deck, m.Table, m.Sid, m.Finish, n, m.Name)));
+                        continue;
+                    }
+                    int need = Math.Min(m.N, Math.Max(0, others + m.N - claimed));
+                    if (need <= 0) continue;
+                    var got = CollectionEditService.ClaimOwned(m.Table, deck, m.Sid, m.Finish, need, m.Name);
+                    int missing = need - Math.Max(0, got.Changed);
+                    if (got.Changed > 0) results.Add(FromEdit(got));
+                    if (missing > 0 && m.Table == CollectionEditService.CardsTable && PoolFor(m.Sid) is { } pool)
+                        results.Add(FromEdit(CollectionEditService.TopUpWantList(pool, m.Finish, missing, deck)));
+                }
+                return results;
+            }, moves.Select(m => (m.Table, m.Sid)).Distinct(),
+               wantList: moves.Any(m => m.In) ? moves.Where(m => m.In).Select(m => m.Sid).Distinct().ToList() : null);
         }
 
         // ── Set a count (double-click a Non-Foil / Foil / Etched cell) ──
@@ -1673,7 +1730,9 @@ namespace BreakersOfE.Views.Pages
             bool anyLeader = lines.Any(l => DeckEditService.SectionOf(l) == DeckCardCategory.Commander);
             bool anySide = lines.Any(l => l.Category == DeckCardCategory.Sideboard);
             bool anyMain = lines.Any(l => DeckEditService.SectionOf(l) == DeckCardCategory.Mainboard);
-            bool hasSide = rule.SideboardMax != null || rule.Type == DeckType.Limited;
+            // Swap options can live in any deck's sideboard (Commander too: it isn't part of the deck there).
+            bool hasSide = rule.SideboardMax != null || rule.Type == DeckType.Limited ||
+                           _deck?.Cards.Any(c => c.Category == DeckCardCategory.Sideboard) == true;
 
             _makeLeaderItem!.Header = $"Set as {leaderName}";
             _makeLeaderItem.Visibility = leaderVis;

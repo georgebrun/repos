@@ -25,7 +25,10 @@ namespace BreakersOfE.ViewModels
         public string Folder { get; init; } = "";
         /// <summary>Color identity as mana symbols, e.g. "{W}{B}{R}" ("{C}" if colorless).</summary>
         public string IdentitySymbols { get; init; } = "";
+        /// <summary>Cards in the deck: main deck and commander (no sideboard, no tokens).</summary>
         public int CardCount { get; init; }
+        /// <summary>Cards in its sideboard (shown on the tile, not in the count).</summary>
+        public int SideboardCount { get; init; }
         public decimal TotalValue { get; init; }
 
         public string CountText => CardCount.ToString("N0");
@@ -37,6 +40,7 @@ namespace BreakersOfE.ViewModels
                 var parts = new List<string>();
                 if (!string.IsNullOrEmpty(FormatName)) parts.Add(FormatName);
                 if (!string.IsNullOrEmpty(CommanderName)) parts.Add(CommanderName);
+                if (SideboardCount > 0) parts.Add($"sideboard of {SideboardCount}");
                 parts.Add(TotalValue > 0
                     ? TotalValue.ToString("C2", CultureInfo.GetCultureInfo("en-US"))
                     : "—");

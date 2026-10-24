@@ -230,8 +230,12 @@ namespace BreakersOfE.Services
         // ══════════════════════════════════════════════════════════════════
         // STATUS
         // ══════════════════════════════════════════════════════════════════
-        /// <summary>Every printing + finish the deck lists or has claimed: copies listed vs. claimed.</summary>
-        public static List<ClaimLine> ClaimStatus(Deck deck)
+        /// <summary>
+        /// Every printing + finish the deck lists or has claimed: copies listed vs. claimed.
+        /// <paramref name="withSideboard"/> false: the sideboard's cards (swap options,
+        /// not claimed) don't count as listed.
+        /// </summary>
+        public static List<ClaimLine> ClaimStatus(Deck deck, bool withSideboard = true)
         {
             var lines = new Dictionary<(string, string, string), ClaimLine>();
             ClaimLine Line(string table, string sid, string finish) =>
@@ -240,6 +244,7 @@ namespace BreakersOfE.Services
 
             foreach (var c in deck.Cards)
             {
+                if (!withSideboard && c.Category == DeckCardCategory.Sideboard) continue;
                 if (string.IsNullOrEmpty(c.ScryfallId)) continue;
                 foreach (var f in Finishes)
                 {

@@ -80,7 +80,9 @@ namespace BreakersOfE.Views.Pages
                         CommanderName = string.Join(" & ", commanders.Select(c => c.Name)),
                         Folder = folder == "." ? "" : folder,
                         IdentitySymbols = symbols,
-                        CardCount = deck.PlayCards.Sum(c => c.TotalQuantity),
+                        // The deck's count: no tokens and no sideboard (swap options); the sideboard is shown on its own.
+                        CardCount = deck.PlayCards.Where(c => c.Category != Models.DeckCardCategory.Sideboard).Sum(c => c.TotalQuantity),
+                        SideboardCount = deck.PlayCards.Where(c => c.Category == Models.DeckCardCategory.Sideboard).Sum(c => c.TotalQuantity),
                         TotalValue = deck.Cards.Sum(c => c.RowValue),
                     });
                 }

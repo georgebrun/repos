@@ -22,7 +22,7 @@ namespace BreakersOfE.Views.Dialogs
         /// <summary>Copies of each (after Add).</summary>
         public int Copies { get; private set; } = 1;
 
-        private TokenSuggestionsDialog(string header, List<TokenSuggestion> items, string emptyMessage)
+        private TokenSuggestionsDialog(string header, List<TokenSuggestion> items, string emptyMessage, bool allowAdd = true)
         {
             InitializeComponent();
             _items = items;
@@ -43,13 +43,22 @@ namespace BreakersOfE.Views.Dialogs
                 NoteText.Text = "Tokens Scryfall links to these cards — ticked unless the deck already has them. " +
                                 "When you own a token, your printing is the one offered. " +
                                 "They go to the deck's Tokens part (never counted as part of the deck).";
+                if (!allowAdd)
+                {
+                    // The Build page's draft: not a deck yet, so look and print only.
+                    BtnAdd.Visibility = Visibility.Collapsed;
+                    BtnCancel.Content = "Close";
+                    NoteText.Text = "Tokens Scryfall links to the draft's cards. Print slips now if you like; " +
+                                    "you can add them to the deck when you Accept the draft.";
+                }
             }
         }
 
         /// <summary>Show the list (or <paramref name="emptyMessage"/> when there's nothing); null when cancelled or nothing was added.</summary>
-        public static TokenSuggestionsDialog? Ask(Window? owner, string header, List<TokenSuggestion> items, string emptyMessage)
+        public static TokenSuggestionsDialog? Ask(Window? owner, string header, List<TokenSuggestion> items, string emptyMessage,
+                                                  bool allowAdd = true)
         {
-            var dlg = new TokenSuggestionsDialog(header, items, emptyMessage) { Owner = owner };
+            var dlg = new TokenSuggestionsDialog(header, items, emptyMessage, allowAdd) { Owner = owner };
             return dlg.ShowDialog() == true && dlg.Picked.Count > 0 ? dlg : null;
         }
 

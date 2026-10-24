@@ -26,8 +26,10 @@ namespace BreakersOfE.DeckBuilder
         public bool IsCommander { get; init; }
         /// <summary>From your free copies, or to get (Want List).</summary>
         public CardSource Source { get; init; }
-        /// <summary>What getting it would cost (0 when it's yours).</summary>
+        /// <summary>What getting one copy would cost (0 when it's yours).</summary>
         public decimal Cost { get; init; }
+        /// <summary>Copies to get (the rest are your free copies).</summary>
+        public int ToGet { get; init; }
         public double Score { get; init; }
         public override string ToString() => $"{(Copies > 1 ? Copies + "× " : "")}{Card.Name} — {Reason}";
     }
@@ -55,13 +57,21 @@ namespace BreakersOfE.DeckBuilder
         public List<RoleResult> Roles { get; } = new();
         public List<string> Notes { get; } = new();
         public List<ComboInfo> Combos { get; } = new();
+        /// <summary>
+        /// Swap options: the best cards that just missed the deck, a few per
+        /// guide role and for the plan, each with its reason. Not part of the
+        /// deck (no card count, value or claims); Accept puts them in the sideboard.
+        /// </summary>
+        public List<Pick> SwapOptions { get; } = new();
         /// <summary>Cards in the deck (commanders included).</summary>
         public int CardCount { get; set; }
         /// <summary>To spend on cards you don't own.</summary>
-        public decimal ToSpend => Picks.Sum(p => p.Cost * p.Copies);
+        public decimal ToSpend => Picks.Sum(p => p.Cost * p.ToGet);
         /// <summary>The deck's market value (all cards with a price).</summary>
         public decimal Value => Picks.Sum(p => (p.Card.Price ?? 0) * p.Copies);
         public int GameChangers => Picks.Count(p => p.Card.IsGameChanger);
+        /// <summary>Copies to get, all cards.</summary>
+        public int CardsToGet => Picks.Sum(p => p.ToGet);
     }
 
     /// <summary>
@@ -113,22 +123,24 @@ namespace BreakersOfE.DeckBuilder
                     foreach (var (e, score) in s.Ranked(role))
                     {
                         if (s.RoleCount(role) >= target.Count || s.NonLandPicked() >= s.NonLandSlots) break;
-                        if (!s.CanAdd(e)) continue;
-                        s.Add(e, s.Why(e, s.RoleLead(e, role, target.Count)), score: score);
+                        if (!s.TryPlan(e, target.Count - s.RoleCount(role), Session.RoleSlack, out int copies, out int toGet)) continue;
+                        s.Add(e, s.Why(e, s.RoleLead(e, role, target.Count), copies, toGet), score: score, copies: copies, toGet: toGet);
                     }
                     if (s.RoleCount(role) < target.Count)
                         deck.Notes.Add($"{RoleClassifier.Name(role)}: only {s.RoleCount(role)} of {target.Count} — not enough {(c.Sources == SourceMode.CollectionOnly ? "free cards in your collection" : "cards within the spend limit")} for this role.");
                 }
             }
 
-            // 3. The rest of the spells: the best cards for the deck's plan.
+            // 3. The rest of the spells: the best cards for the deck's plan
+            //    (60-card: inside the curve first, then anything that's left).
             ct.ThrowIfCancellationRequested();
-            foreach (var (e, score) in s.Ranked(null))
-            {
-                if (s.NonLandPicked() >= s.NonLandSlots) break;
-                if (!s.CanAdd(e)) continue;
-                s.Add(e, s.Why(e, Session.PlanLead(e)), score: score);
-            }
+            foreach (int slack in c.IsConstructed && c.Curve != null ? new[] { 0, int.MaxValue } : new[] { int.MaxValue })
+                foreach (var (e, score) in s.Ranked(null))
+                {
+                    if (s.NonLandPicked() >= s.NonLandSlots) break;
+                    if (!s.TryPlan(e, null, slack, out int copies, out int toGet)) continue;
+                    s.Add(e, s.Why(e, Session.PlanLead(e), copies, toGet), score: score, copies: copies, toGet: toGet);
+                }
             if (s.NonLandPicked() < s.NonLandSlots)
                 deck.Notes.Add($"Only {s.NonLandPicked()} spells found for {s.NonLandSlots} spell slots; the rest are lands.");
 
@@ -136,14 +148,17 @@ namespace BreakersOfE.DeckBuilder
             ct.ThrowIfCancellationRequested();
             s.AddLands();
             s.Finish();
+            // 5. Swap options: the runner-ups.
+            ct.ThrowIfCancellationRequested();
+            s.AddSwapOptions(c.SwapOptions);
             return deck;
         }
 
         /// <summary>
         /// Guided Build: the best options for one step — a guide role, or the
         /// deck's plan (<paramref name="role"/> null) — with what's already
-        /// chosen (c.Locked) in the deck. Each comes with its reason and score;
-        /// cards the bracket, spend limit or value cap rule out are left out.
+        /// chosen (c.Locked) in the deck. Each comes with its reason, score and
+        /// (60-card) copies; cards the bracket, spend limit or value cap rule out are left out.
         /// </summary>
         public static List<Pick> Options(IReadOnlyList<Eligible> eligible, BuildConstraints c, Role? role, int max,
                                          IReadOnlyList<Candidate>? commanders = null, IReadOnlyList<ComboInfo>? combos = null)
@@ -153,22 +168,28 @@ namespace BreakersOfE.DeckBuilder
             s.AddLocked();
             var list = new List<Pick>();
             int target = role is { } r && c.Guide.For(r) is { } t ? t.Count : 0;
+            int already = 0;
             foreach (var (e, score) in s.Ranked(role))
             {
                 if (list.Count >= max) break;
-                if (!s.CanAdd(e)) continue;
-                string lead = role is { } rr ? s.RoleLead(e, rr, target, list.Count) : Session.PlanLead(e);
-                list.Add(s.PickOf(e, s.Why(e, lead), score));
+                if (!s.TryPlan(e, null, int.MaxValue, out int copies, out int toGet, ignoreSlots: true)) continue;
+                string lead = role is { } rr ? s.RoleLead(e, rr, target, already) : Session.PlanLead(e);
+                list.Add(s.PickOf(e, s.Why(e, lead, copies, toGet), score, copies: copies, toGet: toGet));
+                already += copies;
             }
             return list;
         }
 
         /// <summary>
         /// The state of one build: what's picked, the bracket's counters, money
-        /// spent, the deck's themes — and how a card scores and why.
+        /// spent, the deck's themes — and how a card scores, how many copies
+        /// (60-card) and why.
         /// </summary>
         private sealed class Session
         {
+            /// <summary>60-card role steps may go this many cards over a mana value's curve target.</summary>
+            public const int RoleSlack = 2;
+
             public readonly DraftDeck Deck = new();
             private readonly IReadOnlyList<Eligible> _eligible;
             private readonly BuildConstraints _c;
@@ -176,13 +197,18 @@ namespace BreakersOfE.DeckBuilder
             private readonly IReadOnlyList<ComboInfo> _combos;
             private readonly HashSet<string> _picked = new(StringComparer.OrdinalIgnoreCase);
             private readonly List<string> _themes;
+            /// <summary>Your plan words: always count as specific themes, even common ones like "token".</summary>
+            private readonly HashSet<string> _planWords = new(StringComparer.OrdinalIgnoreCase);
             private readonly Dictionary<string, bool> _comboPieces = new(StringComparer.OrdinalIgnoreCase);   // name → in a two-card infinite
             private readonly Dictionary<string, Eligible> _byName;
             /// <summary>Combos by card name: each card only checks its own combos (partners like Thrasios have thousands).</summary>
             private readonly Dictionary<string, List<ComboInfo>> _combosOf = new(StringComparer.OrdinalIgnoreCase);
             private readonly bool _power;
+            private readonly bool _constructed;
             private int _gameChangers, _extraTurns;
             private decimal _spent, _value;
+            /// <summary>60-card: spells (copies) picked at mana value 1 … 6+.</summary>
+            private readonly int[] _curve = new int[6];
             public readonly int Slots;
             public readonly int NonLandSlots;
 
@@ -190,13 +216,23 @@ namespace BreakersOfE.DeckBuilder
             {
                 _eligible = eligible;
                 _c = c;
+                _constructed = c.IsConstructed;
                 _commanders = commanders ?? Array.Empty<Candidate>();
                 _combos = combos ?? Array.Empty<ComboInfo>();
-                _themes = Themes(_commanders);
                 _byName = new Dictionary<string, Eligible>(StringComparer.OrdinalIgnoreCase);
                 foreach (var e in eligible) _byName.TryAdd(e.Card.Name, e);
-                Slots = Math.Max(0, c.DeckSize - Math.Max(1, c.Commanders.Count));
-                int landTarget = c.UseGuide && c.Guide.For(Role.Land) is { Enabled: true } lt ? lt.Count : 37;
+                // Themes: the commanders' — and the key (locked) cards' in a 60-card deck — plus your plan words.
+                var sources = _commanders.ToList();
+                if (_constructed)
+                    sources.AddRange(c.Locked.Select(n => _byName.GetValueOrDefault(n)?.Card).Where(x => x != null).Select(x => x!));
+                _themes = Themes(sources);
+                foreach (var w in c.PlanWords.Select(w => w.Trim()).Where(w => w.Length > 1))
+                {
+                    _planWords.Add(w);
+                    if (!_themes.Contains(w, StringComparer.OrdinalIgnoreCase)) _themes.Add(w);
+                }
+                Slots = _constructed ? Math.Max(0, c.DeckSize) : Math.Max(0, c.DeckSize - Math.Max(1, c.Commanders.Count));
+                int landTarget = c.UseGuide && c.Guide.For(Role.Land) is { Enabled: true } lt ? lt.Count : _constructed ? 24 : 37;
                 NonLandSlots = Slots - landTarget;
 
                 // Higher brackets play to win: Game Changers, combos, cheap and efficient cards count for more.
@@ -216,6 +252,8 @@ namespace BreakersOfE.DeckBuilder
                     foreach (var n in k.Cards) _comboPieces[n] = _comboPieces.GetValueOrDefault(n) || k.TwoCardInfinite;
                 }
             }
+
+            private bool IsGeneric(string theme) => Generic.Contains(theme) && !_planWords.Contains(theme);
 
             private bool Completes(string name, out ComboInfo? combo)
             {
@@ -250,21 +288,84 @@ namespace BreakersOfE.DeckBuilder
                 return true;
             }
 
+            private static int Bucket(Candidate card) => Math.Clamp((int)Math.Round(card.ManaValue), 1, 6) - 1;
+
+            /// <summary>60-card: how many copies a card should have (cheap cards 4, mid 3, expensive 2; competitive one more).</summary>
+            private int Wanted(Eligible e)
+            {
+                var card = e.Card;
+                int n = card.IsLand ? 4 : card.ManaValue <= 2 ? 4 : card.ManaValue <= 4 ? 3 : 2;
+                if (e.Roles.Contains(Role.BoardWipe)) n = Math.Min(n, 2);
+                if (_power) n++;
+                return Math.Min(n, MaxCopies(card));
+            }
+
+            private int MaxCopies(Candidate card) =>
+                card.Restricted ? 1 : card.IsAnyNumber ? Math.Max(4, _c.CopyLimit) : _c.CopyLimit;
+
+            /// <summary>
+            /// Can it go in, and how: Commander — one copy, inside the bracket and
+            /// the money. 60-card — as many copies as it should have (fewer when
+            /// <paramref name="roleLeft"/> is small, the spell slots or the curve
+            /// at its mana value are nearly full), your free copies first, the
+            /// rest to get when the sources and money allow.
+            /// </summary>
+            public bool TryPlan(Eligible e, int? roleLeft, int curveSlack, out int copies, out int toGet, bool ignoreSlots = false)
+            {
+                copies = 0; toGet = 0;
+                if (_picked.Contains(e.Card.Name) || BreaksBracket(e)) return false;
+                if (!_constructed)
+                {
+                    if (!Affordable(e)) return false;
+                    copies = 1;
+                    toGet = CostOf(e) > 0 ? 1 : 0;
+                    return true;
+                }
+                var card = e.Card;
+                int want = Wanted(e);
+                if (roleLeft is { } left) want = Math.Min(want, Math.Max(2, left));
+                if (!ignoreSlots && !card.IsLand) want = Math.Min(want, NonLandSlots - NonLandPicked());
+                if (!card.IsLand && _c.Curve is { } curve && curveSlack != int.MaxValue)
+                {
+                    int b = Bucket(card);
+                    want = Math.Min(want, curve[b] + curveSlack - _curve[b]);
+                }
+                return Copies(e, want, mustHave: false, out copies, out toGet);
+            }
+
+            /// <summary>Up to <paramref name="want"/> copies: free ones first, then copies to get within the money.</summary>
+            private bool Copies(Eligible e, int want, bool mustHave, out int copies, out int toGet)
+            {
+                copies = 0; toGet = 0;
+                if (want <= 0) return false;
+                var card = e.Card;
+                decimal price = card.Price ?? 0m;
+                int own = card.IsBasicLand ? want : Math.Min(Math.Max(0, card.FreeCopies), want);
+                int buy = 0;
+                if (own < want && (mustHave || _c.Sources == SourceMode.CollectionAndPool) && (card.Price.HasValue || mustHave))
+                    while (own + buy < want && (mustHave || _spent + price * (buy + 1) <= _c.SpendLimit)) buy++;
+                if (_c.DeckValueCap is { } cap && !mustHave)
+                    while (own + buy > 0 && _value + price * (own + buy) > cap) { if (buy > 0) buy--; else own--; }
+                copies = own + buy;
+                toGet = buy;
+                return copies > 0;
+            }
+
             /// <summary>Not picked yet, and the bracket, spend limit and value cap allow it.</summary>
-            public bool CanAdd(Eligible e) => !_picked.Contains(e.Card.Name) && !BreaksBracket(e) && Affordable(e);
+            public bool CanAdd(Eligible e) => TryPlan(e, null, int.MaxValue, out _, out _);
 
             public double Score(Eligible e, Role? forRole)
             {
                 var card = e.Card;
                 double s = 0;
-                if (card.IsGameChanger) s += _power ? 20 : _c.Bracket == 3 ? 8 : 0;          // (the bracket's limit still applies)
+                if (card.IsGameChanger && !_constructed) s += _power ? 20 : _c.Bracket == 3 ? 8 : 0;   // (the bracket's limit still applies)
                 if (_power && _comboPieces.TryGetValue(card.Name, out bool twoCard)) s += twoCard ? 14 : 6;
                 // EDHREC: what this commander's decks play.
                 if (card.EdhrecSynergy is { } syn) s += syn * 60;
                 if (card.EdhrecInclusion is { } inc) s += inc * 0.4;
                 // The commander's themes in the card (counters, multicolored, its creature types …):
                 // specific themes count a lot, common words ("spell", "token") a little.
-                double theme = ThemeHits(card, _themes).Sum(t => Generic.Contains(t) ? 1.5 : 10);
+                double theme = ThemeHits(card, _themes).Sum(t => IsGeneric(t) ? 1.5 : 10);
                 s += Math.Min(25, theme) * (forRole == null ? 1.0 : 0.5);      // filling a role: the job first
                 // Combos with what's already in.
                 if (Completes(card.Name, out _)) s += _power ? 30 : 15;
@@ -276,8 +377,10 @@ namespace BreakersOfE.DeckBuilder
                 // Yours already: preferred. To buy: a little worse for each dollar.
                 if (card.FreeCopies > 0) s += 8;
                 else s -= _power ? (double)Math.Min(10m, card.Price ?? 0m) : (double)Math.Min(20m, (card.Price ?? 0m) * 2m);
+                // 60-card: a full playset of your own counts for a little more.
+                if (_constructed && card.FreeCopies >= Math.Min(4, MaxCopies(card))) s += 3;
                 // Low brackets: go easy on the salt.
-                if (_c.Bracket <= 2 && card.Salt is { } salt) s -= salt * 5;
+                if (!_constructed && _c.Bracket <= 2 && card.Salt is { } salt) s -= salt * 5;
                 return s;
             }
 
@@ -286,24 +389,27 @@ namespace BreakersOfE.DeckBuilder
                 _eligible.Where(e => !e.Card.IsLand && (role == null || e.Roles.Contains(role.Value)) && !_picked.Contains(e.Card.Name))
                          .Select(e => (e, s: Score(e, role))).OrderByDescending(x => x.s).ToList();
 
-            public Pick PickOf(Eligible e, string reason, double score, bool locked = false)
+            public Pick PickOf(Eligible e, string reason, double score, bool locked = false, int copies = 1, int toGet = -1)
             {
-                decimal cost = CostOf(e);
+                if (toGet < 0) toGet = CostOf(e) > 0 ? copies : 0;
                 return new Pick
                 {
-                    Card = e.Card, Roles = e.Roles, Reason = reason, Locked = locked, Score = score,
-                    Source = cost > 0 ? CardSource.Pool : CardSource.Collection, Cost = cost,
+                    Card = e.Card, Roles = e.Roles, Reason = reason, Locked = locked, Score = score, Copies = copies,
+                    Source = toGet > 0 ? CardSource.Pool : CardSource.Collection,
+                    Cost = toGet > 0 ? e.Card.Price ?? 0m : 0m, ToGet = toGet,
                 };
             }
 
-            public void Add(Eligible e, string reason, bool locked = false, double score = 0)
+            public void Add(Eligible e, string reason, bool locked = false, double score = 0, int copies = 1, int toGet = -1)
             {
-                _spent += CostOf(e);
-                _value += e.Card.Price ?? 0;
+                var pick = PickOf(e, reason, score, locked, copies, toGet);
+                _spent += pick.Cost * pick.ToGet;
+                _value += (e.Card.Price ?? 0) * pick.Copies;
                 if (e.Card.IsGameChanger) _gameChangers++;
                 if (ExtraTurn.IsMatch(e.Card.OracleText)) _extraTurns++;
+                if (_constructed && !e.Card.IsLand) _curve[Bucket(e.Card)] += pick.Copies;
                 _picked.Add(e.Card.Name);
-                Deck.Picks.Add(PickOf(e, reason, score, locked));
+                Deck.Picks.Add(pick);
             }
 
             public string RoleLead(Eligible e, Role role, int target, int already = -1) =>
@@ -313,31 +419,41 @@ namespace BreakersOfE.DeckBuilder
             public static string PlanLead(Eligible e) =>
                 e.Roles.Count > 0 ? string.Join(", ", e.Roles.Select(RoleClassifier.Name)) : "For the deck's plan";
 
-            public string Why(Eligible e, string lead)
+            public string Why(Eligible e, string lead, int copies = 1, int toGet = -1)
             {
                 var parts = new List<string> { lead };
                 var card = e.Card;
-                parts.Add(card.IsBasicLand ? "basic land"
-                    : card.FreeCopies > 0 ? $"free in your collection ({card.FreeCopies})"
-                    : card.Price is { } p ? $"to get, ${p:0.00}" : "to get");
+                if (_constructed && !card.IsBasicLand && toGet >= 0)
+                {
+                    int own = copies - toGet;
+                    string each = card.Price is { } p ? $", ${p:0.00} each" : "";
+                    parts.Add(toGet == 0 ? $"{copies} free in your collection" + (card.FreeCopies > copies ? $" (of {card.FreeCopies})" : "")
+                              : own > 0 ? $"{own} yours + {toGet} to get{each}"
+                              : $"{toGet} to get{each}");
+                    if (card.Restricted) parts.Add("restricted: 1 copy");
+                }
+                else
+                    parts.Add(card.IsBasicLand ? "basic land"
+                        : card.FreeCopies > 0 ? $"free in your collection ({card.FreeCopies})"
+                        : card.Price is { } p ? $"to get, ${p:0.00}" : "to get");
                 if (card.EdhrecInclusion is { } inc && inc >= 1)
                     parts.Add($"EDHREC: {inc:0}% of decks" + (card.EdhrecSynergy is { } syn && Math.Abs(syn) >= 0.05 ? $", synergy {syn * 100:+0;-0}%" : ""));
-                var hits = ThemeHits(card, _themes).Where(t => !Generic.Contains(t)).Take(2).ToList();
-                if (hits.Count > 0) parts.Add("fits the commander (" + string.Join(", ", hits) + ")");
+                var hits = ThemeHits(card, _themes).Where(t => !IsGeneric(t)).Take(2).ToList();
+                if (hits.Count > 0) parts.Add((_constructed ? "fits the plan (" : "fits the commander (") + string.Join(", ", hits) + ")");
                 if (Completes(card.Name, out var combo))
                     parts.Add($"combo with {string.Join(" + ", combo!.Cards.Where(n => !n.Equals(card.Name, StringComparison.OrdinalIgnoreCase)))}");
-                if (card.IsGameChanger) parts.Add("Game Changer");
+                if (card.IsGameChanger && !_constructed) parts.Add("Game Changer");
                 return string.Join(" · ", parts);
             }
 
-            public int RoleCount(Role r) => Deck.Picks.Count(p => !p.IsCommander && p.Roles.Contains(r));
-            public int NonLandPicked() => Deck.Picks.Count(p => !p.IsCommander && !p.Card.IsLand);
-            private int Ninety() => Deck.Picks.Count(p => !p.IsCommander);
+            public int RoleCount(Role r) => Deck.Picks.Where(p => !p.IsCommander && p.Roles.Contains(r)).Sum(p => p.Copies);
+            public int NonLandPicked() => Deck.Picks.Where(p => !p.IsCommander && !p.Card.IsLand).Sum(p => p.Copies);
+            private int Ninety() => Deck.Picks.Where(p => !p.IsCommander).Sum(p => p.Copies);
 
             /// <summary>0. The commander(s) head the list (they're part of the deck, not of its 99).</summary>
             public void AddCommanders()
             {
-                if (_commanders.Count == 0) return;
+                if (_commanders.Count == 0 || _constructed) return;
                 foreach (var name in _c.Commanders)
                 {
                     var card = _commanders.FirstOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
@@ -357,20 +473,25 @@ namespace BreakersOfE.DeckBuilder
                                  : (card.OwnedCopies > 0 ? " · your copies are in use · to get" : " · to get") +
                                    (card.Price is { } p ? $", ${p:0.00}" : "")),
                         Source = card.FreeCopies > 0 ? CardSource.Collection : CardSource.Pool,
-                        Cost = cost,
+                        Cost = cost, ToGet = cost > 0 ? 1 : 0,
                     });
                     _picked.Add(card.Name);
                 }
             }
 
-            /// <summary>1. Locked cards (and the ones chosen in Guided Build), as they are.</summary>
+            /// <summary>1. Locked cards (key cards, and the ones chosen in Guided Build), as they are.</summary>
             public void AddLocked()
             {
                 foreach (var name in _c.Locked)
                 {
-                    if (!_byName.TryGetValue(name, out var e)) { Deck.Notes.Add($"Locked card \"{name}\" isn't available (not legal, off-color, or excluded)."); continue; }
+                    if (!_byName.TryGetValue(name, out var e)) { Deck.Notes.Add($"Locked card \"{name}\" isn't available (not legal, {(_constructed ? "not in the deck's colors" : "off-color")}, or excluded)."); continue; }
                     if (_picked.Contains(e.Card.Name)) continue;
-                    Add(e, Why(e, "Locked by you"), locked: true);
+                    if (!_constructed) { Add(e, Why(e, "Locked by you"), locked: true); continue; }
+                    // 60-card: the copies asked for (a key card: as many as allowed), yours first, the rest to get.
+                    int want = _c.LockedCopies != null && _c.LockedCopies.TryGetValue(e.Card.Name, out int n) ? n : MaxCopies(e.Card);
+                    want = Math.Clamp(want, 1, MaxCopies(e.Card));
+                    Copies(e, want, mustHave: true, out int copies, out int toGet);
+                    Add(e, Why(e, "Locked by you", copies, toGet), locked: true, copies: copies, toGet: toGet);
                 }
             }
 
@@ -381,25 +502,79 @@ namespace BreakersOfE.DeckBuilder
                 int landSlots = Slots - Ninety();
                 int minBasics = identity.Count == 0 ? 0 : Math.Min(landSlots, Math.Max(identity.Count * 2, landSlots / 3));
                 if (identity.Count >= 4) minBasics = Math.Min(landSlots, identity.Count * 2);
+                if (_constructed) minBasics = identity.Count <= 1 ? Math.Max(0, landSlots - 4) : identity.Count == 2 ? landSlots / 2 : landSlots / 3;
                 var lands = _eligible.Where(e => e.Card.IsLand && !e.Card.IsBasicLand && !_picked.Contains(e.Card.Name))
                                      .Select(e => (e, colors: LandColors(e.Card, identity), s: Score(e, Role.Land)))
-                                     .Where(x => x.colors > 0 || x.e.Roles.Count > 1)
+                                     .Where(x => _constructed ? x.colors >= Math.Min(2, identity.Count) && (identity.Count >= 2 || x.e.Roles.Count > 1)
+                                                              : x.colors > 0 || x.e.Roles.Count > 1)
                                      .OrderByDescending(x => x.colors).ThenByDescending(x => x.s).ToList();
                 foreach (var (e, colors, s) in lands)
                 {
-                    if (Ninety() >= Slots - minBasics) break;
-                    if (!CanAdd(e)) continue;
+                    int room = Slots - minBasics - Ninety();
+                    if (room <= 0) break;
                     string lead = colors >= 3 ? $"Land — makes {colors} of your colors" : colors == 2 ? "Land — makes 2 of your colors"
                         : colors == 1 ? "Land" : "Utility land";
-                    Add(e, Why(e, lead), score: s);
+                    if (!_constructed)
+                    {
+                        if (!CanAdd(e)) continue;
+                        Add(e, Why(e, lead), score: s);
+                        continue;
+                    }
+                    if (_picked.Contains(e.Card.Name) || BreaksBracket(e)) continue;
+                    int want = Math.Min(room, identity.Count >= 2 ? MaxCopies(e.Card) : Math.Min(2, MaxCopies(e.Card)));
+                    if (!Copies(e, want, mustHave: false, out int copies, out int toGet)) continue;
+                    Add(e, Why(e, lead, copies, toGet), score: s, copies: copies, toGet: toGet);
                 }
                 AddBasics(Deck, _eligible, identity, Slots - Ninety());
             }
 
-            /// <summary>5. How it went: card count, the guide's targets, combos in the deck.</summary>
+            /// <summary>
+            /// The runner-ups: taken in turns from each guide role's list (in the
+            /// guide's order) and the plan's, so every job has a spare or two.
+            /// <paramref name="count"/> counts cards (60-card: copies included).
+            /// Inside the bracket; money isn't spent on them (they're suggestions).
+            /// </summary>
+            public void AddSwapOptions(int count)
+            {
+                if (count <= 0) return;
+                var lists = new List<(Role? Role, List<(Eligible e, double s)> Ranked)>();
+                if (_c.UseGuide)
+                    foreach (var role in Order)
+                        if (_c.Guide.For(role) is { Enabled: true, Count: > 0 })
+                            lists.Add((role, Ranked(role)));
+                lists.Add((null, Ranked(null)));
+                var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var next = new int[lists.Count];
+                int total = 0;
+                bool any = true;
+                while (total < count && any)
+                {
+                    any = false;
+                    for (int i = 0; i < lists.Count && total < count; i++)
+                    {
+                        var (role, ranked) = lists[i];
+                        while (next[i] < ranked.Count)
+                        {
+                            var (e, score) = ranked[next[i]++];
+                            if (taken.Contains(e.Card.Name) || BreaksBracket(e)) continue;
+                            int copies = _constructed ? Math.Max(1, Math.Min(Wanted(e), count - total)) : 1;
+                            int own = e.Card.IsBasicLand ? copies : Math.Min(Math.Max(0, e.Card.FreeCopies), copies);
+                            int toGet = copies - own;
+                            string lead = "Swap option — " + (role is { } r ? RoleClassifier.Name(r) : PlanLead(e));
+                            Deck.SwapOptions.Add(PickOf(e, Why(e, lead, copies, toGet), score, copies: copies, toGet: toGet));
+                            taken.Add(e.Card.Name);
+                            total += copies;
+                            any = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            /// <summary>5. How it went: card count, the guide's targets, combos in the deck, the curve (60-card).</summary>
             public void Finish()
             {
-                Deck.CardCount = Deck.Picks.Where(p => !p.IsCommander).Sum(p => p.Copies) + Math.Max(1, _c.Commanders.Count);
+                Deck.CardCount = Deck.Picks.Where(p => !p.IsCommander).Sum(p => p.Copies) + (_constructed ? 0 : Math.Max(1, _c.Commanders.Count));
                 foreach (var t in _c.Guide.Targets)
                     Deck.Roles.Add(new RoleResult
                     {
@@ -409,6 +584,12 @@ namespace BreakersOfE.DeckBuilder
                 foreach (var k in _combos)
                     if (k.Cards.All(n => _picked.Contains(n) || _c.Commanders.Contains(n, StringComparer.OrdinalIgnoreCase)))
                         Deck.Combos.Add(k);
+                if (_constructed)
+                {
+                    string Label(int i) => i == 5 ? "6+" : (i + 1).ToString();
+                    Deck.Notes.Add("Curve (spells by mana value): " + string.Join(" · ", Enumerable.Range(0, 6).Select(i =>
+                        $"{Label(i)}: {_curve[i]}" + (_c.Curve is { } cv ? $"/{cv[i]}" : ""))));
+                }
             }
         }
 
@@ -456,16 +637,33 @@ namespace BreakersOfE.DeckBuilder
             };
             foreach (var w in words)
                 if (text.Contains(w, StringComparison.OrdinalIgnoreCase)) list.Add(w);
-            // Creature types its text cares about ("Spirits you control", "other Elves", "Dragon spells").
-            // A type it only makes tokens of isn't a theme.
-            foreach (Match m in Regex.Matches(text, @"\b(?<type>[A-Z][a-z]+)s you control\b|\bother (?<type>[A-Z][a-z]+)s\b|\b(?<type>[A-Z][a-z]+) spells?\b"))
+            // Creature types its text cares about ("Spirits you control", "other Elves", "Dragon spells",
+            // "the number of Clerics", "Clerics on the battlefield"). A type it only makes tokens of isn't a theme.
+            foreach (Match m in Regex.Matches(text,
+                @"\b(?<pl>[A-Z][a-z]+) you control\b|\b[Oo]ther (?<pl>[A-Z][a-z]+)\b|\bnumber of (?<pl>[A-Z][a-z]+)\b|" +
+                @"\b(?<pl>[A-Z][a-z]+) on the battlefield\b|\b(?<type>[A-Z][a-z]+) spells?\b"))
             {
-                string t = m.Groups["type"].Value;
-                if (t.Length > 2 && !list.Contains(t, StringComparer.OrdinalIgnoreCase) &&
-                    t is not ("You" or "Whenever" or "When" or "Create" or "Treasure" or "Each" or "Then" or "Target"))
+                string t = m.Groups["type"].Success ? m.Groups["type"].Value : Singular(m.Groups["pl"].Value);
+                if (t.Length > 2 && !list.Contains(t, StringComparer.OrdinalIgnoreCase) && !NotATribe.Contains(t))
                     list.Add(t);
             }
             return list;
+        }
+
+        /// <summary>Capitalized words the patterns catch that aren't creature types.</summary>
+        private static readonly HashSet<string> NotATribe = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "You", "Whenever", "When", "Create", "Treasure", "Each", "Then", "Target", "Creature", "Permanent", "Land",
+            "Artifact", "Enchantment", "Card", "Token", "Spell", "Player", "Opponent", "Planeswalker", "Instant", "Sorcery",
+            "Legendary", "Nonland", "Noncreature", "Battle", "If", "All", "Other", "Untapped", "Tapped", "Attacking", "Blocking",
+        };
+
+        /// <summary>"Clerics" → "Cleric", "Elves" → "Elf", "Dwarves" → "Dwarf"; a word that isn't plural → "" (not a type list).</summary>
+        private static string Singular(string word)
+        {
+            if (word.EndsWith("ves", StringComparison.Ordinal) && word.Length > 4) return word[..^3] + "f";
+            if (word.EndsWith("s", StringComparison.Ordinal) && !word.EndsWith("ss", StringComparison.Ordinal) && word.Length > 3) return word[..^1];
+            return "";
         }
 
         /// <summary>How many of the deck's colors a land can make (from its text; "any color" = all).</summary>
@@ -498,7 +696,7 @@ namespace BreakersOfE.DeckBuilder
             foreach (var p in deck.Picks.Where(p => !p.Card.IsLand))                 // the commander's symbols count too
                 foreach (Match m in Symbol.Matches(p.Card.ManaCost))
                     foreach (char ch in m.Groups[1].Value.ToUpperInvariant())
-                        if (pips.ContainsKey(ch)) pips[ch]++;
+                        if (pips.ContainsKey(ch)) pips[ch] += p.Copies;
             int total = Math.Max(1, pips.Values.Sum());
             var names = new Dictionary<char, string> { ['W'] = "Plains", ['U'] = "Island", ['B'] = "Swamp", ['R'] = "Mountain", ['G'] = "Forest" };
             var share = identity.ToDictionary(ch => ch, ch => pips.Values.Sum() == 0 ? slots / identity.Count : (int)Math.Floor(slots * (double)pips[ch] / total));

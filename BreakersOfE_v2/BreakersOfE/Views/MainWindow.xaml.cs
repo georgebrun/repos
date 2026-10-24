@@ -463,7 +463,7 @@ namespace BreakersOfE.Views
                 "Click View to open or close its list.",
                 () => BtnSectionView),
             new("Edit",
-                "Change things: add cards to your collection, build decks, fill the Trade Binder and Want List, and import or export lists.",
+                "Change things: add cards to your collection, build decks (or let Decks → Build draft one from your cards), fill the Trade Binder and Want List, and import or export lists.",
                 () => BtnSectionEdit),
             new("The page",
                 "What you pick in the side menu shows here. On card pages: type a name in Search, use Filters and Columns above the table, " +

@@ -20,6 +20,7 @@ A deck is a file in your data folder's Decks folder. Every change is saved at on
 - **Remove Non-Foil / Foil / Etched** take Qty away; **Remove Card** ([Shift+Delete]) takes every copy. In the deck table, [Delete] removes Qty of that line's finish.
 - Double-click a deck line's **Non-Foil**, **Foil** or **Etched** count to type the exact number.
 - Right-click a deck line to **Set as Commander**, **Move to Sideboard** or **Move to Main Deck**.
+- **The sideboard holds swap options** (cards you might swap in after testing, like the ones the deck builder suggests), so its cards aren't claimed. **Move to Main Deck** claims your free copies (what you don't have goes on the Want List for the deck); **Move to Sideboard** frees the card's claimed copies. A Commander deck shows these items once it has sideboard cards.
 
 If an add would break a deck rule (too many copies of a card, not legal in the format, outside the commander's colors, deck size), **Add Anyway?** explains why. **Cancel** is the default; **Add Anyway** adds it anyway. It's a warning, never a block.
 
@@ -40,8 +41,17 @@ The line under the buttons shows how much of the deck is claimed, e.g. "Main 60 
 
 **Print Ticked…** prints paper slips of the ticked tokens instead, for the ones you don't have (**Not Owned** ticks just those). Each slip is the token's name, type, rules text and power/toughness on plain white, with its color shown in the empty picture box (W, U, B, R, G, M for multicolor, N for colorless). **Copies of each** sets how many of every token. Nine fit on a US Letter page, each a little smaller than a card, so it slides into a sleeve in front of any card. Cut along the thin grey lines. To keep a PDF instead, pick **Microsoft Print to PDF** as the printer. A two-sided token prints one slip per side. Slips are for casual play at home; tournaments allow only real cards.
 
+## Versions
+**Versions…** keeps saved copies of the deck:
+- **Save Version…** saves the deck as it is now, with a note ("before the Bloomburrow upgrades"). One is also saved when the deck builder makes the deck, and before every restore.
+- Select one version to see what changed from it to the deck now; select two to compare them (cards added and removed, per part of the deck).
+- **Restore…** makes a version the deck again: the deck as it is now is saved as a version first (restore that to go back), its claimed copies are freed, the version's cards are claimed from your free copies, and what's missing goes on the Want List for the deck. The page's Undo starts over after a restore.
+- **Delete** removes a version.
+
+Versions are kept in **Deck Versions** in the data folder, by the deck's id, so renaming the deck keeps them.
+
 ## Tear Down
-**Tear Down…** gives every claimed copy back to Available and moves the deck file to the **Deleted Decks** folder (you can copy it back by hand). It can't be undone on the page. See [[howto-tear-down]].
+**Tear Down…** gives every claimed copy back to Available and moves the deck file to the **Deleted Decks** folder. If the deck has Want List rows, you tick the ones to keep for the Collection; the rest are removed (you can copy it back by hand). It can't be undone on the page. See [[howto-tear-down]].
 
 ## Undo
 **Undo** or [Ctrl+Z] takes back the last 30 changes **of the open deck**. Each deck keeps its own undo while BoE is open.

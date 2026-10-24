@@ -9,6 +9,7 @@
 ## Take the whole deck apart
 1. Open the deck on any deck page.
 2. Click **Tear Down…** and confirm.
+3. If the deck has cards on the Want List, a list of them opens, each with a **Keep** tick (**Select All** / **Select None**). Ticked cards stay on the Want List, for the **Collection**; unticked ones are removed. **Cancel** stops the tear-down.
 
 Every claimed copy goes back to Available, and the deck file moves to the **Deleted Decks** folder in your data folder.
 

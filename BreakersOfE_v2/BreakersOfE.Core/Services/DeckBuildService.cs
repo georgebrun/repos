@@ -34,11 +34,20 @@ namespace BreakersOfE.Services
         public List<string> Sources { get; } = new();
     }
 
-    /// <summary>What can I build: one commander you own and how much of a deck your free cards make for it.</summary>
+    /// <summary>
+    /// What can I build: one idea and how much of a deck your free cards make
+    /// for it — a commander you own (or a partner pair), or for 60-card decks
+    /// a color combination.
+    /// </summary>
     public sealed class BuildIdea
     {
+        /// <summary>The commander (Commander ideas; empty for 60-card).</summary>
         public DeckBuildService.CommanderChoice Commander { get; init; } = new("", 0, 0);
-        /// <summary>Free spells (not lands) in its colors, and the deck's spell slots (the guide's 99 minus lands).</summary>
+        /// <summary>The second commander of a partner pair (Partner, Background …), or null.</summary>
+        public DeckBuildService.CommanderChoice? Partner { get; init; }
+        /// <summary>60-card: the colors ("RG"); Commander: the commanders' identity.</summary>
+        public string ColorLetters { get; init; } = "";
+        /// <summary>Free spells (not lands; 60-card: copies, up to 4 each) in its colors, and the deck's spell slots.</summary>
         public int Spells { get; init; }
         public int SpellSlots { get; init; }
         /// <summary>Free nonbasic lands in its colors.</summary>
@@ -47,18 +56,27 @@ namespace BreakersOfE.Services
         public double RoleFill { get; init; }
         /// <summary>The roles they fall short in ("Ramp 4/10").</summary>
         public List<string> ShortOf { get; init; } = new();
-        /// <summary>"23 of its top 100" (EDHREC page saved), else "".</summary>
+        /// <summary>Commander: "23 of its top 100" (EDHREC page saved). 60-card: playsets and the most common creature type.</summary>
         public string Edhrec { get; init; } = "";
         public double Score { get; init; }
 
-        public string Name => Commander.Name;
-        public string Colors { get { var s = new string("WUBRG".Where(ch => Commander.ColorIdentity.ToUpperInvariant().Contains(ch)).ToArray()); return s.Length == 0 ? "C" : s; } }
+        public bool IsConstructed => Commander.Name.Length == 0;
+        public string Name => IsConstructed ? ColorNames(ColorLetters)
+            : Partner == null ? Commander.Name : $"{Commander.Name} + {Partner.Name}";
+        public string Colors => ColorLetters.Length == 0 ? "C" : ColorLetters;
         public string SpellsText => $"{Math.Min(Spells, SpellSlots)} of {SpellSlots}" + (Spells > SpellSlots ? $" (+{Spells - SpellSlots})" : "");
         public string RolesText => $"{RoleFill * 100:0}%";
         public string ShortText => ShortOf.Count == 0 ? "—" : string.Join(", ", ShortOf);
-        public string EdhrecText => Edhrec.Length == 0 ? "" : Edhrec;
+        public string EdhrecText => Edhrec;
         public string ReadyText => $"{Score * 100:0}%";
-        public string CommanderText => Commander.IsFree ? "Free" : "Yours, in use";
+        public string CommanderText => IsConstructed ? "—"
+            : Commander.IsFree && (Partner == null || Partner.IsFree) ? "Free" : "Yours, in use";
+
+        private static string ColorNames(string letters) => letters.Length == 0 ? "Colorless" :
+            string.Join(" + ", letters.Select(ch => ch switch
+            {
+                'W' => "White", 'U' => "Blue", 'B' => "Black", 'R' => "Red", 'G' => "Green", _ => ch.ToString(),
+            }));
     }
 
     /// <summary>
@@ -75,7 +93,7 @@ namespace BreakersOfE.Services
         public static async Task<BuildRun> BuildCommanderAsync(IReadOnlyList<string> commanderNames, BuildConstraints constraints,
                                                                CancellationToken ct = default, IProgress<string>? progress = null)
         {
-            var ctx = await PrepareAsync(commanderNames, constraints, ct, progress);
+            var ctx = await PrepareAsync(commanderNames, constraints, ct, progress, "commander");
             progress?.Report("Picking the cards…");
             return Build(ctx, ctx.Constraints, ct);
         }
@@ -84,15 +102,19 @@ namespace BreakersOfE.Services
         /// Everything a build needs, gathered once: the cards it may use (with
         /// EDHREC, tags, salt), the commanders, the combos. Guided Build keeps
         /// it for all its steps; a plain build uses it once.
+        /// <paramref name="legalityKey"/>: the format whose card list counts
+        /// ("commander", or a 60-card format's: "standard", "modern" …).
         /// </summary>
         public static async Task<BuildContext> PrepareAsync(IReadOnlyList<string> commanderNames, BuildConstraints constraints,
-                                                            CancellationToken ct = default, IProgress<string>? progress = null)
+                                                            CancellationToken ct = default, IProgress<string>? progress = null,
+                                                            string legalityKey = "commander")
         {
             var sources = new List<string>();
             progress?.Report(constraints.Sources == SourceMode.CollectionAndPool
                 ? "Reading your collection and the card pool…" : "Reading your collection…");
-            var candidates = await Task.Run(() => Candidates(constraints.Sources == SourceMode.CollectionAndPool, sources, ct), ct);
+            var candidates = await Task.Run(() => Candidates(constraints.Sources == SourceMode.CollectionAndPool, sources, ct, legalityKey), ct);
             ct.ThrowIfCancellationRequested();
+            if (constraints.IsConstructed) return await PrepareConstructedAsync(candidates, constraints, sources, ct, progress);
 
             // The commander(s): their color identity limits the deck.
             var commanders = commanderNames
@@ -101,13 +123,7 @@ namespace BreakersOfE.Services
                 .Where(x => x != null).Select(x => x!).ToList();
             if (commanders.Count == 0) throw new InvalidOperationException($"\"{string.Join(" + ", commanderNames)}\" isn't in the card pool.");
             string identity = new string("WUBRG".Where(ch => commanders.Any(x => x.ColorIdentity.Contains(ch))).ToArray());
-            var c = new BuildConstraints
-            {
-                Commanders = commanders.Select(x => x.Name).ToList(), ColorIdentity = identity, DeckSize = constraints.DeckSize,
-                Bracket = constraints.Bracket, Sources = constraints.Sources, SpendLimit = constraints.SpendLimit,
-                DeckValueCap = constraints.DeckValueCap, Locked = constraints.Locked, Excluded = constraints.Excluded,
-                UseGuide = constraints.UseGuide, Guide = constraints.Guide,
-            };
+            var c = constraints.With(commanders.Select(x => x.Name).ToList(), identity);
 
             // EDHREC for this commander (saved for 7 days; never required).
             try
@@ -132,25 +148,44 @@ namespace BreakersOfE.Services
             ct.ThrowIfCancellationRequested();
 
             // Combos among the cards it could use (Commander Spellbook).
-            var combos = new List<ComboInfo>();
-            if (DeckDataService.HasCombos)
-            {
-                var names = eligible.Select(e => e.Card.Name).Concat(c.Commanders).ToList();
-                progress?.Report("Looking for combos…");
-                combos = DeckDataService.CombosWithin(names)
-                    .Select(k => new ComboInfo
-                    {
-                        Cards = k.Cards, Results = string.Join("; ", k.Results),
-                        TwoCardInfinite = k.Cards.Count == 2 && DeckDataService.IsInfiniteOrWin(k),
-                    }).ToList();
-                sources.Add($"Commander Spellbook ({combos.Count:N0} combos among these cards)");
-            }
-            else sources.Add("Combos: not downloaded (run Update Database)");
+            var combos = CombosAmong(eligible.Select(e => e.Card.Name).Concat(c.Commanders), sources, progress);
             ct.ThrowIfCancellationRequested();
 
             var ctx = new BuildContext { Constraints = c, Commanders = commanders, Eligible = eligible, Left = left, Combos = combos };
             ctx.Sources.AddRange(sources);
             return ctx;
+        }
+
+        /// <summary>A 60-card deck: no commander or EDHREC; the colors chosen; combos among the legal cards.</summary>
+        private static Task<BuildContext> PrepareConstructedAsync(List<Candidate> candidates, BuildConstraints constraints,
+                                                                  List<string> sources, CancellationToken ct, IProgress<string>? progress)
+        {
+            string identity = new string("WUBRG".Where(ch => constraints.ColorIdentity.ToUpperInvariant().Contains(ch)).ToArray());
+            var c = constraints.With(Array.Empty<string>(), identity);
+            sources.Add("EDHREC: commander decks only (not used for 60-card)");
+            progress?.Report("Sorting the cards by what they do…");
+            var (eligible, left) = CandidatePool.Build(candidates, c);
+            ct.ThrowIfCancellationRequested();
+            var combos = CombosAmong(eligible.Select(e => e.Card.Name), sources, progress);
+            ct.ThrowIfCancellationRequested();
+            var ctx = new BuildContext { Constraints = c, Commanders = new(), Eligible = eligible, Left = left, Combos = combos };
+            ctx.Sources.AddRange(sources);
+            return Task.FromResult(ctx);
+        }
+
+        /// <summary>Commander Spellbook's combos among these cards (empty, and said so, when not downloaded).</summary>
+        private static List<ComboInfo> CombosAmong(IEnumerable<string> names, List<string> sources, IProgress<string>? progress)
+        {
+            if (!DeckDataService.HasCombos) { sources.Add("Combos: not downloaded (run Update Database)"); return new(); }
+            progress?.Report("Looking for combos…");
+            var combos = DeckDataService.CombosWithin(names.ToList())
+                .Select(k => new ComboInfo
+                {
+                    Cards = k.Cards, Results = string.Join("; ", k.Results),
+                    TwoCardInfinite = k.Cards.Count == 2 && DeckDataService.IsInfiniteOrWin(k),
+                }).ToList();
+            sources.Add($"Commander Spellbook ({combos.Count:N0} combos among these cards)");
+            return combos;
         }
 
         /// <summary>Build from a prepared context (<paramref name="c"/>: its constraints, perhaps with other locked cards).</summary>
@@ -233,163 +268,348 @@ namespace BreakersOfE.Services
                 ?? db.PoolCards.AsNoTracking().FirstOrDefault(x => x.Name.StartsWith(name + " // ") && !x.IsToken);
         }
 
-        // ══ What can I build? ═══════════════════════════════════════════════
+        /// <summary>A card typed by name (any case; a double-faced card by its front name), or null. Not a token.</summary>
+        public static Models.PoolCard? FindCardByName(string typed)
+        {
+            string name = (typed ?? "").Trim();
+            if (name.Length == 0) return null;
+            if (PoolCardByName(name) is { } exact) return exact;
+            string lower = name.ToLowerInvariant();
+            using var db = new AppDbContext();
+            return db.PoolCards.AsNoTracking().FirstOrDefault(x => !x.IsToken && x.Name.ToLower() == lower)
+                ?? db.PoolCards.AsNoTracking().FirstOrDefault(x => !x.IsToken && x.Name.ToLower().StartsWith(lower + " // "));
+        }
+
+        // ══ Rule 0 sheet for a deck ═════════════════════════════════════════
 
         /// <summary>
-        /// For each commander you own (a free copy; with <paramref name="includeInUse"/>
-        /// also ones in decks): how much of a deck your free cards already make —
-        /// spells in its colors, how far they go toward the guide's roles, and
-        /// (when EDHREC's page for it is saved) how many of its most-played cards
-        /// are free. Best first. Only your collection is read; nothing is downloaded.
+        /// The Rule 0 sheet for a saved Commander deck (Deck Statistics): its
+        /// main deck and commander as the engine sees them — roles from card
+        /// tags (else rules text), Game Changers, salt, and the combos among its
+        /// cards. Bracket aimed for isn't known for a deck, so it's left out.
         /// </summary>
-        public static List<BuildIdea> WhatCanIBuild(bool includeInUse, CancellationToken ct = default, IProgress<string>? progress = null)
+        public static string Rule0For(Models.Deck deck)
+        {
+            var lines = deck.Cards.Where(c => !c.IsTokenLine && c.Category != Models.DeckCardCategory.Sideboard).ToList();
+            var sids = lines.Select(c => c.ScryfallId).Where(x => !string.IsNullOrEmpty(x)).Distinct().ToList();
+            Dictionary<string, string> oracleOf;
+            using (var db = new AppDbContext())
+                oracleOf = db.PoolCards.AsNoTracking().Where(p => sids.Contains(p.ScryfallId))
+                             .Select(p => new { p.ScryfallId, p.OracleId }).ToList()
+                             .GroupBy(p => p.ScryfallId).ToDictionary(g => g.Key, g => g.First().OracleId ?? "");
+            var tags = DeckDataService.TagsForMany(oracleOf.Values.Where(x => x.Length > 0).Distinct());
+            bool salt = EdhrecService.HasSalt;
+
+            var draft = new DraftDeck();
+            foreach (var g in lines.GroupBy(c => c.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                var c = g.First();
+                string oracle = oracleOf.GetValueOrDefault(c.ScryfallId) ?? "";
+                var card = new Candidate
+                {
+                    Name = c.Name, OracleId = oracle, TypeLine = c.TypeLine, OracleText = c.OracleText, ManaCost = c.ManaCost,
+                    ManaValue = c.ManaValue, ColorIdentity = c.ColorIdentity, IsGameChanger = g.Any(x => x.IsGameChanger),
+                    Tags = oracle.Length > 0 && tags.TryGetValue(oracle, out var t) ? t : Array.Empty<string>(),
+                    Price = c.PriceUsd, Salt = salt ? EdhrecService.SaltOf(c.Name)?.Score : null,
+                };
+                var (roles, _) = RoleClassifier.Classify(card);
+                bool commander = g.Any(x => DeckEditService.SectionOf(x) == Models.DeckCardCategory.Commander);
+                draft.Picks.Add(new Pick { Card = card, Roles = roles, Copies = g.Sum(x => x.TotalQuantity), IsCommander = commander });
+            }
+            draft.CardCount = draft.Picks.Sum(p => p.Copies);
+            if (DeckDataService.HasCombos)
+            {
+                var names = new HashSet<string>(draft.Picks.Select(p => p.Card.Name), StringComparer.OrdinalIgnoreCase);
+                foreach (var k in DeckDataService.CombosWithin(names).Where(k => k.Cards.All(names.Contains)))
+                    draft.Combos.Add(new ComboInfo
+                    {
+                        Cards = k.Cards, Results = string.Join("; ", k.Results),
+                        TwoCardInfinite = k.Cards.Count == 2 && DeckDataService.IsInfiniteOrWin(k),
+                    });
+            }
+            var commanders = draft.Picks.Where(p => p.IsCommander).Select(p => p.Card).ToList();
+            string identity = new string("WUBRG".Where(ch => commanders.Any(x => x.ColorIdentity.ToUpperInvariant().Contains(ch))).ToArray());
+            var c0 = new BuildConstraints { Commanders = commanders.Select(x => x.Name).ToList(), ColorIdentity = identity, Bracket = 0 };
+            return Rule0.Sheet(draft, c0, deck.Name);
+        }
+
+        // ══ What can I build? ═══════════════════════════════════════════════
+
+        /// <summary>A free card for What can I build: its roles, colors and free copies.</summary>
+        private sealed record FreeCard(Candidate Card, HashSet<Role> Roles, HashSet<char> Colors);
+
+        private static List<FreeCard> FreeCards(string legalityKey, CancellationToken ct, IProgress<string>? progress)
         {
             progress?.Report("Reading your collection…");
             var sources = new List<string>();
-            var free = Candidates(false, sources, ct).Where(x => x.FreeCopies > 0 && x.Legal && !x.IsBasicLand).ToList();
+            var free = Candidates(false, sources, ct, legalityKey).Where(x => x.FreeCopies > 0 && x.Legal && !x.IsBasicLand).ToList();
             ct.ThrowIfCancellationRequested();
             progress?.Report("Sorting your cards by what they do…");
-            var cards = free.Select(x => (card: x, roles: RoleClassifier.Classify(x).Roles,
-                                          colors: new HashSet<char>(x.ColorIdentity.ToUpperInvariant().Where(ch => "WUBRG".Contains(ch)))))
-                            .ToList();
+            return free.Select(x => new FreeCard(x, RoleClassifier.Classify(x).Roles,
+                                                 new HashSet<char>(x.ColorIdentity.ToUpperInvariant().Where(ch => "WUBRG".Contains(ch)))))
+                       .ToList();
+        }
+
+        /// <summary>
+        /// For each commander you own (a free copy; with <paramref name="includeInUse"/>
+        /// also ones in decks) — and each partner pair you own (Partner, Partner
+        /// with, Friends forever, a Background …) — how much of a deck your free
+        /// cards already make: spells in its colors, how far they go toward the
+        /// guide's roles, and (when EDHREC's page is saved) how many of its most-played
+        /// cards are free. Best first. Only your collection is read; nothing is downloaded.
+        /// </summary>
+        public static List<BuildIdea> WhatCanIBuild(bool includeInUse, CancellationToken ct = default, IProgress<string>? progress = null)
+        {
+            var cards = FreeCards("commander", ct, progress);
             var guide = RoleGuide.CommanderDefault();
             int spellSlots = 99 - (guide.For(Role.Land)?.Count ?? 37);
 
             progress?.Report("Finding your commanders…");
-            var commanders = CommanderChoices().Where(x => !x.IsBackground && (x.IsFree || includeInUse && x.Owned > 0)).ToList();
+            var all = CommanderChoices().Where(x => x.IsFree || includeInUse && x.Owned > 0).ToList();
+            var commanders = all.Where(x => !x.IsBackground).ToList();
             var ideas = new List<BuildIdea>();
+
+            BuildIdea Evaluate(DeckBuildService.CommanderChoice cmd, DeckBuildService.CommanderChoice? partner)
+            {
+                var identity = new HashSet<char>((cmd.ColorIdentity + (partner?.ColorIdentity ?? "")).ToUpperInvariant().Where(ch => "WUBRG".Contains(ch)));
+                var fits = cards.Where(x => x.Colors.IsSubsetOf(identity) &&
+                                            !x.Card.Name.Equals(cmd.Name, StringComparison.OrdinalIgnoreCase) &&
+                                            !(partner != null && x.Card.Name.Equals(partner.Name, StringComparison.OrdinalIgnoreCase))).ToList();
+                int spells = fits.Count(x => !x.Card.IsLand);
+                int lands = fits.Count(x => x.Card.IsLand);
+                var (roleFill, shortOf) = RoleFill(guide, fits, copies: false);
+                double spellFill = Math.Min(1.0, spells / (double)Math.Max(1, spellSlots - (partner != null ? 1 : 0)));
+
+                // EDHREC's page, only if it's saved already.
+                string edhrec = "";
+                double edhrecFill = -1;
+                var names = partner == null ? new[] { cmd.Name } : new[] { cmd.Name, partner.Name };
+                var page = EdhrecService.Saved(names);
+                if (page != null)
+                {
+                    var top = page.Cards.Where(x => x.InclusionPercent >= 0).OrderByDescending(x => x.InclusionPercent).Take(100)
+                                        .Select(x => DeckDataService.FrontName(x.Name)).ToList();
+                    var freeNames = new HashSet<string>(fits.Select(x => DeckDataService.FrontName(x.Card.Name)), StringComparer.OrdinalIgnoreCase);
+                    int have = top.Count(freeNames.Contains);
+                    if (top.Count > 0) { edhrecFill = have / (double)top.Count; edhrec = $"{have} of its top {top.Count}"; }
+                }
+                double score = 0.55 * spellFill + 0.45 * roleFill;
+                if (edhrecFill >= 0) score = 0.7 * score + 0.3 * Math.Min(1.0, edhrecFill * 2);
+                return new BuildIdea
+                {
+                    Commander = cmd, Partner = partner, ColorLetters = new string("WUBRG".Where(identity.Contains).ToArray()),
+                    Spells = spells, Lands = lands, SpellSlots = spellSlots - (partner != null ? 1 : 0),
+                    RoleFill = roleFill, ShortOf = shortOf, Edhrec = edhrec, Score = score,
+                };
+            }
+
             int done = 0;
             foreach (var cmd in commanders)
             {
                 ct.ThrowIfCancellationRequested();
                 if (++done % 20 == 0) progress?.Report($"Checking commanders… {done:N0} of {commanders.Count:N0}");
-                var identity = new HashSet<char>(cmd.ColorIdentity.ToUpperInvariant().Where(ch => "WUBRG".Contains(ch)));
-                var fits = cards.Where(x => x.colors.IsSubsetOf(identity) && !x.card.Name.Equals(cmd.Name, StringComparison.OrdinalIgnoreCase)).ToList();
-                int spells = fits.Count(x => !x.card.IsLand);
-                int lands = fits.Count(x => x.card.IsLand);
+                ideas.Add(Evaluate(cmd, null));
+            }
 
-                // The guide's roles: how many of each target the free cards could fill.
-                int need = 0, got = 0;
-                var shortOf = new List<string>();
-                foreach (var t in guide.Targets.Where(t => t.Role != Role.Land && t.Enabled && t.Count > 0))
+            // Partner pairs you own: each pair once (a Background always second).
+            progress?.Report("Checking partner pairs…");
+            var pairable = all.Where(x => x.CanHaveSecond).ToList();
+            foreach (var a in pairable.Where(x => !x.IsBackground))
+                foreach (var b in pairable)
                 {
-                    int have = fits.Count(x => !x.card.IsLand && x.roles.Contains(t.Role));
-                    need += t.Count;
-                    got += Math.Min(have, t.Count);
-                    if (have < t.Count) shortOf.Add($"{RoleClassifier.Name(t.Role)} {have}/{t.Count}");
+                    ct.ThrowIfCancellationRequested();
+                    if (!b.IsBackground && string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                    if (!a.CanPairWith(b)) continue;
+                    ideas.Add(Evaluate(a, b));
                 }
-                double roleFill = need == 0 ? 1 : got / (double)need;
-                double spellFill = Math.Min(1.0, spells / (double)spellSlots);
+            return ideas.OrderByDescending(x => x.Score).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        }
 
-                // EDHREC's page, only if it's saved already.
-                string edhrec = "";
-                double edhrecFill = -1;
-                var page = EdhrecService.Saved(new[] { cmd.Name });
-                if (page != null)
+        /// <summary>
+        /// 60-card: for each color combination (one, two and three colors, and
+        /// colorless), how much of a deck your free cards legal in the format
+        /// make — spell copies (up to 4 each), playsets, the guide's roles, and the
+        /// most common creature type (a tribe to build around). Best first.
+        /// </summary>
+        public static List<BuildIdea> WhatCanIBuild60(string legalityKey, CancellationToken ct = default, IProgress<string>? progress = null)
+        {
+            var cards = FreeCards(legalityKey, ct, progress).Where(x => !CandidatePool.NeedsACommander(x.Card)).ToList();
+            var guide = RoleGuide.ConstructedDefault();
+            int spellSlots = 60 - (guide.For(Role.Land)?.Count ?? 24);
+            var combos = new List<string> { "" };
+            const string wubrg = "WUBRG";
+            for (int a = 0; a < 5; a++)
+            {
+                combos.Add(wubrg[a].ToString());
+                for (int b = a + 1; b < 5; b++)
                 {
-                    var top = page.Cards.Where(x => x.InclusionPercent >= 0).OrderByDescending(x => x.InclusionPercent).Take(100)
-                                        .Select(x => DeckDataService.FrontName(x.Name)).ToList();
-                    var freeNames = new HashSet<string>(fits.Select(x => DeckDataService.FrontName(x.card.Name)), StringComparer.OrdinalIgnoreCase);
-                    int have = top.Count(freeNames.Contains);
-                    if (top.Count > 0)
-                    {
-                        edhrecFill = have / (double)top.Count;
-                        edhrec = $"{have} of its top {top.Count}";
-                    }
+                    combos.Add($"{wubrg[a]}{wubrg[b]}");
+                    for (int c = b + 1; c < 5; c++) combos.Add($"{wubrg[a]}{wubrg[b]}{wubrg[c]}");
                 }
-
-                double score = 0.55 * spellFill + 0.45 * roleFill;
-                if (edhrecFill >= 0) score = 0.7 * score + 0.3 * Math.Min(1.0, edhrecFill * 2);
+            }
+            var ideas = new List<BuildIdea>();
+            foreach (var letters in combos)
+            {
+                ct.ThrowIfCancellationRequested();
+                progress?.Report($"Checking {(letters.Length == 0 ? "colorless" : letters)}…");
+                var set = new HashSet<char>(letters);
+                var fits = cards.Where(x => CandidatePool.FitsColors(x.Card, set)).ToList();
+                var spellsList = fits.Where(x => !x.Card.IsLand).ToList();
+                int Copies(FreeCard x) => Math.Min(x.Card.Restricted ? 1 : 4, x.Card.FreeCopies);
+                int spells = spellsList.Sum(Copies);
+                int playsets = spellsList.Count(x => x.Card.FreeCopies >= 4);
+                int lands = fits.Count(x => x.Card.IsLand && x.Colors.Count >= 2 && x.Colors.IsSubsetOf(set));
+                var (roleFill, shortOf) = RoleFill(guide, fits, copies: true);
+                // The creature type most of these creatures share: a tribe to build around.
+                var tribe = spellsList.Where(x => x.Card.IsCreature)
+                    .SelectMany(x => CreatureTypes(x.Card.TypeLine).Select(t => (t, n: Copies(x))))
+                    .GroupBy(x => x.t).Select(g => (Type: g.Key, N: g.Sum(x => x.n)))
+                    .OrderByDescending(x => x.N).FirstOrDefault();
+                string notes = $"{playsets} playset{(playsets == 1 ? "" : "s")}" +
+                               (tribe.N >= 6 ? $" · most common type: {tribe.Type} ({tribe.N})" : "");
+                double score = 0.5 * Math.Min(1.0, spells / (double)spellSlots) + 0.3 * roleFill + 0.2 * Math.Min(1.0, playsets / 9.0);
+                // More colors make a shakier mana base: a little less for three.
+                if (letters.Length == 3) score *= 0.95;
                 ideas.Add(new BuildIdea
                 {
-                    Commander = cmd, Spells = spells, Lands = lands, SpellSlots = spellSlots,
-                    RoleFill = roleFill, ShortOf = shortOf, Edhrec = edhrec, Score = score,
+                    ColorLetters = letters, Spells = spells, SpellSlots = spellSlots, Lands = lands,
+                    RoleFill = roleFill, ShortOf = shortOf, Edhrec = notes, Score = score,
                 });
             }
-            return ideas.OrderByDescending(x => x.Score).ThenBy(x => x.Commander.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            return ideas.OrderByDescending(x => x.Score).ThenBy(x => x.ColorLetters.Length).ToList();
+        }
+
+        /// <summary>How far these free cards go toward the guide's roles (0–1), and the roles they fall short in.</summary>
+        private static (double Fill, List<string> ShortOf) RoleFill(RoleGuide guide, List<FreeCard> fits, bool copies)
+        {
+            int need = 0, got = 0;
+            var shortOf = new List<string>();
+            foreach (var t in guide.Targets.Where(t => t.Role != Role.Land && t.Enabled && t.Count > 0))
+            {
+                int have = fits.Where(x => !x.Card.IsLand && x.Roles.Contains(t.Role))
+                               .Sum(x => copies ? Math.Min(4, x.Card.FreeCopies) : 1);
+                need += t.Count;
+                got += Math.Min(have, t.Count);
+                if (have < t.Count) shortOf.Add($"{RoleClassifier.Name(t.Role)} {have}/{t.Count}");
+            }
+            return (need == 0 ? 1 : got / (double)need, shortOf);
+        }
+
+        /// <summary>"Legendary Creature — Elf Druid" → Elf, Druid (the front face's subtypes).</summary>
+        private static IEnumerable<string> CreatureTypes(string typeLine)
+        {
+            string front = typeLine.Split(" // ")[0];
+            int dash = front.IndexOf('—');
+            return dash < 0 ? Array.Empty<string>()
+                : front[(dash + 1)..].Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
 
         // ══ From draft to deck ═══════════════════════════════════════════════
 
         /// <summary>
-        /// The draft as a deck (not saved): each card in a printing you have free
-        /// copies of (non-foil first), or else the cheapest printing in the pool;
-        /// the commander in the command zone.
+        /// The draft as a deck (not saved): each card in the printings you have
+        /// free copies of (non-foil first, copies spread over them), the rest in
+        /// the cheapest printing in the pool; the commander in the command zone.
+        /// 60-card: a Constructed deck in <paramref name="constructedFormat"/>.
         /// </summary>
-        public static Models.Deck ToDeck(DraftDeck draft, string name)
+        public static Models.Deck ToDeck(DraftDeck draft, string name, string? constructedFormat = null)
         {
-            var deck = DeckService.CreateNew(name, Models.DeckType.Commander);
+            var deck = DeckService.CreateNew(name, constructedFormat != null ? Models.DeckType.Standard : Models.DeckType.Commander);
+            if (constructedFormat != null) deck.ConstructedFormat = constructedFormat;
             using var cdb = new CollectionDbContext();
             using var db = new AppDbContext();
-            foreach (var p in draft.Picks)
+            // The deck, then the swap options in the sideboard.
+            foreach (var (p, swap) in draft.Picks.Select(x => (x, false)).Concat(draft.SwapOptions.Select(x => (x, true))))
             {
                 string cardName = p.Card.Name;
-                // A printing you have free copies of …
-                var own = cdb.CollectionEntries.AsNoTracking()
-                    .Where(x => x.Name == cardName && x.Quantity > x.UsedCount)
-                    .Select(x => new { x.ScryfallId, x.Finish, Free = x.Quantity - x.UsedCount })
-                    .ToList()
-                    .OrderBy(x => x.Finish == CardFinish.NonFoil ? 0 : 1).ThenByDescending(x => x.Free)
-                    .FirstOrDefault();
-                Models.PoolCard? pool = null;
-                string finish = CardFinish.NonFoil;
-                if (own != null)
+                var section = swap ? Models.DeckCardCategory.Sideboard
+                    : p.IsCommander ? Models.DeckCardCategory.Commander : Models.DeckCardCategory.Mainboard;
+                int left = Math.Max(1, p.Copies);
+                // Printings you have free copies of (basic lands too: yours before buying any) …
                 {
-                    pool = db.PoolCards.AsNoTracking().FirstOrDefault(x => x.ScryfallId == own.ScryfallId);
-                    finish = CardFinish.Normalize(own.Finish);
+                    var own = cdb.CollectionEntries.AsNoTracking()
+                        .Where(x => x.Name == cardName && x.Quantity > x.UsedCount)
+                        .Select(x => new { x.ScryfallId, x.Finish, Free = x.Quantity - x.UsedCount })
+                        .ToList()
+                        .OrderBy(x => x.Finish == CardFinish.NonFoil ? 0 : 1).ThenByDescending(x => x.Free);
+                    foreach (var o in own)
+                    {
+                        if (left <= 0) break;
+                        var printing = db.PoolCards.AsNoTracking().FirstOrDefault(x => x.ScryfallId == o.ScryfallId);
+                        if (printing == null) continue;
+                        int n = Math.Min(left, o.Free);
+                        DeckEditService.Add(deck, DeckService.FromPoolCard(printing), CardFinish.Normalize(o.Finish), n, section);
+                        left -= n;
+                    }
                 }
-                // … else the cheapest printing (non-foil when it comes in it).
-                if (pool == null)
-                {
-                    var printings = db.PoolCards.AsNoTracking().Where(x => x.Name == cardName && !x.IsToken).ToList();
-                    pool = printings.Where(x => x.IsNonFoil && x.PriceUsd > 0).OrderBy(x => x.PriceUsd).FirstOrDefault()
+                if (left <= 0) continue;
+                // … the rest: the cheapest printing (non-foil when it comes in it).
+                var printings = db.PoolCards.AsNoTracking().Where(x => x.Name == cardName && !x.IsToken).ToList();
+                var pool = printings.Where(x => x.IsNonFoil && x.PriceUsd > 0).OrderBy(x => x.PriceUsd).FirstOrDefault()
                            ?? printings.FirstOrDefault(x => x.IsNonFoil) ?? printings.FirstOrDefault();
-                    if (pool != null) finish = pool.IsNonFoil ? CardFinish.NonFoil : pool.IsFoil ? CardFinish.Foil : CardFinish.Etched;
-                }
                 if (pool == null) continue;                          // not in the pool any more: left out (said so by the caller)
-                var section = p.IsCommander ? Models.DeckCardCategory.Commander : Models.DeckCardCategory.Mainboard;
-                DeckEditService.Add(deck, DeckService.FromPoolCard(pool), finish, Math.Max(1, p.Copies), section);
+                string finish = pool.IsNonFoil ? CardFinish.NonFoil : pool.IsFoil ? CardFinish.Foil : CardFinish.Etched;
+                DeckEditService.Add(deck, DeckService.FromPoolCard(pool), finish, left, section);
             }
             return deck;
         }
 
         /// <summary>
-        /// Accept a draft: save it as a new Commander deck, claim your free
+        /// Accept a draft: save it as a new deck (Commander, or Constructed in
+        /// <paramref name="constructedFormat"/>), claim your free
         /// copies for it, and put everything it still misses on the Want List
         /// (for this deck). Returns the deck and what happened.
         /// </summary>
-        public static (Models.Deck Deck, string Message, bool Warning) Accept(DraftDeck draft, string name)
+        public static (Models.Deck Deck, string Message, bool Warning) Accept(DraftDeck draft, string name, string? constructedFormat = null)
         {
-            var deck = ToDeck(draft, name);
-            int lost = draft.Picks.Sum(p => p.Copies) - deck.Cards.Sum(c => c.TotalQuantity);
+            var deck = ToDeck(draft, name, constructedFormat);
+            int swaps = deck.Cards.Where(c => c.Category == Models.DeckCardCategory.Sideboard).Sum(c => c.TotalQuantity);
+            int lost = draft.Picks.Sum(p => p.Copies) + draft.SwapOptions.Sum(p => p.Copies) - deck.Cards.Sum(c => c.TotalQuantity);
             deck.FilePath = DeckService.NewDeckPath(name);
             DeckService.Save(deck);                                  // gives it its id (claims are keyed on it)
 
-            int claimed = 0;
+            var (claimed, wanted, problems) = ClaimAndWant(deck);
+            if (lost > 0) problems.Add($"{lost} card(s) aren't in the card pool and were left out");
+            DeckVersionService.SaveVersion(deck, "Built by the deck builder");
+
+            int main = deck.Cards.Where(c => c.Category != Models.DeckCardCategory.Sideboard).Sum(c => c.TotalQuantity);
+            string msg = $"Created \"{deck.Name}\": {main} cards, {claimed} claimed from your collection" +
+                         (wanted > 0 ? $", {wanted} on the Want List for this deck" : "") +
+                         (swaps > 0 ? $", {swaps} swap options in the sideboard (not claimed)" : "") + "." +
+                         (problems.Count > 0 ? "  " + string.Join("; ", problems.Take(3)) + "." : "");
+            return (deck, msg, problems.Count > 0);
+        }
+
+        /// <summary>
+        /// Claim your free copies for a saved deck's lines (the sideboard's swap
+        /// options aren't claimed), then put whatever the deck still needs on the
+        /// Want List for it. Used by Accept and by restoring a deck version.
+        /// </summary>
+        public static (int Claimed, int Wanted, List<string> Problems) ClaimAndWant(Models.Deck deck)
+        {
+            int claimed = 0, wanted = 0;
             var problems = new List<string>();
-            foreach (var line in deck.Cards)
-                foreach (var f in new[] { CardFinish.NonFoil, CardFinish.Foil, CardFinish.Etched })
+            var finishes = new[] { CardFinish.NonFoil, CardFinish.Foil, CardFinish.Etched };
+            foreach (var line in deck.Cards.Where(c => c.Category != Models.DeckCardCategory.Sideboard))
+                foreach (var f in finishes)
                 {
                     int n = line.CountOf(f);
                     if (n <= 0) continue;
-                    var r = CollectionEditService.ClaimOwned(CollectionEditService.CardsTable, deck, line.ScryfallId, f, n, line.Name);
+                    var r = CollectionEditService.ClaimOwned(CollectionEditService.TableOf(line), deck, line.ScryfallId, f, n, line.Name);
                     if (r.Changed > 0) claimed += r.Changed;
                 }
 
-            int wanted = 0;
-            foreach (var need in CollectionEditService.ClaimStatus(deck).Where(l => l.Needed > 0 && l.Table == CollectionEditService.CardsTable))
+            // Still needed: the deck's demand without the sideboard, less what's claimed.
+            foreach (var need in CollectionEditService.ClaimStatus(deck, withSideboard: false).Where(l => l.Table == CollectionEditService.CardsTable))
             {
+                int missing = need.Needed;
+                if (missing <= 0) continue;
                 var pool = CollectionEditService.FindPoolCard(CollectionEditService.CardsTable, need.ScryfallId);
                 if (pool == null) { problems.Add($"{need.Name}: not in the card pool"); continue; }
-                var r = CollectionEditService.TopUpWantList(pool, need.Finish, need.Needed, deck);
+                var r = CollectionEditService.TopUpWantList(pool, need.Finish, missing, deck);
                 if (r.Changed > 0) wanted += r.Changed; else if (r.Warning) problems.Add(r.Message);
             }
-            if (lost > 0) problems.Add($"{lost} card(s) aren't in the card pool and were left out");
-
-            string msg = $"Created \"{deck.Name}\": {deck.Cards.Sum(c => c.TotalQuantity)} cards, {claimed} claimed from your collection" +
-                         (wanted > 0 ? $", {wanted} on the Want List for this deck" : "") + "." +
-                         (problems.Count > 0 ? "  " + string.Join("; ", problems.Take(3)) + "." : "");
-            return (deck, msg, problems.Count > 0);
+            return (claimed, wanted, problems);
         }
 
         private static Candidate With(Candidate x, double? inclusion, double? synergy) => new()
@@ -405,7 +625,8 @@ namespace BreakersOfE.Services
         /// plus — with <paramref name="includePool"/> — every Commander-legal
         /// card in the pool (to get). Tags, salt and Game Changer flags added.
         /// </summary>
-        private static List<Candidate> Candidates(bool includePool, List<string> sources, CancellationToken ct = default)
+        private static List<Candidate> Candidates(bool includePool, List<string> sources, CancellationToken ct = default,
+                                                  string legalityKey = "commander")
         {
             var rows = new Dictionary<string, Row>(StringComparer.OrdinalIgnoreCase);
 
@@ -418,7 +639,7 @@ namespace BreakersOfE.Services
                              .ToList())
                 {
                     if (string.IsNullOrWhiteSpace(e.Name)) continue;
-                    var r = Get(rows, e.Name, e.OracleId, e.TypeLine, e.OracleText, e.ManaCost, e.ManaValue, e.ColorIdentity, e.Keywords, e.LegalitiesJson);
+                    var r = Get(rows, e.Name, e.OracleId, e.TypeLine, e.OracleText, e.ManaCost, e.ManaValue, e.ColorIdentity, e.Keywords, e.LegalitiesJson, legalityKey);
                     r.Owned += Math.Max(0, e.Quantity);
                     r.Free += Math.Max(0, e.Quantity - Math.Max(0, e.UsedCount));
                     if (e.Price is { } p && p > 0 && (r.Price == null || p < r.Price)) r.Price = p;
@@ -436,13 +657,14 @@ namespace BreakersOfE.Services
                 if (includePool)
                 {
                     int before = rows.Count;
+                    string legalOne = $"\"{legalityKey}\":\"legal\"", restrictedOne = $"\"{legalityKey}\":\"restricted\"";
                     foreach (var p in db.PoolCards.AsNoTracking()
-                                 .Where(x => !x.IsToken && x.LegalitiesJson.Contains("\"commander\":\"legal\""))
+                                 .Where(x => !x.IsToken && (x.LegalitiesJson.Contains(legalOne) || x.LegalitiesJson.Contains(restrictedOne)))
                                  .Select(x => new { x.Name, x.OracleId, x.TypeLine, x.OracleText, x.ManaCost, x.ManaValue, x.ColorIdentity,
                                                     x.Keywords, x.LegalitiesJson, x.PriceUsd, x.PriceUsdFoil, x.IsGameChanger })
                                  .ToList())
                     {
-                        var r = Get(rows, p.Name, p.OracleId, p.TypeLine, p.OracleText, p.ManaCost, p.ManaValue, p.ColorIdentity, p.Keywords, p.LegalitiesJson);
+                        var r = Get(rows, p.Name, p.OracleId, p.TypeLine, p.OracleText, p.ManaCost, p.ManaValue, p.ColorIdentity, p.Keywords, p.LegalitiesJson, legalityKey);
                         var price = new[] { p.PriceUsd, p.PriceUsdFoil }.Where(x => x is > 0).Min();
                         if (price is { } pr && (r.Price == null || pr < r.Price)) r.Price = pr;
                         r.GameChanger |= p.IsGameChanger;
@@ -465,7 +687,7 @@ namespace BreakersOfE.Services
                 ManaValue = r.ManaValue, ColorIdentity = r.ColorIdentity,
                 Keywords = (r.Keywords ?? "").Split('|', ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
                 Tags = tags.TryGetValue(r.OracleId, out var t) ? t : Array.Empty<string>(),
-                Legal = r.CommanderLegal, IsGameChanger = r.GameChanger,
+                Legal = r.Legal, Restricted = r.Restricted, IsGameChanger = r.GameChanger,
                 OwnedCopies = r.Owned, FreeCopies = r.Free, Price = r.Price,
                 Salt = salt ? EdhrecService.SaltOf(r.Name)?.Score : null,
             }).ToList();
@@ -487,34 +709,37 @@ namespace BreakersOfE.Services
         {
             public string Name = "", OracleId = "", TypeLine = "", OracleText = "", ManaCost = "", ColorIdentity = "", Keywords = "";
             public double ManaValue;
-            public bool CommanderLegal = true, GameChanger;
+            public bool Legal = true, Restricted, GameChanger;
             public int Owned, Free;
             public decimal? Price;
         }
 
         private static Row Get(Dictionary<string, Row> rows, string name, string? oracleId, string? type, string? text, string? cost,
-                               double mv, string? identity, string? keywords, string? legalities)
+                               double mv, string? identity, string? keywords, string? legalities, string legalityKey)
         {
             if (rows.TryGetValue(name, out var r)) return r;
             r = new Row
             {
                 Name = name, OracleId = oracleId ?? "", TypeLine = type ?? "", OracleText = text ?? "", ManaCost = cost ?? "",
                 ManaValue = mv, ColorIdentity = identity ?? "", Keywords = keywords ?? "",
-                CommanderLegal = CommanderLegal(legalities),
             };
+            (r.Legal, r.Restricted) = Legality(legalities, legalityKey);
             rows[name] = r;
             return r;
         }
 
-        private static bool CommanderLegal(string? legalitiesJson)
+        /// <summary>Legal (or restricted) in the format, and restricted (one copy). Unknown: allowed (Format Check says otherwise).</summary>
+        private static (bool Legal, bool Restricted) Legality(string? legalitiesJson, string key)
         {
-            if (string.IsNullOrWhiteSpace(legalitiesJson)) return true;          // unknown: allowed (Format Check says otherwise)
+            if (string.IsNullOrWhiteSpace(legalitiesJson)) return (true, false);
             try
             {
                 using var doc = JsonDocument.Parse(legalitiesJson);
-                return !doc.RootElement.TryGetProperty("commander", out var v) || v.GetString() is "legal" or "restricted";
+                if (!doc.RootElement.TryGetProperty(key, out var v)) return (true, false);
+                string status = v.GetString() ?? "";
+                return (status is "legal" or "restricted", status == "restricted");
             }
-            catch { return true; }
+            catch { return (true, false); }
         }
     }
 }

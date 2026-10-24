@@ -31,6 +31,8 @@ namespace BreakersOfE.DeckBuilder
 
         /// <summary>Legal in the deck's format.</summary>
         public bool Legal { get; init; } = true;
+        /// <summary>Restricted in the format (Vintage): one copy at most.</summary>
+        public bool Restricted { get; init; }
         /// <summary>On the Commander Game Changers list.</summary>
         public bool IsGameChanger { get; init; }
 
@@ -52,6 +54,8 @@ namespace BreakersOfE.DeckBuilder
                                    TypeLine.StartsWith("Snow Basic", StringComparison.Ordinal);
         public bool IsCreature => TypeLine.Contains("Creature", StringComparison.Ordinal);
         public bool IsLegendaryCreature => TypeLine.Contains("Legendary", StringComparison.Ordinal) && IsCreature;
+        /// <summary>"A deck can have any number of cards named …" (Relentless Rats, Persistent Petitioners …).</summary>
+        public bool IsAnyNumber => OracleText.Contains("A deck can have any number of cards named", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>Free in your collection, owned but all in use, or not owned.</summary>
         public CardSource Source => FreeCopies > 0 ? CardSource.Collection : CardSource.Pool;

@@ -125,11 +125,30 @@ namespace BreakersOfE.Views.Pages
             // Wants from before the For column ("For: Deck" in Notes) become wants for that deck.
             int converted = CollectionEditService.ConvertForNotes();
             CollectionEditService.RefreshWantDeckNames();
+            string orphans = SettleOrphanWants();
             FillForChoices();
             _top.LoadPool(PoolTag);
             _bottom.LoadPool(CollectionEditService.WantTable);
             RefreshCounts();
-            ShowStatus(converted > 0 ? $"{converted} want(s) with \"For: deck\" in their notes are now wants for that deck (see the For column)." : "", false);
+            ShowStatus(orphans.Length > 0 ? orphans
+                : converted > 0 ? $"{converted} want(s) with \"For: deck\" in their notes are now wants for that deck (see the For column)." : "", false);
+        }
+
+        /// <summary>
+        /// Wants for decks that are gone (torn down before Tear Down asked):
+        /// tick the ones to keep for the Collection, the rest are removed.
+        /// Cancel leaves them (asked again next time).
+        /// </summary>
+        private string SettleOrphanWants()
+        {
+            var orphans = CollectionEditService.OrphanWants();
+            if (orphans.Count == 0) return "";
+            if (!Dialogs.DeckWantsDialog.Ask(Window.GetWindow(this),
+                    $"{orphans.Sum(w => w.Quantity)} card(s) on the Want List are for decks that no longer exist",
+                    "Ticked cards stay on the Want List, for the Collection. Unticked cards are removed. " +
+                    "Cancel leaves them as they are (you'll be asked again next time).", "Apply", orphans, showDeck: true))
+                return "";
+            return "Want List: " + CollectionEditService.SettleDeckWants(orphans).Message;
         }
 
         // ══════════════════════════════════════════════════════════════════

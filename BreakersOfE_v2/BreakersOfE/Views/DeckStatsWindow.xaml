@@ -541,6 +541,8 @@
 
         <DockPanel Grid.Row="3" Margin="16,8,16,16" LastChildFill="False">
             <Button DockPanel.Dock="Right" Content="Close" Padding="16,5" Click="BtnClose_Click"/>
+            <Button x:Name="BtnRule0" DockPanel.Dock="Left" Content="Rule 0 Sheet…" Padding="12,5" Click="BtnRule0_Click"
+                    ToolTip="What to tell the table before a game: commander, the bracket the cards show, Game Changers, combos, extra turns, tutors, how it wins"/>
         </DockPanel>
     </Grid>
 </ui:FluentWindow>

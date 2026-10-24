@@ -24,6 +24,8 @@ The card pool is on top and your Want List below. Each want row is one printing 
 - **Decks:** **Find Missing…** adds what the deck still needs in one go, as wants for that deck ([[howto-find-missing]]). Right-click deck lines → **Add Missing to Want List (for this deck)** does it for just those lines.
 - **Collection → Cards:** right-click a card → **Add to Want List (for the Collection)** puts Qty copies on the list.
 
+Wants for a deck that no longer exists (torn down before Tear Down asked about its wants): when you open the Want List, they're listed with a **Keep** tick each. Ticked ones become wants for the **Collection**, the rest are removed; **Cancel** leaves them (you're asked again next time).
+
 Wants made before the For column, with "For: Deck name" in their **Notes** (Find Missing used to write that), become wants for that deck the first time you open the Want List. A note naming several decks, or a deck that isn't found, is left as it is: use **For ▸** on those.
 
 Importing into the Want List adds to (or, with Replace, replaces) the **Collection's** wants only; wants for decks are left alone.

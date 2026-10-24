@@ -19,5 +19,6 @@ With a deck open (View → Decks, or an Edit deck page), click **Statistics**. I
   - **You**: **In the deck**, **free in your collection** (unclaimed copies), **own, all in use**, or **not owned**.
   - **Show** narrows to cards not in the deck, free ones, or ones in the deck; **Section** to one of EDHREC's lists (High Synergy Cards, Creatures, Lands …). Click a header to sort; double-click a card to open it on EDHREC.
   - The first time you open a commander it's fetched from EDHREC and saved; after 7 days, or with **Refresh**, it's fetched again. If EDHREC can't be reached, the saved copy shows with a note, or the tab says EDHREC is unavailable.
+- **Rule 0 Sheet…** (Commander decks, bottom of the window): what to tell the table before a game — the commander, the bracket the cards show, Game Changers, two-card combos, extra turns, land denial, tutors, interaction, how it wins and the saltiest cards. **Copy** or **Save…** it.
 - **Bracket** (Commander decks): the likely bracket, with Game Changers, mass land denial, extra turns and two-card combos. A two-card infinite or game-winning combo means at least Bracket 3; whether it can come together early (Bracket 4) is up to you.
 - **Format Check:** the deck's rule checks, and whether it's legal in each format.

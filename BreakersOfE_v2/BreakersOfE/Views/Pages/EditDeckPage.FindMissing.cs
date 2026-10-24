@@ -66,7 +66,8 @@ namespace BreakersOfE.Views.Pages
         private void FindMissing()
         {
             if (_deck == null || _deckPath == null) { ShowStatus("Pick a deck first.", true); return; }
-            var all = Needs().Where(n => n.Needed > 0).ToList();
+            // The sideboard's swap options aren't claimed, so they aren't "missing".
+            var all = Needs(withSideboard: false).Where(n => n.Needed > 0).ToList();
             // The Want List holds cards: tokens are left out (and said so).
             var needs = all.Where(n => n.Table == CollectionEditService.CardsTable)
                            .OrderBy(n => n.Name, StringComparer.OrdinalIgnoreCase).ToList();

@@ -41,7 +41,7 @@ namespace BreakersOfE.DeckBuilder
             Line("Colors:", c.ColorIdentity.Length == 0 ? "Colorless" : string.Join(" ", c.ColorIdentity.Select(ColorWord)));
             var themes = Builder.CommanderThemes(commanders);
             if (themes.Count > 0) Line("Plan:", string.Join(", ", themes));
-            Line("Bracket aimed for:", BuildConstraints.BracketName(c.Bracket));
+            if (c.Bracket > 0) Line("Bracket aimed for:", BuildConstraints.BracketName(c.Bracket));      // 0: not known (a deck, not a draft)
             Line("Cards show:", (min == 1 ? "Bracket 1–2" : min == 3 ? "at least Bracket 3" : "at least Bracket 4") +
                                 (because.Count > 0 ? $" ({string.Join(", ", because)})" : " (nothing pushes it higher)"));
             sb.AppendLine();

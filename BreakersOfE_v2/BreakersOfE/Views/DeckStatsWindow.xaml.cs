@@ -43,6 +43,7 @@ namespace BreakersOfE.Views
 
             _deck = deck;
             _isCommander = deck.DeckType == DeckType.Commander;
+            BtnRule0.Visibility = _isCommander ? Visibility.Visible : Visibility.Collapsed;
             _rule = DeckFormats.For(deck, constructedFormat);
             _hasLeader = _rule.HasLeader;
             // Tokens (the deck's Tokens part) aren't part of the deck's statistics.
@@ -68,6 +69,19 @@ namespace BreakersOfE.Views
         }
 
         private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
+
+        /// <summary>Rule 0 Sheet (Commander decks): the same sheet the Build page makes for a draft.</summary>
+        private void BtnRule0_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                new Dialogs.Rule0Window(Services.DeckBuildService.Rule0For(_deck), _deck.Name, this).Show();
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show(this, $"Couldn't make the Rule 0 sheet: {ex.Message}", "Rule 0 Sheet");
+            }
+        }
 
         private static bool IsCommanderCard(DeckCard c) =>
             c.IsCommander || c.Category == DeckCardCategory.Commander;

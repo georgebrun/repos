@@ -80,6 +80,9 @@
                                 Click="BtnNewDeck_Click" ToolTip="Start a new deck: name, type and format"/>
                             <Button x:Name="BtnDeckSettings" Content="Deck Settings…" Padding="10,4" Margin="0,0,6,0"
                                 Click="BtnDeckSettings_Click" ToolTip="Rename the deck, or change its type or format"/>
+                            <Button x:Name="BtnVersions" Content="Versions…" Padding="10,4" Margin="0,0,6,0"
+                                Click="BtnVersions_Click"
+                                ToolTip="Saved versions of this deck: save one now, compare, or restore one"/>
                             <Button x:Name="BtnCloseDeck" Content="Close Deck" Padding="10,4" Margin="0,0,6,0"
                                 Click="BtnCloseDeck_Click"
                                 ToolTip="Close the deck (it's already saved). With no deck open, nothing can be added or removed."/>

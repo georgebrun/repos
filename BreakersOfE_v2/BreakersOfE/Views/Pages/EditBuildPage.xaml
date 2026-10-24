@@ -5,6 +5,18 @@
       ScrollViewer.VerticalScrollBarVisibility="Disabled"
       Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
+    <Page.Resources>
+        <!-- Draft text: swap options in the accent color and italic, so they stand apart from the deck. -->
+        <Style x:Key="DraftText" TargetType="TextBlock">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSwap}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
+                    <Setter Property="FontStyle" Value="Italic"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Page.Resources>
+
     <!-- Edit → Decks → Build: tell the builder what you want (left of the
          draft), Build Draft, look it over (every card with its reason), lock or
          exclude cards and build again, then Accept: a new deck, your free copies
@@ -18,7 +30,7 @@
         </Grid.ColumnDefinitions>
 
         <!-- ═══ LEFT: the card selected in the draft ═══ -->
-        <ctl:CardDetailPanel x:Name="Detail" Grid.Column="0" Margin="0,0,4,0"/>
+        <ctl:CardDetailPanel x:Name="Detail" Grid.Column="0" Margin="0,0,4,0" ImageDoubleClicked="Detail_ImageDoubleClicked"/>
 
         <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                       ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
@@ -38,8 +50,17 @@
         <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" Margin="0,0,12,0">
             <StackPanel x:Name="ChoicesPanel">
                 <TextBlock Text="Build a Deck" FontSize="20" FontWeight="SemiBold"/>
-                <TextBlock Style="{StaticResource BoeHint}" TextWrapping="Wrap" Margin="0,2,0,6"
-                           Text="Commander decks. The builder only uses what you allow below, and every card it picks says why."/>
+                <TextBlock Style="{StaticResource BoeHint}" TextWrapping="Wrap" Margin="0,2,0,8"
+                           Text="The builder only uses what you allow below, and every card it picks says why."/>
+
+                <TextBlock Text="Deck type" FontWeight="SemiBold"/>
+                <ComboBox x:Name="ShapeBox" SelectedIndex="0" Margin="0,4,0,10" SelectionChanged="ShapeBox_SelectionChanged">
+                    <ComboBoxItem Content="Commander (100 cards)"/>
+                    <ComboBoxItem Content="60-card (Constructed)"/>
+                </ComboBox>
+
+                <!-- ═══ Commander ═══ -->
+                <StackPanel x:Name="CommanderSection">
                 <Button x:Name="BtnIdeas" Content="What can I build?…" Padding="10,4" Margin="0,0,0,10" HorizontalAlignment="Left"
                         Click="BtnIdeas_Click" ToolTip="Your commanders, ranked by how much of a deck your free cards already make for them"/>
 
@@ -68,6 +89,70 @@
                     <ComboBoxItem Content="4 — Optimized"/>
                     <ComboBoxItem Content="5 — cEDH"/>
                 </ComboBox>
+                </StackPanel>
+
+                <!-- ═══ 60-card ═══ -->
+                <StackPanel x:Name="ConstructedSection" Visibility="Collapsed">
+                    <Button Content="What can I build?…" Padding="10,4" Margin="0,0,0,10" HorizontalAlignment="Left"
+                            Click="BtnIdeas_Click" ToolTip="Color combinations ranked by how much of a deck your free cards (legal in the format) already make"/>
+                    <TextBlock Text="Format" FontWeight="SemiBold"/>
+                    <ComboBox x:Name="FormatBox" DisplayMemberPath="Name" Margin="0,4,0,10"
+                              ToolTip="Only cards legal in this format are used (Vintage's restricted cards: 1 copy)"/>
+
+                    <TextBlock Text="Colors" FontWeight="SemiBold"/>
+                    <WrapPanel Margin="0,4,0,0">
+                        <CheckBox x:Name="ColorW" Content="W" Margin="0,0,6,0" MinWidth="0" ToolTip="White"/>
+                        <CheckBox x:Name="ColorU" Content="U" Margin="0,0,6,0" MinWidth="0" ToolTip="Blue"/>
+                        <CheckBox x:Name="ColorB" Content="B" Margin="0,0,6,0" MinWidth="0" ToolTip="Black"/>
+                        <CheckBox x:Name="ColorR" Content="R" Margin="0,0,6,0" MinWidth="0" ToolTip="Red"/>
+                        <CheckBox x:Name="ColorG" Content="G" Margin="0,0,6,0" MinWidth="0" ToolTip="Green"/>
+                        <CheckBox x:Name="ColorM" Content="M" Margin="0,0,6,0" MinWidth="0" IsChecked="True"
+                                  ToolTip="Multicolor: spells of two or more of the ticked colors (untick for none)"/>
+                        <CheckBox x:Name="ColorN" Content="N" MinWidth="0" IsChecked="True"
+                                  ToolTip="Non-color: colorless spells such as artifacts (untick for none). With no colors ticked, a colorless deck."/>
+                    </WrapPanel>
+                    <TextBlock Style="{StaticResource BoeHint}" TextWrapping="Wrap" Margin="0,2,0,10"
+                               Text="Spells are matched by their mana cost. M: multicolor, N: non-color (colorless). Adding a key card ticks its colors."/>
+
+                    <TextBlock Text="Key cards (build around)" FontWeight="SemiBold"/>
+                    <DockPanel Margin="0,4,0,2">
+                        <Button x:Name="BtnAddKey" DockPanel.Dock="Right" Content="Add" Padding="10,4" Margin="4,0,0,0" Click="BtnAddKey_Click"/>
+                        <TextBox x:Name="KeyCardBox" KeyDown="KeyCardBox_KeyDown"
+                                 ToolTip="A card to build around: type its name and Add (or Enter). It gets as many copies as the format allows, and its text sets the plan."/>
+                    </DockPanel>
+                    <ItemsControl x:Name="KeyCardList" Margin="0,2,0,10">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel Margin="0,1">
+                                    <Button DockPanel.Dock="Right" Content="✕" Padding="6,0" Tag="{Binding}" Click="RemoveKey_Click"
+                                            ToolTip="Not a key card any more"/>
+                                    <TextBlock Text="{Binding}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Text="Plan words" FontWeight="SemiBold"/>
+                    <TextBox x:Name="PlanWordsBox" Margin="0,4,0,2"
+                             ToolTip="Words the cards for your plan have, separated by commas"/>
+                    <TextBlock Style="{StaticResource BoeHint}" TextWrapping="Wrap" Margin="0,0,0,10"
+                               Text="For example: token, +1/+1 counter, Elf, artifact, sacrifice."/>
+
+                    <TextBlock Text="Power" FontWeight="SemiBold"/>
+                    <ComboBox x:Name="PowerBox" SelectedIndex="0" Margin="0,4,0,10">
+                        <ComboBoxItem Content="Casual"/>
+                        <ComboBoxItem Content="Competitive (combos, efficient cards, full playsets)"/>
+                    </ComboBox>
+
+                    <TextBlock Text="Mana curve" FontWeight="SemiBold"/>
+                    <ComboBox x:Name="CurveBox" SelectedIndex="1" Margin="0,4,0,10"
+                              ToolTip="How many spells at each mana value the builder aims for">
+                        <ComboBoxItem Content="Low — fast, cheap spells" Tag="Low"/>
+                        <ComboBoxItem Content="Medium" Tag="Medium"/>
+                        <ComboBoxItem Content="High — slower, bigger spells" Tag="High"/>
+                        <ComboBoxItem Content="No curve target" Tag=""/>
+                    </ComboBox>
+                </StackPanel>
 
                 <TextBlock Text="Cards to use" FontWeight="SemiBold"/>
                 <RadioButton x:Name="SourceCollection" Content="Only my collection's free copies" IsChecked="True" Margin="0,4,0,0"
@@ -105,6 +190,14 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                    <TextBlock Text="Swap options" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBox x:Name="SwapBox" Width="56" Text="12" Margin="8,0,0,0" TextAlignment="Right"
+                             ToolTip="How many runner-up cards to suggest (0 = none). Up to 30."/>
+                </StackPanel>
+                <TextBlock Style="{StaticResource BoeHint}" TextWrapping="Wrap" Margin="0,0,0,10"
+                           Text="The best cards that just missed the deck, a few per job. Accept puts them in the sideboard to swap in after testing; they aren't claimed."/>
+
                 <TextBlock x:Name="LocksText" Style="{StaticResource BoeHint}" TextWrapping="Wrap" Margin="0,0,0,4"/>
                 <Button x:Name="BtnClearLocks" Content="Clear locks and excludes" Padding="10,4" Margin="0,0,0,10"
                         HorizontalAlignment="Left" Click="BtnClearLocks_Click" Visibility="Collapsed"/>
@@ -124,6 +217,9 @@
                 <StackPanel>
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button x:Name="BtnTokens" Content="Suggested Tokens…" Padding="10,4" Margin="0,0,8,0"
+                                    Click="BtnTokens_Click" IsEnabled="False"
+                                    ToolTip="The tokens the draft's cards make: look and print slips now; you can add them when you Accept"/>
                             <Button x:Name="BtnRule0" Content="Rule 0 Sheet…" Padding="10,4" Margin="0,0,8,0"
                                     Click="BtnRule0_Click" IsEnabled="False"
                                     ToolTip="What to tell the table before a game: bracket, Game Changers, combos, extra turns, tutors, how it wins"/>
@@ -154,7 +250,9 @@
 
             <DataGrid x:Name="DraftGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
                       GridLinesVisibility="None" RowHeaderWidth="0" CanUserReorderColumns="True" SelectionMode="Extended"
-                      SelectionChanged="DraftGrid_SelectionChanged">
+                      SelectionChanged="DraftGrid_SelectionChanged" MouseDoubleClick="DraftGrid_MouseDoubleClick"
+
+                      ToolTip="Double-click a card for the larger card window">
                 <DataGrid.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Lock (always keep it)" Click="Lock_Click"/>
@@ -162,21 +260,21 @@
                     </ContextMenu>
                 </DataGrid.ContextMenu>
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Qty" Binding="{Binding Copies}" Width="45"/>
-                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="220"/>
-                    <DataGridTextColumn Header="Source" Binding="{Binding SourceText}" Width="110"/>
+                    <DataGridTextColumn Header="Qty" Binding="{Binding Copies}" Width="45" ElementStyle="{StaticResource DraftText}"/>
+                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="220" ElementStyle="{StaticResource DraftText}"/>
+                    <DataGridTextColumn Header="Source" Binding="{Binding SourceText}" Width="130" ElementStyle="{StaticResource DraftText}"/>
                     <!-- The full reason as a tooltip (the column may cut it off) -->
                     <DataGridTextColumn Header="Why" Binding="{Binding Reason}" Width="*">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource DraftText}">
                                 <Setter Property="ToolTip" Value="{Binding Reason}"/>
                                 <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="170"/>
-                    <DataGridTextColumn Header="MV" Binding="{Binding ManaValue}" Width="45"/>
-                    <DataGridTextColumn Header="Price" Binding="{Binding PriceText}" Width="70"/>
+                    <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="170" ElementStyle="{StaticResource DraftText}"/>
+                    <DataGridTextColumn Header="MV" Binding="{Binding ManaValue}" Width="45" ElementStyle="{StaticResource DraftText}"/>
+                    <DataGridTextColumn Header="Price" Binding="{Binding PriceText}" Width="70" ElementStyle="{StaticResource DraftText}"/>
                 </DataGrid.Columns>
             </DataGrid>
         </DockPanel>

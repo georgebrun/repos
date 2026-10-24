@@ -19,13 +19,13 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-        <ui:TitleBar Grid.Row="0" Title="What Can I Build?"/>
+        <ui:TitleBar Grid.Row="0" x:Name="WindowTitleBar" Title="What Can I Build?"/>
 
         <DockPanel Grid.Row="1" Margin="16,0,16,14">
             <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                <TextBlock Text="What Can I Build?" FontSize="18" FontWeight="SemiBold"/>
-                <TextBlock Style="{StaticResource BoeHint}" TextWrapping="Wrap" Margin="0,2,0,8"
-                           Text="Your commanders, best first: how many free spells you have in their colors, how far those go toward the guide's roles, and — when EDHREC's page for the commander is saved — how many of its 100 most-played cards you have free. Only your collection is read; nothing is downloaded. Ready is a rough mix of the three."/>
+                <TextBlock x:Name="TitleText" Text="What Can I Build?" FontSize="18" FontWeight="SemiBold"/>
+                <TextBlock x:Name="HintText" Style="{StaticResource BoeHint}" TextWrapping="Wrap" Margin="0,2,0,8"
+                           Text="Your commanders and the partner pairs you own, best first: how many free spells you have in their colors, how far those go toward the guide's roles, and — when EDHREC's page for the commander is saved — how many of its 100 most-played cards you have free. Only your collection is read; nothing is downloaded. Ready is a rough mix of the three."/>
                 <CheckBox x:Name="InUseCheck" Content="Include commanders whose copies are in a deck" Click="InUseCheck_Click"/>
             </StackPanel>
 
@@ -33,7 +33,7 @@
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <ui:Button x:Name="BtnStop" Content="Stop" MinWidth="72" Margin="0,0,8,0" Click="Stop_Click" Visibility="Collapsed"/>
                     <ui:Button x:Name="BtnUse" Content="Build This One" Appearance="Primary" Margin="0,0,8,0" Click="Use_Click" IsEnabled="False"
-                               ToolTip="Pick this commander on the Build page"/>
+                               ToolTip="Pick this on the Build page"/>
                     <ui:Button Content="Close" MinWidth="72" IsCancel="True"/>
                 </StackPanel>
                 <StackPanel VerticalAlignment="Center">
@@ -47,14 +47,14 @@
                       GridLinesVisibility="None" RowHeaderWidth="0" SelectionMode="Single"
                       SelectionChanged="IdeasGrid_SelectionChanged" MouseDoubleClick="IdeasGrid_MouseDoubleClick">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Commander" Binding="{Binding Name}" Width="240"/>
+                    <DataGridTextColumn x:Name="NameColumn" Header="Commander" Binding="{Binding Name}" Width="280"/>
                     <DataGridTextColumn Header="Colors" Binding="{Binding Colors}" Width="70"/>
-                    <DataGridTextColumn Header="Copy" Binding="{Binding CommanderText}" Width="100"/>
+                    <DataGridTextColumn x:Name="CopyColumn" Header="Copy" Binding="{Binding CommanderText}" Width="100"/>
                     <DataGridTextColumn Header="Ready" Binding="{Binding ReadyText}" Width="70" SortMemberPath="Score"/>
-                    <DataGridTextColumn Header="Free spells" Binding="{Binding SpellsText}" Width="110" SortMemberPath="Spells"/>
-                    <DataGridTextColumn Header="Free lands" Binding="{Binding Lands}" Width="85"/>
+                    <DataGridTextColumn x:Name="SpellsColumn" Header="Free spells" Binding="{Binding SpellsText}" Width="110" SortMemberPath="Spells"/>
+                    <DataGridTextColumn x:Name="LandsColumn" Header="Free lands" Binding="{Binding Lands}" Width="85"/>
                     <DataGridTextColumn Header="Roles" Binding="{Binding RolesText}" Width="65" SortMemberPath="RoleFill"/>
-                    <DataGridTextColumn Header="EDHREC" Binding="{Binding EdhrecText}" Width="130"/>
+                    <DataGridTextColumn x:Name="NotesColumn" Header="EDHREC" Binding="{Binding EdhrecText}" Width="150"/>
                     <DataGridTextColumn Header="Short of" Binding="{Binding ShortText}" Width="*">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">

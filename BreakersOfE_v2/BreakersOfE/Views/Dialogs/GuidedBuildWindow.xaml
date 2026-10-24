@@ -29,7 +29,7 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <ctl:CardDetailPanel x:Name="Detail" Grid.Column="0" Margin="0,0,12,0"/>
+            <ctl:CardDetailPanel x:Name="Detail" Grid.Column="0" Margin="0,0,12,0" ImageDoubleClicked="Detail_ImageDoubleClicked"/>
 
             <DockPanel Grid.Column="1">
                 <!-- The step -->
@@ -60,7 +60,7 @@
                 <DataGrid x:Name="OptionsGrid" AutoGenerateColumns="False" HeadersVisibility="Column"
                           GridLinesVisibility="None" RowHeaderWidth="0" SelectionMode="Single"
                           CanUserAddRows="False" CanUserDeleteRows="False"
-                          SelectionChanged="OptionsGrid_SelectionChanged">
+                          SelectionChanged="OptionsGrid_SelectionChanged" MouseDoubleClick="OptionsGrid_MouseDoubleClick">
                     <DataGrid.Columns>
                         <DataGridTemplateColumn Header="Use" Width="50" SortMemberPath="Use">
                             <DataGridTemplateColumn.CellTemplate>
@@ -70,6 +70,7 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
+                        <DataGridTextColumn x:Name="QtyColumn" Header="Qty" Binding="{Binding Copies}" Width="45" IsReadOnly="True"/>
                         <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="210" IsReadOnly="True"/>
                         <DataGridTextColumn Header="Source" Binding="{Binding SourceText}" Width="110" IsReadOnly="True"/>
                         <DataGridTextColumn Header="Why" Binding="{Binding Reason}" Width="*" IsReadOnly="True">

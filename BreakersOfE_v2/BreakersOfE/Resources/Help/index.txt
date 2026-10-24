@@ -16,6 +16,7 @@
 # After changing a file, rebuild BoE: the topics are built into the app.
 
 getting-started.md
+whats-new.md
 
 How To
   howto-add-cards.md

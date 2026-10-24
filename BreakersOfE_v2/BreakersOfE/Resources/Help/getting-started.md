@@ -22,7 +22,8 @@ Tip: Press [F1] anywhere for Help on the page you're on.
 Tip: Click any card to see its details on the left. Double-click it for the full card window with prices, price history, rulings and legality. See [[card-details]].
 
 ## Where to next
-- [[howto-build-deck]]
+- [[whats-new]]: what's new in this version.
+- [[howto-build-deck]]: build a deck by hand, or let BoE draft one from your cards ([[build]]).
 - [[search-and-filters]]
 - [[keyboard-shortcuts]]
 - [[tour|Take the Program Tour]]: a quick look around the window. It starts when BoE opens until you tick **Do Not Show Again** (or finish it); **Settings → Restart Tour** shows it again.

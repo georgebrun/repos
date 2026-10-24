@@ -232,7 +232,7 @@ namespace BreakersOfE.Services
                         if (decks.TryGetValue(id, out var deck))
                         {
                             need.ForName = string.IsNullOrWhiteSpace(deck.Name) ? need.ForName : deck.Name;
-                            need.DeckMissing = ClaimStatus(deck)
+                            need.DeckMissing = ClaimStatus(deck, withSideboard: false)
                                 .Where(l => l.Table == CardsTable && l.Finish == finish &&
                                             string.Equals(l.ScryfallId, sid, StringComparison.OrdinalIgnoreCase))
                                 .Sum(l => l.Needed);
@@ -318,7 +318,7 @@ namespace BreakersOfE.Services
                         warnings.Add($"{want.ForName}: deck file not found, so nothing was claimed for it");
                         continue;
                     }
-                    int missing = ClaimStatus(deck)
+                    int missing = ClaimStatus(deck, withSideboard: false)
                         .Where(l => l.Table == CardsTable && l.Finish == finish &&
                                     string.Equals(l.ScryfallId, sid, StringComparison.OrdinalIgnoreCase))
                         .Sum(l => l.Needed);
