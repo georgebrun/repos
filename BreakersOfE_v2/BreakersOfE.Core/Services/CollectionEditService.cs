@@ -65,6 +65,8 @@ namespace BreakersOfE.Services
         internal List<Dictionary<string, object?>> Rows = new();
         /// <summary>The same printings right after the edit: Undo only runs if nothing changed them since.</summary>
         internal List<Dictionary<string, object?>>? After;
+        /// <summary>Tokens: the two-sided pairs these printings were on (Undo puts them back as they were).</summary>
+        internal List<TokenPair>? Pairs;
         /// <summary>The collection table the snapshot belongs to.</summary>
         public string Table => CollTag;
         /// <summary>The printings (Scryfall ids) it covers.</summary>
@@ -643,6 +645,7 @@ namespace BreakersOfE.Services
             try
             {
                 snap.Rows = Capture(collTag, snap.Sids);
+                if (collTag == TokensTable) snap.Pairs = PairsOfPrintings(snap.Sids);
                 return snap;
             }
             catch (Exception ex)
@@ -717,6 +720,7 @@ namespace BreakersOfE.Services
 
                 var touched = RestoreInto(db, snap);
                 db.SaveChanges();
+                if (snap.Pairs != null) RestorePairs(db, snap.Sids, snap.Pairs);     // tokens: the pairs as they were
                 return new EditResult { Changed = 1, Message = $"Undone: {description}", Touched = touched };
             }
             catch (Exception ex)
@@ -1059,6 +1063,11 @@ namespace BreakersOfE.Services
         /// <summary>"Deck A, Deck B" — who uses this printing (main collection only).</summary>
         private static string UsedBy(CollectionDbContext db, string collTag, string sid)
         {
+            if (collTag == TokensTable)
+            {
+                try { return TokenUsedBy(db, sid); }
+                catch { return "in use"; }
+            }
             if (collTag != CardsTable) return "in use";
             try
             {

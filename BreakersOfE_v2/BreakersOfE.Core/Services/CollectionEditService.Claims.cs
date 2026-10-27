@@ -293,6 +293,16 @@ namespace BreakersOfE.Services
         private static void Recompute(CollectionDbContext db, string table, IEnumerable<string> sids,
                                       Dictionary<string, bool> etchedCache)
         {
+            // Two-sided tokens: a claim on one side uses the other side's row
+            // too, so both sides are worked out (see CollectionEditService.Pairs).
+            PairState? pairs = null;
+            if (table == TokensTable)
+            {
+                pairs = LoadPairState(db, etchedCache);
+                if (pairs.Pairs.Count == 0) pairs = null;
+                else sids = WithPartners(pairs, sids);
+                PairsChanged();
+            }
             foreach (var sid in sids.Where(s => !string.IsNullOrEmpty(s)).Distinct())
             {
                 if (table == CardsTable && ConvertV1(db, sid, etchedCache)) db.SaveChanges();
@@ -305,6 +315,7 @@ namespace BreakersOfE.Services
                 foreach (var g in rows.GroupBy(r => KeyOf(r, eo)))
                 {
                     int used = claims.Where(u => Matches(u, table, g.Key)).Sum(u => ClaimOf(u, g.Key.Finish, eo));
+                    if (pairs != null && pairs.ByKey.ContainsKey(g.Key)) used = pairs.Used(g.Key);
                     var list = g.ToList();
                     for (int i = 0; i < list.Count; i++)
                     {
@@ -360,7 +371,9 @@ namespace BreakersOfE.Services
         private static int ClaimFrom(CollectionDbContext db, Deck deck, string table, Row row, RowKey key, int n, bool etchedOnly)
         {
             int free = Math.Max(0, row.Quantity - Math.Max(0, row.UsedCount));
-            int take = Math.Min(n, free);
+            // A two-sided token whose other side this deck already holds: that card is the deck's already.
+            int headroom = Headroom(db, deck, table, key);
+            int take = Math.Min(n, free + headroom);
             if (take <= 0) return 0;
             var u = GetOrAddClaim(db, deck.DeckId, table, key);
             Tidy(u, etchedOnly);
@@ -368,8 +381,20 @@ namespace BreakersOfE.Services
             u.DeckName = deck.Name;
             u.DeckType = DeckTypeText(deck);
             u.DateRecorded = DateTime.Now;
-            row.UsedCount = row.UsedCount + take;           // recomputed after saving; keeps "free" right meanwhile
+            row.UsedCount = row.UsedCount + Math.Max(0, take - headroom);   // recomputed after saving; keeps "free" right meanwhile
             return take;
+        }
+
+        /// <summary>Tokens: copies of this row the deck holds already by their other side (0 for cards).</summary>
+        private static int Headroom(CollectionDbContext db, Deck deck, string table, RowKey key)
+        {
+            if (table != TokensTable || string.IsNullOrEmpty(deck.DeckId)) return 0;
+            try
+            {
+                var st = LoadPairState(db, new Dictionary<string, bool>(StringComparer.Ordinal));
+                return st.ByKey.ContainsKey(key) ? st.Headroom(key, deck.DeckId) : 0;
+            }
+            catch { return 0; }
         }
 
         // ══════════════════════════════════════════════════════════════════
@@ -430,7 +455,8 @@ namespace BreakersOfE.Services
                 bool eo = EtchedOnlyPrinting(table, sid, cache);
                 var candidates = Rows(db, table, sid)
                     .Select(r => (row: r, key: KeyOf(r, eo)))
-                    .Where(x => x.key.Finish == finish && x.row.Quantity - Math.Max(0, x.row.UsedCount) > 0)
+                    .Where(x => x.key.Finish == finish &&
+                                (x.row.Quantity - Math.Max(0, x.row.UsedCount) > 0 || Headroom(db, deck, table, x.key) > 0))
                     .OrderBy(x => x.key.Language == CardLanguage.Default ? 0 : 1)
                     .ThenBy(x => WorstFirst(x.key.Condition))
                     .ToList();
@@ -717,6 +743,8 @@ namespace BreakersOfE.Services
                     }
                     list.Add(new RowUse { DeckId = g.Key, DeckName = name, DeckType = type, Part = part, Copies = copies, DeckPath = path });
                 }
+                // Two-sided tokens: decks holding the card by its other side.
+                if (table == TokensTable) list.AddRange(OtherSideUses(key));
             }
             catch (Exception ex)
             {

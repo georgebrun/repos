@@ -180,6 +180,7 @@ namespace BreakersOfE.Views.Pages
             Detail.ShowCard(null);
             ShowModeControls();
             _top.LoadPool(poolTag);
+            if (IsTokens) CollectionEditService.TidyPairs();    // pairs whose copies went another way (an import, a deck page)
             _bottom.LoadPool(CollTag);
             RefreshCounts();
             ShowStatus("", false);
@@ -275,6 +276,7 @@ namespace BreakersOfE.Views.Pages
                 foreach (MenuItem mi in _finishMenu.Items)
                     mi.Visibility = (string)mi.Tag == CardFinish.Etched ? paper : Visibility.Visible;
             }
+            ShowPairControls();
         }
 
         // ══════════════════════════════════════════════════════════════════
@@ -425,9 +427,43 @@ namespace BreakersOfE.Views.Pages
         private void Run(string what, IEnumerable<string> sids, Func<List<EditResult>> work)
         {
             var printings = sids.Where(s => s.Length > 0).Distinct().ToList();
+
+            // Tokens: a two-sided card's other side follows the edit (FollowPairs),
+            // so its rows are in the Undo snapshot too.
+            List<CollectionEditService.PairLink>? pairsBefore = null;
+            Dictionary<RowKey, int>? qtyBefore = null;
+            if (CollTag == CollectionEditService.TokensTable)
+            {
+                pairsBefore = CollectionEditService.PairLinks();
+                if (pairsBefore.Count > 0)
+                {
+                    var set = new HashSet<string>(printings, StringComparer.OrdinalIgnoreCase);
+                    foreach (var p in pairsBefore)
+                    {
+                        if (set.Contains(p.A.ScryfallId)) set.Add(p.B.ScryfallId);
+                        if (set.Contains(p.B.ScryfallId)) set.Add(p.A.ScryfallId);
+                    }
+                    printings = set.ToList();
+                    qtyBefore = CollectionEditService.TokenQuantities();
+                }
+                else pairsBefore = null;
+            }
+
             var snap = CollectionEditService.Snapshot(CollTag, printings);
             var results = work();
             var result = Combine(what, results);
+            if (pairsBefore != null && qtyBefore != null && result.Changed > 0)
+            {
+                var follow = FollowPairs(pairsBefore, qtyBefore);
+                if (follow.Count > 0)
+                    result = new EditResult
+                    {
+                        Changed = result.Changed + follow.Sum(r => Math.Max(0, r.Changed)),
+                        Warning = result.Warning || follow.Any(r => r.Warning),
+                        Message = result.Message + "  " + string.Join("  ", follow.Select(r => r.Message)),
+                        Touched = result.Touched.Concat(follow.SelectMany(r => r.Touched)).ToList(),
+                    };
+            }
             if (result.Changed > 0)
             {
                 if (snap != null)
@@ -506,12 +542,26 @@ namespace BreakersOfE.Views.Pages
                          "Add to Several Rows"))
                 return;
 
+            // Tokens: what's on the other side of the card? (One token at a time;
+            // tokens from before two-sided ones existed, and real double-faced ones, don't ask.)
+            if (IsTokens && plan.Count == 1 && plan[0].Pool is { } token && CollectionEditService.MayHaveOtherSide(token))
+            {
+                var ask = AddTokenSidesWindow.Ask(Window.GetWindow(this), token, qty, plan[0].Key.Text);
+                if (ask == null) { ShowStatus("Nothing added.", false); return; }
+                if (ask.OtherSide != null)
+                {
+                    AddBothSides(plan[0].Key, token, ask.OtherSide, qty);
+                    return;
+                }
+            }
             Run($"Added {qty} {finishText}".TrimEnd(), plan.Select(p => p.Key.ScryfallId), () =>
                 plan.Select(p => p.Pool == null
                     ? new EditResult { Message = $"{p.Name}: not in the card pool.", Warning = true }
                     : CollectionEditService.Add(CollTag, p.Pool, p.Key.Finish, qty, p.Key.Language, p.Key.Condition))
                 .ToList());
             if (skipped.Length > 0) ShowStatus(ActionText.Text + "  " + skipped, true);
+            if (IsTokens && plan.Count > 1)
+                ShowStatus(ActionText.Text + "  Two-sided cards: select a row and Two-Sided… to pair it.", false);
         }
 
         // ── Want List (for the Collection) ──────────────────────────────
@@ -594,6 +644,7 @@ namespace BreakersOfE.Views.Pages
             }
 
             bool ownFinish = plan.Any(p => p.FromCollection);
+            if (!PairsOk(plan.Select(p => (p.Key, qty)))) return;
             if (plan.Count > 1 &&
                 !Confirm((ownFinish
                             ? OwnFinishQuestion("Remove", qty, plan.Select(p => p.Key.Finish).ToList(), "from")
@@ -617,6 +668,7 @@ namespace BreakersOfE.Views.Pages
             if (rows.Count == 0) { ShowStatus("Select a row in the collection table first.", true); return; }
             if (TooMany(rows)) return;
             int qty = Qty;
+            if (!PairsOk(rows.Select(r => (TokenKeyOf(r), all ? Int(r, "Quantity") : qty)))) return;
             if (all || rows.Count > 1)
             {
                 string what = all ? "all unused copies" : $"{qty} {(qty == 1 ? "copy" : "copies")}";
@@ -638,6 +690,13 @@ namespace BreakersOfE.Views.Pages
             if (rows.Count == 0) { ShowStatus("Select a card first.", true); return; }
             if (TooMany(rows)) return;
             var printings = rows.GroupBy(r => Str(r, "ScryfallId")).Select(g => g.First()).ToList();
+            if (IsTokens)
+            {
+                var sids = new HashSet<string>(printings.Select(r => Str(r, "ScryfallId")), StringComparer.OrdinalIgnoreCase);
+                if (!PairsOk(CollectionEditService.TokenRows().Where(r => sids.Contains(r.ScryfallId))
+                                 .Select(r => (TokenKeyOf(r), r.Quantity))))
+                    return;
+            }
             string of = printings.Count == 1 ? CardText(printings[0]) : $"the {printings.Count} selected printings";
             if (!Confirm($"Remove every unused copy of {of} — all finishes, languages and conditions?\n\n" +
                          "Copies used by decks or the Trade Binder are kept.", "Remove All"))
@@ -678,10 +737,16 @@ namespace BreakersOfE.Views.Pages
                               "All unused copies of each row change; copies used by decks stay as they are.",
                               "Change Several Rows"))
                 return;
+            if (!PairsOk(rows.Select(r => (TokenKeyOf(r), count == int.MaxValue ? Int(r, "Quantity") : count)), move: true)) return;
 
-            Run(what, rows.Select(r => Str(r, "ScryfallId")), () =>
-                rows.Select(row => CollectionEditService.Move(CollTag, CollectionEditService.RowId(row), count,
-                    finish, language, condition)).ToList());
+            _moving = (finish, language, condition);          // two-sided tokens: the other side moves too
+            try
+            {
+                Run(what, rows.Select(r => Str(r, "ScryfallId")), () =>
+                    rows.Select(row => CollectionEditService.Move(CollTag, CollectionEditService.RowId(row), count,
+                        finish, language, condition)).ToList());
+            }
+            finally { _moving = null; }
         }
 
         // ── Notes, storage and favorite ─────────────────────────────────
@@ -750,6 +815,9 @@ namespace BreakersOfE.Views.Pages
         {
             ShowStatus(result.Message, result.Warning);
             if (result.Changed <= 0) { RefreshCounts(); return; }
+
+            // Tokens: a pair's copies follow its rows, so Used of both sides is worked out again.
+            if (CollTag == CollectionEditService.TokensTable) CollectionEditService.RefreshPairs(sids);   // Edit → Sets tokens too
 
             // Pool rows of these printings: Owned updates in place.
             var wanted = new HashSet<string>(sids);
@@ -864,6 +932,12 @@ namespace BreakersOfE.Views.Pages
             Item(_bottomMenu, "Add to Want List (for the Collection)", "", () => DoAddToWantList(_bottom),
                  () => CollTag == CollectionEditService.CardsTable, true);
             _favoriteItem = Item(_bottomMenu, "Mark as Favorite", "", ToggleFavorite);
+            _otherSideItem = Item(_bottomMenu, "Other Side…", "", DoOtherSide);
+            _unpairItem = new MenuItem { Header = "Unpair" };
+            _unpairItem.Click += (_, e) => { if (e.OriginalSource == _unpairItem && _unpairItem.Tag is OtherSide s) DoUnpair(s); };
+            _bottomMenu.Items.Add(_unpairItem);
+            _exportPairsItem = Item(_bottomMenu, "Export Two-Sided Pairs…", "", DoExportPairs);
+            _importPairsItem = Item(_bottomMenu, "Import Two-Sided Pairs…", "", DoImportPairs);
             _bottomMenu.Items.Add(new Separator());
             _undoBottom = Item(_bottomMenu, "Undo", "Ctrl+Z", DoUndo, () => _undo.Count > 0);
 
@@ -892,6 +966,7 @@ namespace BreakersOfE.Views.Pages
             if (_undoBottom != null) _undoBottom.Header = undoText;
 
             if (table != _bottom) return;
+            UpdateUnpairItem();
             var rows = Targets(_bottom).Where(IsCollectionRow).ToList();
             bool single = rows.Count == 1;
             object? row = single ? rows[0] : null;
@@ -991,6 +1066,7 @@ namespace BreakersOfE.Views.Pages
                         return;
                     }
                     if (n == current) return;
+                    if (n < current && !PairsOk(new[] { (TokenKeyOf(row), current - n) })) return;
                     Run("Quantity", new[] { Str(row, "ScryfallId") }, () =>
                         new List<EditResult> { CollectionEditService.SetQuantity(CollTag, id, n, etchedOnly) });
                 });

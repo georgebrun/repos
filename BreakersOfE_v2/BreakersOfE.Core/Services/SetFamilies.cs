@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 
 namespace BreakersOfE.Services
@@ -66,6 +67,15 @@ namespace BreakersOfE.Services
             }
             return current;
         }
+
+        /// <summary>
+        /// Every set of a release (the release itself and all its sub-sets:
+        /// token sets, Commander, promos …), lower case. Empty when the list
+        /// isn't there.
+        /// </summary>
+        public static List<string> SetsOfRelease(string release) =>
+            Sets().Keys.Where(c => string.Equals(ReleaseOf(c), release, StringComparison.OrdinalIgnoreCase))
+                .Select(c => c.ToLowerInvariant()).ToList();
 
         private static Dictionary<string, SetInfo> Sets()
         {

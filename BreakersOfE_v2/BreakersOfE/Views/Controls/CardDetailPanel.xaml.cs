@@ -71,14 +71,38 @@ namespace BreakersOfE.Views.Controls
             // Card image (shared ScryfallId cache first) and the back face button
             ShowPicture(back: false);
             BtnShowBackFace.Visibility = CardDetailText.HasBack(card) ? Visibility.Visible : Visibility.Collapsed;
+
+            // A two-sided token (paired): the button shows the token on its other side.
+            _others = CardDetailText.OtherSideCards(card);
+            _otherAt = -1;
+            if (_others.Count > 0)
+            {
+                BtnShowBackFace.Visibility = Visibility.Visible;
+                BtnShowBackFace.Content = CardDetailText.ShowOther(_others[0]);
+            }
         }
 
-        /// <summary>One side's name, type, mana cost, stats and text (-1 = the whole card).</summary>
-        private void ShowSide(int side)
+        private System.Collections.Generic.List<object> _others = new();
+        private int _otherAt = -1;
+
+        /// <summary>Two-sided token: the next other side (picture and text), then back to this one.</summary>
+        private void ShowNextOtherSide()
         {
             if (_card == null) return;
-            var face = CardDetailText.Face(_card, side);
-            DetailName.Text = face.Name;
+            _otherAt = _otherAt + 1 >= _others.Count ? -1 : _otherAt + 1;
+            if (_otherAt < 0)
+            {
+                ShowPicture(back: false);
+                ShowSide(CardDetailText.FirstSide(_card));
+                BtnShowBackFace.Content = CardDetailText.ShowOther(_others[0]);
+                return;
+            }
+            var o = _others[_otherAt];
+            int v = ++_picVersion;
+            _ = Services.CardPictures.ShowAsync(DetailCardImage, CardDetailText.Get(o, "ScryfallId"),
+                CardDetailText.Get(o, "ImageNormalUrl"), CardDetailText.Get(o, "LocalImagePath"), () => v == _picVersion);
+            var face = CardDetailText.Face(o, -1);
+            DetailName.Text = face.Name + "  // " + CardDetailText.Get(_card, "Name");
             DetailType.Text = face.TypeLine;
             Services.ManaCostConverter.Fill(DetailManaCost, face.ManaCost);
             DetailOracle.Text = face.OracleText;
@@ -86,6 +110,33 @@ namespace BreakersOfE.Views.Controls
             DetailPTLabel.Text = face.Stats?.Label ?? "";
             DetailPT.Text = face.Stats?.Value ?? "";
             DetailPTLabel.Visibility = DetailPT.Visibility = face.Stats != null ? Visibility.Visible : Visibility.Collapsed;
+            BtnShowBackFace.Content = _otherAt + 1 < _others.Count ? CardDetailText.ShowOther(_others[_otherAt + 1]) : CardDetailText.ShowFront;
+        }
+
+        /// <summary>One side's name, type, mana cost, stats and text (-1 = the whole card).</summary>
+        private void ShowSide(int side)
+        {
+            if (_card == null) return;
+            var face = CardDetailText.Face(_card, side);
+            DetailName.Text = face.Name + OtherSideText(_card);
+            DetailType.Text = face.TypeLine;
+            Services.ManaCostConverter.Fill(DetailManaCost, face.ManaCost);
+            DetailOracle.Text = face.OracleText;
+            DetailFlavor.Text = face.FlavorText;
+            DetailPTLabel.Text = face.Stats?.Label ?? "";
+            DetailPT.Text = face.Stats?.Value ?? "";
+            DetailPTLabel.Visibility = DetailPT.Visibility = face.Stats != null ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        /// <summary>A two-sided token (token row or deck token line): "  // Angel"; else nothing.</summary>
+        private static string OtherSideText(object card)
+        {
+            try
+            {
+                var sides = Services.CollectionEditService.OtherSidesOfRow(card);
+                return sides.Count == 0 ? "" : "  // " + string.Join(", ", sides.Select(s => s.Name).Distinct());
+            }
+            catch { return ""; }
         }
 
         private void ShowTags(object? card)
@@ -117,6 +168,7 @@ namespace BreakersOfE.Views.Controls
         private void BtnShowBackFace_Click(object sender, RoutedEventArgs e)
         {
             if (_card == null) return;
+            if (_others.Count > 0) { ShowNextOtherSide(); return; }
 
             _showingBack = !_showingBack;
             ShowPicture(back: _showingBack);

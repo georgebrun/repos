@@ -42,6 +42,7 @@ Looking at Cards
 
 Your Cards
   edit-collection.md
+  two-sided-tokens.md
   trade-binder.md
   want-list.md
   decks.md

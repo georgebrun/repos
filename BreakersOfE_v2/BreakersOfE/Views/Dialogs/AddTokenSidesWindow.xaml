@@ -1,0 +1,67 @@
+<ui:FluentWindow x:Class="BreakersOfE.Views.Dialogs.AddTokenSidesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="Other Side"
+        Width="860" Height="620" MinWidth="620" MinHeight="400"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        ShowInTaskbar="False"
+        ExtendsContentIntoTitleBar="True"
+        Background="{DynamicResource ApplicationBackgroundBrush}"
+        Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+
+    <!-- Adding a token (Edit → Pool → Collection → Tokens): what's on the
+         other side of the card? Pick it and Add to Collection (both sides go
+         in, paired), or Single-Sided. -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <ui:TitleBar Grid.Row="0" x:Name="WindowTitleBar" Title="Other Side"/>
+
+        <DockPanel Grid.Row="1" Margin="16,0,16,14">
+            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                <TextBlock x:Name="HeaderText" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                <TextBlock x:Name="SubText" Style="{StaticResource BoeHint}" TextWrapping="Wrap" Margin="0,2,0,0"
+                           Text="Is another token printed on the back of this card? Pick it and Add to Collection: both sides go in as two rows, paired (a deck that takes one side takes the card). No other side: Single-Sided."/>
+                <DockPanel Margin="0,10,0,0">
+                    <TextBlock DockPanel.Dock="Left" Text="Find" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox x:Name="FindBox" TextChanged="Filter_Changed"
+                             ToolTip="Part of a name, an edition code or a collector number"/>
+                </DockPanel>
+                <WrapPanel Margin="0,6,0,0">
+                    <CheckBox x:Name="SameSetsCheck" IsChecked="True" Click="Release_Changed"
+                              ToolTip="Only the tokens of this release: all its token sets (booster, Commander …), as View → Sets groups them"/>
+                </WrapPanel>
+            </StackPanel>
+
+            <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <ui:Button x:Name="BtnAdd" Content="Add to Collection" Appearance="Primary" MinWidth="130" Margin="0,0,8,0"
+                               IsEnabled="False" Click="Add_Click"
+                               ToolTip="Add this token and the one picked, paired as one card"/>
+                    <ui:Button x:Name="BtnSingle" Content="Single-Sided" MinWidth="110" Margin="0,0,8,0" IsDefault="True"
+                               Click="Single_Click" ToolTip="No other side: add just this token (Enter)"/>
+                    <ui:Button Content="Cancel" MinWidth="72" IsCancel="True" ToolTip="Add nothing (Esc)"/>
+                </StackPanel>
+                <TextBlock x:Name="StatusText" VerticalAlignment="Center" TextWrapping="Wrap" FontSize="12"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            </DockPanel>
+
+            <DataGrid x:Name="ChoiceGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
+                      GridLinesVisibility="None" RowHeaderWidth="0" SelectionMode="Single"
+                      SelectionChanged="ChoiceGrid_SelectionChanged" MouseDoubleClick="ChoiceGrid_MouseDoubleClick">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*"/>
+                    <DataGridTextColumn Header="Edition" Binding="{Binding SetCode}" Width="75"/>
+                    <DataGridTextColumn Header="No." Binding="{Binding Number}" Width="55" SortMemberPath="NumberSort"/>
+                    <DataGridTextColumn Header="P/T" Binding="{Binding PT}" Width="50"/>
+                    <DataGridTextColumn x:Name="OwnedColumn" Header="Owned" Binding="{Binding OwnedText}" Width="65" SortMemberPath="Owned"/>
+                    <DataGridTextColumn x:Name="PairedColumn" Header="Paired with" Binding="{Binding PairedWith}" Width="150"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </DockPanel>
+    </Grid>
+</ui:FluentWindow>

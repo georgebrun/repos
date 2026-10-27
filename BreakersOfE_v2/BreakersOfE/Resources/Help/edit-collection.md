@@ -10,6 +10,8 @@ Open **Edit**, then **Pool → Collection** and a kind (Cards, Tokens, …). The
 
 Only the finishes the printing comes in can be added.
 
+Adding a token that may have another token on its back asks what's on the other side. See [[two-sided-tokens]].
+
 Tip: Opened a pack, box or precon? **Edit → Sets** shows one set at a time as pictures, so you can go down the set and click **+** on what you got. See [[sets]].
 
 Tip: With both tables in Gallery, the Add and Remove finish buttons are hidden: the boxes under each picture do the same job. **Remove All…** and **Undo** stay. Switch either table to Grid and the buttons come back. To add to several selected pictures at once, use [Enter], [Shift+Enter] or [Ctrl+Enter].

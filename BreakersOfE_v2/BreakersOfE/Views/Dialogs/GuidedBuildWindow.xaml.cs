@@ -166,8 +166,11 @@ namespace BreakersOfE.Views.Dialogs
             var step = _steps[_step];
             var all = Others(_step).Concat(_rows.Where(r => r.Use).Select(r => r.Name)).Concat(Keys).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             int spells = Spells(all);
+            int inRole = step.Role is { } role ? InRole(all, role) : 0;
             string here = step.Role is { } r
-                ? $"{step.Title}: {InRole(all, r)} of {step.Target} (ticked here: {_rows.Count(x => x.Use)})"
+                ? (inRole > step.Target
+                    ? $"{step.Title}: {inRole}, over the guide's {step.Target} (ticked here: {_rows.Count(x => x.Use)})"
+                    : $"{step.Title}: {inRole} of {step.Target} (ticked here: {_rows.Count(x => x.Use)})")
                 : $"Ticked here: {_rows.Count(x => x.Use)}";
             int gc = GameChangersIn(all);
             string gcText = _ctx.Constraints.IsConstructed ? ""

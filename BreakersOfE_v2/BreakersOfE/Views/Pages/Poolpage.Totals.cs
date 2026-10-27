@@ -194,7 +194,9 @@ namespace BreakersOfE.Views.Pages
                 {
                     Label = kind == TableKind.ArenaCollection
                         ? $"Totals ({rows.Count:N0} rows)"
-                        : $"Totals ({rows.Count:N0} rows, {foil:N0} foil)",
+                        : TokenCardsText(rows) is { Length: > 0 } physical
+                            ? $"Totals ({rows.Count:N0} rows = {physical}{(foil > 0 ? $", {foil:N0} foil" : "")})"   // two-sided tokens: short, so it fits
+                            : $"Totals ({rows.Count:N0} rows, {foil:N0} foil)",
                     Qty = rows.Sum(r => Int(r, "Quantity")).ToString("N0"),
                     Used = Count(rows.Sum(r => Int(r, "UsedCount"))),
                     Available = Count(rows.Sum(r => Int(r, "AvailableCount"))),
@@ -214,6 +216,22 @@ namespace BreakersOfE.Views.Pages
                 }
             };
             QueueTotalsSync();
+        }
+
+        /// <summary>
+        /// Collection → Tokens with two-sided cards: "10 cards" (each pair
+        /// counted once when both its sides are in the list). Nothing otherwise.
+        /// </summary>
+        private string TokenCardsText(List<object> rows)
+        {
+            if (_currentTag != "CollTokens") return "";
+            try
+            {
+                int copies = rows.Sum(r => Int(r, "Quantity"));
+                int cards = Services.CollectionEditService.PhysicalCards(rows);
+                return cards == copies ? "" : $"{cards:N0} cards";
+            }
+            catch { return ""; }
         }
 
         // ── Field readers for the totals (cached per type + property) ──

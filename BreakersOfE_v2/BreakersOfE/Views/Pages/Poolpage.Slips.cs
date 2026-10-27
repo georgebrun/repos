@@ -59,14 +59,27 @@ namespace BreakersOfE.Views.Pages
         private static List<Slip> SlipsFor(IEnumerable<object> rows)
         {
             var slips = new List<Slip>();
+            // Two-sided tokens print both sides; when both rows of one card are
+            // selected, the card prints once.
+            var printedAsOther = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var row in rows)
             {
                 int copies = CopiesOf(row);
                 if (copies == 0) continue;
-                var sides = Slip.FromCard(row);
+                string sid = row.GetType().GetProperty("ScryfallId")?.GetValue(row) as string ?? "";
+                if (sid.Length > 0 && printedAsOther.Remove(sid)) continue;
+                var sides = Slip.WithOtherSides(row);
+                if (sides.Count > 1 && row is TokenCollectionEntry or TokenCard or DeckCard)
+                    foreach (var o in SafeOtherSides(row)) printedAsOther.Add(o);
                 for (int c = 0; c < copies; c++) slips.AddRange(sides);
             }
             return slips;
+        }
+
+        private static IEnumerable<string> SafeOtherSides(object row)
+        {
+            try { return CollectionEditService.OtherSideRefs(row).Select(o => o.ScryfallId).ToList(); }
+            catch { return Enumerable.Empty<string>(); }
         }
 
         private void PrintSlipsForSelection()

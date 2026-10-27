@@ -48,6 +48,7 @@ Breakers of E (BoE) keeps track of every Magic card that exists, the cards you o
 - One row per printing × finish × language × condition, with notes, storage location, favorites and price
 - Add and remove with a Qty box, keys, right-click menus, or the **− / +** under each gallery picture, with **Undo**
 - **Edit → Sets**: opened a pack, box or precon? Go down the set's pictures and click **+** on what you got; tokens and oversized cards go to their own collections by themselves
+- **Two-sided tokens**: adding a token asks what's on its other side; both sides go in as one card ("Treasure // Angel"), a deck that takes one side takes the card, and removing one side removes both
 - Copies used by decks or the Trade Binder can't be removed by accident
 - A finish you own that the card doesn't come in is flagged in amber (usually the wrong set picked)
 - **Statistics**: counts, value, breakdowns, and **collection value over time**
@@ -60,6 +61,10 @@ Breakers of E (BoE) keeps track of every Magic card that exists, the cards you o
 <p align="center">
   <img src="docs/images/edit-collection.png" width="49%" alt="Edit → Pool → Collection: the card pool on top, your collection below">
   <img src="docs/images/collection-statistics.png" width="49%" alt="Collection statistics: value over time, by color, rarity, type and set">
+</p>
+
+<p align="center">
+  <img src="docs/images/other-side.png" width="860" alt="Adding a two-sided token: pick the token on its back from the release's token sets, and both go in as one card">
 </p>
 
 ### Deck builder

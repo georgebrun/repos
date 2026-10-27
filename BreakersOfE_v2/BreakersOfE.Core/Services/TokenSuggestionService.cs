@@ -10,8 +10,30 @@ namespace BreakersOfE.Services
     /// <summary>One token a deck's cards make (Edit → Decks → Suggested Tokens).</summary>
     public sealed class TokenSuggestion
     {
-        /// <summary>The printing offered (the one most of the deck's cards link to).</summary>
-        public TokenCard Token { get; init; } = new();
+        /// <summary>The printing offered: yours when you own one (see <see cref="Prefer"/>), else the one most of the cards link to.</summary>
+        public TokenCard Token { get; set; } = new();
+        /// <summary>The offer when you own none of it: the printing most of the cards link to.</summary>
+        public TokenCard Linked { get; init; } = new();
+        /// <summary>Your best single-sided printing of it, if any.</summary>
+        public TokenCard? OwnedSingle { get; init; }
+        /// <summary>Your best two-sided printing of it (paired, or a real double-faced token), if any.</summary>
+        public TokenCard? OwnedTwoSided { get; init; }
+        /// <summary>Every printing of this token.</summary>
+        public List<TokenCard> Every { get; init; } = new();
+        /// <summary>Copies you own per printing.</summary>
+        public Dictionary<string, int> OwnedBySid { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+        /// <summary>Another suggestion that's the other side of the same card you own: one card does both, one side at a time.</summary>
+        public TokenSuggestion? SharedWith { get; set; }
+
+        /// <summary>Offer your single-sided or your two-sided printing first (when you own both kinds).</summary>
+        public void Prefer(bool twoSided)
+        {
+            Token = twoSided ? OwnedTwoSided ?? OwnedSingle ?? Linked
+                             : OwnedSingle ?? OwnedTwoSided ?? Linked;
+        }
+
+        /// <summary>The offered printing's other side ("Angel"), or "".</summary>
+        public string OtherSide => TokenSuggestionService.OtherSideName(Token);
         /// <summary>The deck's cards that make it (names, A→Z).</summary>
         public List<string> MadeBy { get; init; } = new();
         /// <summary>Copies of this token already in the deck's Tokens part (any printing).</summary>
@@ -19,7 +41,7 @@ namespace BreakersOfE.Services
         /// <summary>Copies of this token in your token collection (any printing).</summary>
         public int Owned { get; init; }
         /// <summary>Of those, copies of the printing offered.</summary>
-        public int OwnedOffered { get; init; }
+        public int OwnedOffered => OwnedBySid.GetValueOrDefault(Token.ScryfallId);
         /// <summary>Ticked in the list (two-way bound).</summary>
         public bool IsChecked { get; set; }
 
@@ -41,6 +63,8 @@ namespace BreakersOfE.Services
             (Owned == 0 ? "  ·  not in your collection"
              : Owned == OwnedOffered ? $"  ·  you own {Owned}"
              : $"  ·  you own {Owned} ({OwnedOffered} of this printing)") +
+            (OtherSide.Length > 0 ? $"  ·  two-sided: {OtherSide} on the back" : "") +
+            (SharedWith != null ? $"  ·  one card with {SharedWith.Token.Name}, one side at a time" : "") +
             (InDeck > 0 ? $"  ·  {InDeck} already in the deck" : "");
 
         private static string ColorText(string colors)
@@ -67,8 +91,10 @@ namespace BreakersOfE.Services
         /// of them). <paramref name="noLinkData"/>: the card pool has no token
         /// links at all yet (a Full Database Update brings them).
         /// </summary>
-        public static List<TokenSuggestion> Suggest(Deck deck, IEnumerable<DeckCard> makers, out bool noLinkData)
+        public static List<TokenSuggestion> Suggest(Deck deck, IEnumerable<DeckCard> makers, out bool noLinkData,
+                                                    bool? preferTwoSided = null)
         {
+            bool preferTwo = preferTwoSided ?? AppSettingsService.Current.PreferTwoSidedTokens;
             noLinkData = false;
             var sources = makers.Where(c => !c.IsTokenLine && !string.IsNullOrEmpty(c.ScryfallId)).ToList();
             var sids = sources.Select(c => c.ScryfallId).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -101,6 +127,10 @@ namespace BreakersOfE.Services
                 : db.TokenCards.AsNoTracking().Where(t => oracleIds.Contains(t.OracleId)).ToList();
             var owned = OwnedTokens(allPrintings.Select(t => t.ScryfallId).Concat(ids).Distinct().ToList());
 
+            // Your real double-faced tokens (one of their faces can be what a card makes).
+            var ownedDfcs = OwnedDoubleFaced(db);
+            foreach (var (sid, n) in OwnedTokens(ownedDfcs.Select(d => d.ScryfallId).ToList())) owned[sid] = n;
+
             var deckTokens = deck.Cards.Where(c => c.IsTokenLine).ToList();
             var list = new List<TokenSuggestion>();
             // One entry per token: same Oracle card (else same name, P/T and colors).
@@ -108,15 +138,28 @@ namespace BreakersOfE.Services
             {
                 var linked = g.ToList();
                 var every = string.IsNullOrEmpty(g.First().OracleId)
-                    ? linked
+                    ? linked.ToList()                                                // a copy: a double-faced one may join it
                     : allPrintings.Where(t => t.OracleId == g.First().OracleId)
                                   .Concat(linked).GroupBy(t => t.ScryfallId).Select(x => x.First()).ToList();
                 int Links(TokenCard t) => makersByToken.TryGetValue(t.ScryfallId, out var m) ? m.Count : 0;
-                var pick = every
-                    .OrderByDescending(t => owned.GetValueOrDefault(t.ScryfallId))   // yours first
-                    .ThenByDescending(Links)                                         // then the linked one
+                var linkedPick = every
+                    .OrderByDescending(Links)                                        // the one most cards link to
                     .ThenByDescending(t => t.ReleasedAt, StringComparer.Ordinal)
                     .First();
+
+                // A real double-faced token you own with this face ("Incubator // Phyrexian" for a Phyrexian).
+                if (!every.Any(t => owned.GetValueOrDefault(t.ScryfallId) > 0))
+                    foreach (var d in ownedDfcs.Where(x => FaceNames(x.Name).Contains(linkedPick.Name, StringComparer.OrdinalIgnoreCase)))
+                        if (every.All(t => t.ScryfallId != d.ScryfallId)) every.Add(d);
+
+                TokenCard? Best(bool twoSided) => every
+                    .Where(t => owned.GetValueOrDefault(t.ScryfallId) > 0 && IsTwoSided(t) == twoSided)
+                    .OrderByDescending(t => owned.GetValueOrDefault(t.ScryfallId))
+                    .ThenByDescending(Links)
+                    .FirstOrDefault();
+                var single = Best(false);
+                var twoSided = Best(true);
+                var pick = (preferTwo ? twoSided ?? single : single ?? twoSided) ?? linkedPick;
                 var printings = linked;
                 var madeBy = printings.SelectMany(t => makersByToken[t.ScryfallId])
                     .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -128,17 +171,77 @@ namespace BreakersOfE.Services
                 list.Add(new TokenSuggestion
                 {
                     Token = pick,
+                    Linked = linkedPick,
+                    OwnedSingle = single,
+                    OwnedTwoSided = twoSided,
+                    Every = every,
+                    OwnedBySid = every.ToDictionary(t => t.ScryfallId, t => owned.GetValueOrDefault(t.ScryfallId), StringComparer.OrdinalIgnoreCase),
                     MadeBy = madeBy,
                     InDeck = inDeck,
                     Owned = every.Sum(t => owned.GetValueOrDefault(t.ScryfallId)),
-                    OwnedOffered = owned.GetValueOrDefault(pick.ScryfallId),
                     IsChecked = inDeck == 0,          // ticked unless the deck already has it
                 });
             }
-            return list
+            var sorted = list
                 .OrderBy(s => s.Token.Name, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(s => s.Token.Power)
                 .ToList();
+            LinkShared(sorted);
+            return sorted;
+        }
+
+        /// <summary>The real double-faced tokens in your token collection (their pool cards).</summary>
+        private static List<TokenCard> OwnedDoubleFaced(AppDbContext db)
+        {
+            List<string> sids;
+            using (var cdb = new CollectionDbContext())
+                sids = cdb.TokenCollectionEntries.Where(e => e.Quantity > 0 && e.Layout == "double_faced_token")
+                          .Select(e => e.ScryfallId).Distinct().ToList();
+            return sids.Count == 0 ? new List<TokenCard>()
+                : db.TokenCards.AsNoTracking().Where(t => sids.Contains(t.ScryfallId)).ToList();
+        }
+
+        /// <summary>"Incubator // Phyrexian" → Incubator, Phyrexian.</summary>
+        private static string[] FaceNames(string name) =>
+            name.Split(" // ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        /// <summary>A two-sided printing: a real double-faced token, or one you've paired with another token.</summary>
+        public static bool IsTwoSided(TokenCard t) =>
+            string.Equals(t.Layout, "double_faced_token", StringComparison.OrdinalIgnoreCase) ||
+            CollectionEditService.OtherSidesOfPrinting(t.ScryfallId).Count > 0;
+
+        /// <summary>The other side of a two-sided printing: the paired token's name, or a double-faced token's other face.</summary>
+        public static string OtherSideName(TokenCard t)
+        {
+            try
+            {
+                var paired = CollectionEditService.OtherSidesOfPrinting(t.ScryfallId);
+                if (paired.Count > 0) return string.Join(", ", paired.Select(p => p.Name).Distinct());
+            }
+            catch { /* no pairs to read */ }
+            return "";
+        }
+
+        /// <summary>
+        /// Two suggestions offered as the two sides of one card you own (your
+        /// Treasure // Angel for a Treasure and an Angel): each is told about the
+        /// other, and the one card does both.
+        /// </summary>
+        public static void LinkShared(List<TokenSuggestion> list)
+        {
+            foreach (var s in list) s.SharedWith = null;
+            for (int i = 0; i < list.Count; i++)
+            {
+                var others = CollectionEditService.OtherSidesOfPrinting(list[i].Token.ScryfallId)
+                    .Select(o => o.Key.ScryfallId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                if (others.Count == 0) continue;
+                for (int j = i + 1; j < list.Count; j++)
+                    if (list[j].SharedWith == null && list[i].SharedWith == null && others.Contains(list[j].Token.ScryfallId))
+                    {
+                        list[i].SharedWith = list[j];
+                        list[j].SharedWith = list[i];
+                    }
+            }
         }
 
         /// <summary>

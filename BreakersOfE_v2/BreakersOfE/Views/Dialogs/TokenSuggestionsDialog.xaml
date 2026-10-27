@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Suggested Tokens"
-        Width="640" SizeToContent="Height" MaxHeight="720"
+        Width="680" SizeToContent="Height" MaxHeight="720"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
@@ -18,6 +18,16 @@
         <TextBlock DockPanel.Dock="Top" x:Name="HeaderText" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
         <TextBlock DockPanel.Dock="Top" x:Name="NoteText" Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+        <!-- Two-sided tokens: which of your printings is offered first (remembered). -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" x:Name="PreferPanel" Margin="0,10,0,0" Visibility="Collapsed">
+            <TextBlock Text="Prefer" VerticalAlignment="Center" Margin="0,0,8,0"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            <ComboBox x:Name="PreferBox" Width="200" SelectionChanged="PreferBox_SelectionChanged"
+                      ToolTip="When you own a token both on its own and on a two-sided card: which one is offered">
+                <ComboBoxItem Content="Single-sided first"/>
+                <ComboBoxItem Content="Two-sided first"/>
+            </ComboBox>
+        </StackPanel>
         <TextBlock DockPanel.Dock="Bottom" x:Name="PrintStatus" Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap"
                    Visibility="Collapsed" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
 
@@ -49,6 +59,8 @@
                     ToolTip="Tick only the tokens in your token collection that the deck doesn't have yet"/>
             <Button Content="Not Owned" Padding="10,4" Click="NotOwned_Click"
                     ToolTip="Tick only the tokens you don't have in your token collection (the ones to print)"/>
+            <CheckBox x:Name="OneSideCheck" Content="Print one side only" Margin="18,0,0,0" VerticalAlignment="Center"
+                      ToolTip="Two-sided tokens: print just the side listed, not the token on its back"/>
         </StackPanel>
 
         <ScrollViewer Margin="0,12,0,0" VerticalScrollBarVisibility="Auto" MaxHeight="480">

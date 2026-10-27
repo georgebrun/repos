@@ -45,6 +45,42 @@ namespace BreakersOfE.Services
         public static List<Slip> FromToken(TokenCard t) => FromCard(t);
 
         /// <summary>
+        /// A token and, when you've paired it (two Scryfall tokens on one card),
+        /// the token on its other side: this side first, then the other
+        /// ("Side 1 of 2", "Side 2 of 2"). <paramref name="thisSideOnly"/>: just this one.
+        /// Anything else: its own slips.
+        /// </summary>
+        public static List<Slip> WithOtherSides(object card, bool thisSideOnly = false)
+        {
+            var slips = FromCard(card);
+            bool token = card is TokenCard || card is TokenCollectionEntry || (card is DeckCard d && d.IsTokenLine);
+            if (thisSideOnly || !token || slips.Count != 1) return slips;     // a real double-faced token prints both faces already
+            List<CollectionEditService.OtherSideRef> others;
+            try { others = CollectionEditService.OtherSideRefs(card); }
+            catch { return slips; }
+            if (others.Count == 0) return slips;
+            var list = new List<Slip>();
+            int n = 1 + others.Count;
+            list.Add(Renumber(slips[0], 1, n));
+            int i = 2;
+            foreach (var o in others)
+            {
+                var pool = CollectionEditService.FindPoolCard(CollectionEditService.TokensTable, o.ScryfallId);
+                if (pool == null) continue;
+                foreach (var sl in FromCard(pool)) list.Add(Renumber(sl, i, n));
+                i++;
+            }
+            return list;
+        }
+
+        private static Slip Renumber(Slip s, int side, int of) => new()
+        {
+            Name = s.Name, ManaCost = s.ManaCost, TypeLine = s.TypeLine, Text = s.Text,
+            PowerToughness = s.PowerToughness, Colors = s.Colors, IsProxy = s.IsProxy,
+            Side = $"Side {side} of {of}",
+        };
+
+        /// <summary>
         /// Layouts printed as one slip per side (cards with two real faces).
         /// Split and adventure cards are one card, so they stay one slip.
         /// </summary>

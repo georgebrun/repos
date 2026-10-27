@@ -145,6 +145,24 @@ namespace BreakersOfE.Views
         /// <summary>The card has a back face picture (double-faced): show the flip button.</summary>
         public static bool HasBack(object card) => Get(card, "ImageBackUrl").Length > 0;
 
+        // ── Two-sided tokens (two Scryfall tokens paired as one card) ─────
+        /// <summary>The pool tokens on the other side of a paired token row or deck token line (none: single-sided).</summary>
+        public static List<object> OtherSideCards(object? card)
+        {
+            if (card == null || HasBack(card)) return new List<object>();
+            try
+            {
+                return Services.CollectionEditService.OtherSidesOfRow(card)
+                    .Select(s => s.Key.ScryfallId).Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Select(sid => Services.CollectionEditService.FindPoolCard(Services.CollectionEditService.TokensTable, sid))
+                    .Where(c => c != null).Cast<object>().ToList();
+            }
+            catch { return new List<object>(); }
+        }
+
+        /// <summary>"🔄 Show Other Side (Angel)".</summary>
+        public static string ShowOther(object other) => $"🔄 Show Other Side ({Get(other, "Name")})";
+
         /// <summary>The empty "decks" line, with how many decks were checked so "none" can be trusted.</summary>
         public static string NotInDecks(bool otherDecksOnly)
         {

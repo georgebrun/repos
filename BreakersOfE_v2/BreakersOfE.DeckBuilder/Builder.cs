@@ -412,9 +412,13 @@ namespace BreakersOfE.DeckBuilder
                 Deck.Picks.Add(pick);
             }
 
-            public string RoleLead(Eligible e, Role role, int target, int already = -1) =>
-                $"{RoleClassifier.Name(role)} ({(already >= 0 ? RoleCount(role) + already : RoleCount(role)) + 1} of {target})" +
-                (e.RolesFromTags ? "" : " — read from its text");
+            /// <summary>"Removal (6 of 8)"; past the guide's target "Removal (over the guide)".</summary>
+            public string RoleLead(Eligible e, Role role, int target, int already = -1)
+            {
+                int n = (already >= 0 ? RoleCount(role) + already : RoleCount(role)) + 1;
+                return $"{RoleClassifier.Name(role)} ({(n > target ? "over the guide" : $"{n} of {target}")})" +
+                       (e.RolesFromTags ? "" : " — read from its text");
+            }
 
             public static string PlanLead(Eligible e) =>
                 e.Roles.Count > 0 ? string.Join(", ", e.Roles.Select(RoleClassifier.Name)) : "For the deck's plan";

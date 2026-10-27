@@ -32,6 +32,8 @@ namespace BreakersOfE.Data
         public DbSet<DeckUsage> DeckUsages { get; set; }
         /// <summary>Online collections (MTGO and Arena, by Game) — separate from paper.</summary>
         public DbSet<OnlineCollectionEntry> OnlineCollectionEntries { get; set; }
+        /// <summary>v2.2: two token rows that are the two sides of one card.</summary>
+        public DbSet<TokenPair> TokenPairs { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder options)
         {
@@ -366,6 +368,28 @@ namespace BreakersOfE.Data
             // v2 Trade Binder: binder copies come from one exact collection row
             // (finish × language × condition). '' = English (v1 binders had no language).
             AddColumnIfMissing("TradeBinderEntries", "Language", "TEXT NOT NULL DEFAULT ''");
+
+            // ── v2.2: two-sided tokens (each side its own Scryfall token) ──
+            CreateTableIfMissing(@"
+                CREATE TABLE IF NOT EXISTS TokenPairs (
+                    TokenPairId  INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ASid         TEXT NOT NULL DEFAULT '',
+                    AFinish      TEXT NOT NULL DEFAULT 'nonfoil',
+                    ALanguage    TEXT NOT NULL DEFAULT '',
+                    ACondition   TEXT NOT NULL DEFAULT '',
+                    AName        TEXT NOT NULL DEFAULT '',
+                    ASet         TEXT NOT NULL DEFAULT '',
+                    ANumber      TEXT NOT NULL DEFAULT '',
+                    BSid         TEXT NOT NULL DEFAULT '',
+                    BFinish      TEXT NOT NULL DEFAULT 'nonfoil',
+                    BLanguage    TEXT NOT NULL DEFAULT '',
+                    BCondition   TEXT NOT NULL DEFAULT '',
+                    BName        TEXT NOT NULL DEFAULT '',
+                    BSet         TEXT NOT NULL DEFAULT '',
+                    BNumber      TEXT NOT NULL DEFAULT '',
+                    Count        INTEGER NOT NULL DEFAULT 1,
+                    DateAdded    TEXT NOT NULL DEFAULT '2026-01-01 00:00:00'
+                )");
 
             // ── From v1 Phase 1: DeckUsage — which decks use each card ──────
             // Usage lives ONLY in the collection DB, never on deck files.

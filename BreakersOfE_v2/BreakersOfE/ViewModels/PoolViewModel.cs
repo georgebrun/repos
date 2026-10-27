@@ -128,6 +128,7 @@ namespace BreakersOfE.ViewModels
                             label = "collection rows"; break;
                         // ── Other collection tables (view-only) ──
                         case "CollTokens":
+                            Services.CollectionEditService.TidyPairs();         // "// other side" read fresh, gone pairs tidied
                             using (var cdb = new CollectionDbContext())
                                 rows = cdb.TokenCollectionEntries.AsNoTracking().OrderBy(c => c.Name)
                                           .ToList().Cast<object>().ToList();

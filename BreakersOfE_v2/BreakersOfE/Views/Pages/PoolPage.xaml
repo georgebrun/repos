@@ -18,6 +18,7 @@
         <svc:ImageSourceConverter x:Key="ImageSourceConverter" />
         <svc:ManaCostConverter x:Key="ManaCostConverter" />
         <pages:UsedInTableConverter x:Key="UsedInTable" />
+        <pages:NameShownConverter x:Key="NameShown" />
         <conv:RowBackgroundConverter x:Key="RowBackground" />
 
         <!-- Detail panel label/value styles -->
@@ -295,7 +296,7 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Name"         Binding="{Binding Name}"            Width="210"
+                    <DataGridTextColumn Header="Name"         Binding="{Binding Converter={StaticResource NameShown}, Mode=OneWay}" SortMemberPath="Name" Width="210"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />
                     <DataGridTextColumn Header="Edition"      Binding="{Binding SetCode}"         Width="85"
                                     HeaderTemplate="{StaticResource FilterableHeader}" />

@@ -89,6 +89,11 @@
                                   SelectionChanged="Defaults_SelectionChanged"
                                   ToolTip="Condition of cards added from the pool table. Adding to a selected collection row keeps that row's condition."/>
 
+                            <!-- Tokens: fix a two-sided card later (adding asks what's on the other side). -->
+                            <Button x:Name="BtnOtherSide" Content="Two-Sided…" Padding="10,4" Margin="0,0,18,0"
+                                Visibility="Collapsed" Click="BtnOtherSide_Click"
+                                ToolTip="The selected token's other side: pair it with the token on its back, or unpair it. Also right-click → Other Side…"/>
+
                             <Button x:Name="BtnAddNonFoil" Content="Add Non-Foil" Padding="10,4" Margin="0,0,6,0"
                                 Click="BtnAddNonFoil_Click" ToolTip="Add Qty non-foil copies (Enter)"/>
                             <Button x:Name="BtnAddFoil" Content="Add Foil" Padding="10,4" Margin="0,0,6,0"

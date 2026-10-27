@@ -111,6 +111,15 @@ namespace BreakersOfE.Views
             ShowPicture(back: false);
             BtnFlipFace.Visibility = CardDetailText.HasBack(_card) ? Visibility.Visible : Visibility.Collapsed;
 
+            // A two-sided token (paired): the button shows the token on its other side.
+            _others = CardDetailText.OtherSideCards(_card);
+            _otherAt = -1;
+            if (_others.Count > 0)
+            {
+                BtnFlipFace.Visibility = Visibility.Visible;
+                BtnFlipFace.Content = CardDetailText.ShowOther(_others[0]);
+            }
+
             // Hide rulings from previous card
             RulingsHeader.Visibility = Visibility.Collapsed;
             RulingsBorder.Visibility = Visibility.Collapsed;
@@ -127,7 +136,7 @@ namespace BreakersOfE.Views
         private void ShowSide(int side)
         {
             var face = CardDetailText.Face(_card, side);
-            CardName.Text = face.Name;
+            CardName.Text = face.Name + OtherSideNames();
             CardType.Text = face.TypeLine;
             Services.ManaCostConverter.Fill(ManaCostPanel, face.ManaCost);
             PTLabel.Text = face.Stats?.Label ?? "";
@@ -313,8 +322,52 @@ namespace BreakersOfE.Views
         }
 
         // ── Button handlers ─────────────────────────────────────────────
+        /// <summary>A two-sided token: "  // Angel"; else nothing.</summary>
+        private string OtherSideNames()
+        {
+            try
+            {
+                var sides = Services.CollectionEditService.OtherSidesOfRow(_card);
+                return sides.Count == 0 ? "" : "  // " + string.Join(", ", sides.Select(x => x.Name).Distinct());
+            }
+            catch { return ""; }
+        }
+
+        private List<object> _others = new();
+        private int _otherAt = -1;
+
+        /// <summary>Two-sided token: the next other side (picture and text), then back to this one.</summary>
+        private void ShowNextOtherSide()
+        {
+            _otherAt = _otherAt + 1 >= _others.Count ? -1 : _otherAt + 1;
+            if (_otherAt < 0)
+            {
+                ShowPicture(back: false);
+                ShowSide(CardDetailText.FirstSide(_card));
+                BtnFlipFace.Content = CardDetailText.ShowOther(_others[0]);
+                return;
+            }
+            var o = _others[_otherAt];
+            int v = ++_picVersion;
+            _ = Services.CardPictures.ShowAsync(CardImage, CardDetailText.Get(o, "ScryfallId"),
+                CardDetailText.Get(o, "ImageNormalUrl"), CardDetailText.Get(o, "LocalImagePath"), () => v == _picVersion);
+            var face = CardDetailText.Face(o, -1);
+            CardName.Text = face.Name + "  // " + Get("Name");
+            CardType.Text = face.TypeLine;
+            Services.ManaCostConverter.Fill(ManaCostPanel, face.ManaCost);
+            PTLabel.Text = face.Stats?.Label ?? "";
+            CardPT.Text = face.Stats?.Value ?? "";
+            PTLabel.Visibility = CardPT.Visibility = face.Stats != null ? Visibility.Visible : Visibility.Collapsed;
+            CardOracle.Text = face.OracleText;
+            CardFlavor.Text = face.FlavorText;
+            FlavorHeader.Visibility = face.FlavorText.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+            FlavorBorder.Visibility = FlavorHeader.Visibility;
+            BtnFlipFace.Content = _otherAt + 1 < _others.Count ? CardDetailText.ShowOther(_others[_otherAt + 1]) : CardDetailText.ShowFront;
+        }
+
         private void BtnFlipFace_Click(object sender, RoutedEventArgs e)
         {
+            if (_others.Count > 0) { ShowNextOtherSide(); return; }
             _showingBack = !_showingBack;
             ShowPicture(back: _showingBack);
             ShowSide(_showingBack ? 1 : 0);

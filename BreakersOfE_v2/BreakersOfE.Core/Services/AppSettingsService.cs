@@ -60,6 +60,9 @@ namespace BreakersOfE.Services
         /// <summary>The page the app opens on: pool, collection, decks, sets or keywords.</summary>
         public string StartPage { get; set; } = "pool";
 
+        /// <summary>Suggested Tokens: offer your two-sided tokens before your single-sided ones (the window's Prefer choice).</summary>
+        public bool PreferTwoSidedTokens { get; set; }
+
         /// <summary>Remind to Update Database after this many days (0 = never).</summary>
         public int UpdateReminderDays { get; set; } = 14;
 
