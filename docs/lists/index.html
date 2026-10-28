@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1c1f24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="BoE Lists">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>BoE Lists</title>
+<!--
+  Breakers of E — the phone lists (Trade Binder and Want List).
+  One page for every BoE user; it holds nobody's cards. Each user's lists
+  come from the file BoE on their PC writes to their own cloud drive
+  ("BoE Lists.json"), opened here once and kept on the phone.
+
+  The file (written by BoE):
+  { "format": "boe-lists", "version": 1, "exported": "2026-10-27T18:15:00",
+    "binder": [ { name, back?, set, setName, no, finish, qty, price, ask?, color, type, lang, cond, img, imgLarge } ],
+    "want":   [ { name, back?, set, setName, no, finish, qty, price, color, type, forDeck, img, imgLarge } ] }
+  color: W U B R G M (multicolor) C (colorless). img / imgLarge: Scryfall picture links.
+-->
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --ink: #1c1f24; --dim: #5f6670; --line: #dde0e5;
+    --accent: #2f6fde; --chip: #eef1f5; --foil: #9a6c00; --good: #2e7d32; --warn: #fff3cd; --warnInk: #6b5200;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #16181c; --panel: #202329; --ink: #e9ebee; --dim: #9aa1ab; --line: #30343b;
+            --accent: #6ea0ff; --chip: #2a2e35; --foil: #e0b84a; --good: #7cc47f; --warn: #3a3220; --warnInk: #f0d58a; }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  button { font: inherit; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line);
+    padding: max(10px, env(safe-area-inset-top)) 14px 8px; }
+  .top { display: flex; align-items: center; gap: 10px; }
+  .top img { width: 30px; height: 30px; border-radius: 7px; }
+  h1 { font-size: 17px; margin: 0; flex: 1; }
+  .iconbtn { border: 1px solid var(--line); background: var(--chip); color: var(--ink); border-radius: 9px;
+    padding: 6px 10px; font-size: 13px; font-weight: 600; }
+  .sub { color: var(--dim); font-size: 12px; margin-top: 4px; }
+  .tabs { display: flex; gap: 6px; margin-top: 10px; }
+  .tab { flex: 1; border: 1px solid var(--line); background: var(--chip); color: var(--ink);
+    border-radius: 9px; padding: 8px 4px; font-size: 14px; font-weight: 600; }
+  .tab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tools { display: flex; gap: 6px; margin-top: 8px; }
+  .tools input, .tools select { font: inherit; font-size: 16px; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 9px; padding: 7px 9px; min-width: 0; }
+  .tools input { flex: 1; }
+  .tools select { flex: 1; }
+  .summary { color: var(--dim); font-size: 12px; margin-top: 7px; }
+  main { padding: 8px 10px 40px; }
+  .card { display: flex; gap: 10px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 11px; padding: 8px; margin-bottom: 8px; cursor: pointer; }
+  .pic { width: 64px; height: 89px; flex: none; border-radius: 5px; overflow: hidden; background: var(--chip);
+    display: flex; align-items: center; justify-content: center; text-align: center; font-size: 10px; color: var(--dim); padding: 2px; }
+  .pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .info { flex: 1; min-width: 0; }
+  .name { font-weight: 650; font-size: 15px; }
+  .name .back { font-weight: 400; color: var(--dim); }
+  .meta { color: var(--dim); font-size: 12.5px; margin-top: 2px; }
+  .row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; align-items: center; }
+  .pill { font-size: 11.5px; padding: 2px 7px; border-radius: 99px; background: var(--chip); }
+  .pill.foil { color: var(--foil); font-weight: 700; }
+  .pill.for { color: var(--accent); }
+  .price { margin-left: auto; text-align: right; font-size: 13px; white-space: nowrap; }
+  .price b { font-size: 15px; }
+  .ask { color: var(--good); font-weight: 650; }
+  .empty { text-align: center; color: var(--dim); padding: 40px 10px; }
+  /* First open: get the lists */
+  .welcome { max-width: 480px; margin: 24px auto; padding: 0 16px; }
+  .welcome h2 { font-size: 20px; margin: 10px 0 6px; }
+  .welcome p { color: var(--dim); margin: 6px 0 14px; }
+  .big-btn { display: block; width: 100%; padding: 13px; margin: 10px 0; border-radius: 12px; font-weight: 650;
+    border: 1px solid var(--line); background: var(--chip); color: var(--ink); text-align: center; }
+  .big-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .note { background: var(--warn); color: var(--warnInk); font-size: 12.5px; padding: 8px 10px; border-radius: 9px; margin-top: 8px; }
+  .note button { background: none; border: none; color: inherit; font-weight: 700; float: right; padding: 0 0 0 8px; }
+  /* Tap a card: bigger picture and details */
+  .sheet { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; z-index: 10;
+    align-items: flex-end; justify-content: center; }
+  .sheet.open { display: flex; }
+  .box { background: var(--panel); width: 100%; max-width: 520px; border-radius: 16px 16px 0 0;
+    padding: 14px 14px max(16px, env(safe-area-inset-bottom)); max-height: 92vh; overflow: auto; }
+  .bigpic { width: 100%; max-width: 300px; aspect-ratio: 488 / 680; margin: 0 auto 10px; border-radius: 12px;
+    overflow: hidden; background: var(--chip); display: flex; align-items: center; justify-content: center; color: var(--dim); }
+  .bigpic img { width: 100%; height: 100%; object-fit: cover; }
+  .close { display: block; width: 100%; margin-top: 12px; padding: 10px; font-weight: 600;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--chip); color: var(--ink); }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0 0; font-size: 14px; }
+  dt { color: var(--dim); }
+  dd { margin: 0; }
+  footer { color: var(--dim); font-size: 11px; text-align: center; padding: 10px 16px 30px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ═══ First open (no lists yet) ═══ -->
+<section id="welcome" class="welcome hidden">
+  <img src="icon-192.png" alt="" width="64" height="64" style="border-radius:14px">
+  <h2>Your Trade Binder and Want List</h2>
+  <p>Breakers of E on your PC keeps a file called <b>BoE Lists.json</b> in your cloud drive (OneDrive, Google Drive, iCloud Drive or Dropbox). Open it here once; it's kept on this phone, so it works without signal too.</p>
+  <button class="big-btn primary" id="btnOpen1">Open my lists file</button>
+  <button class="big-btn" id="btnSample">Try it with sample cards</button>
+  <p style="font-size:12.5px">In Breakers of E: <b>Settings → Phone Lists</b> turns the file on and shows where it is.</p>
+</section>
+
+<!-- ═══ The lists ═══ -->
+<div id="app" class="hidden">
+<header>
+  <div class="top">
+    <img src="icon-192.png" alt="">
+    <h1>BoE Lists</h1>
+    <button class="iconbtn" id="btnOpen2" title="Open the newest lists file from your cloud drive">Update</button>
+  </div>
+  <div class="sub" id="stamp"></div>
+  <div class="note hidden" id="installTip"><button id="tipClose" aria-label="Close">✕</button></div>
+  <div class="tabs">
+    <button class="tab on" data-tab="binder">Trade Binder</button>
+    <button class="tab" data-tab="want">Want List</button>
+  </div>
+  <div class="tools">
+    <input id="q" type="search" placeholder="Search name, set, type…" autocomplete="off">
+  </div>
+  <div class="tools">
+    <select id="filter"></select>
+    <select id="sort">
+      <option value="name">Name</option>
+      <option value="price">Price, high first</option>
+      <option value="set">Set</option>
+    </select>
+  </div>
+  <div class="summary" id="summary"></div>
+</header>
+<main id="list"></main>
+<footer>Card pictures: Scryfall (when online). Prices as of the update. Breakers of E is unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards.</footer>
+</div>
+
+<input type="file" id="file" accept=".json,application/json" class="hidden">
+<div class="sheet" id="sheet"><div class="box" id="box"></div></div>
+
+<script>
+"use strict";
+const STORE = "boe-lists-v1";
+const COLORS = { W: "White", U: "Blue", B: "Black", R: "Red", G: "Green", M: "Multicolor", C: "Colorless" };
+const $ = id => document.getElementById(id);
+const money = v => v == null ? "—" : "$" + Number(v).toFixed(2);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+let DATA = null, tab = "binder";
+
+// ── Sample (for "Try it") ────────────────────────────────────────────
+const SAMPLE = { format: "boe-lists", version: 1, exported: new Date().toISOString(), sample: true,
+  binder: [
+    { name: "Lightning Bolt", set: "M10", setName: "Magic 2010", no: "146", finish: "Non-Foil", qty: 2, price: 1.85, ask: 2.00, color: "R", type: "Instant", lang: "English", cond: "Near Mint" },
+    { name: "Sol Ring", set: "C21", setName: "Commander 2021", no: "263", finish: "Non-Foil", qty: 3, price: 1.20, color: "C", type: "Artifact", lang: "English", cond: "Lightly Played" },
+    { name: "Counterspell", set: "MH2", setName: "Modern Horizons 2", no: "267", finish: "Foil", qty: 1, price: 4.10, ask: 4.00, color: "U", type: "Instant", lang: "English", cond: "Near Mint" },
+    { name: "Treasure", back: "Angel", set: "TFRA", setName: "Reality Fracture Tokens", no: "15", finish: "Non-Foil", qty: 1, price: null, color: "C", type: "Token Artifact — Treasure", lang: "English", cond: "Near Mint" }
+  ],
+  want: [
+    { name: "Doubtless One", set: "ONS", setName: "Onslaught", no: "31", finish: "Non-Foil", qty: 4, price: 0.25, color: "W", type: "Creature — Cleric Avatar", forDeck: "Clerics (60-card)" },
+    { name: "Cyclonic Rift", set: "MM3", setName: "Modern Masters 2017", no: "35", finish: "Non-Foil", qty: 1, price: 22.00, color: "U", type: "Instant", forDeck: "Collection" },
+    { name: "Arcane Signet", set: "CMM", setName: "Commander Masters", no: "371", finish: "Foil", qty: 2, price: 3.75, color: "C", type: "Artifact", forDeck: "Lathril, Blade of the Elves" }
+  ] };
+
+// Pictures: the printing's own link from BoE; the sample asks Scryfall by name.
+const pic = (c, large) => (large ? c.imgLarge || c.img : c.img) ||
+  "https://api.scryfall.com/cards/named?exact=" + encodeURIComponent(c.name) + "&format=image&version=" + (large ? "normal" : "small");
+
+// ── Loading and keeping the lists ────────────────────────────────────
+function valid(d) { return d && d.format === "boe-lists" && Array.isArray(d.binder) && Array.isArray(d.want); }
+
+function use(d, keep) {
+  DATA = d;
+  if (keep) try { localStorage.setItem(STORE, JSON.stringify(d)); } catch { /* full or private mode: still shows */ }
+  $("welcome").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  const when = new Date(d.exported);
+  $("stamp").textContent = (d.sample ? "Sample cards · " : "Lists from ") +
+    (isNaN(when) ? d.exported : when.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }));
+  fillFilter();
+  render();
+  showInstallTip();
+}
+
+function openFile() { $("file").value = ""; $("file").click(); }
+$("file").onchange = async () => {
+  const f = $("file").files[0];
+  if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (!valid(d)) throw new Error("not a BoE lists file");
+    use(d, true);
+  } catch (e) {
+    alert("That isn't the BoE Lists file (" + e.message + "). Pick \"BoE Lists.json\" from your cloud drive.");
+  }
+};
+$("btnOpen1").onclick = openFile;
+$("btnOpen2").onclick = openFile;
+$("btnSample").onclick = () => use(SAMPLE, false);
+
+// ── Home-screen tip (once) ───────────────────────────────────────────
+function showInstallTip() {
+  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  if (standalone || localStorage.getItem("boe-tip-done")) return;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  $("installTip").insertAdjacentText("beforeend", ios
+    ? "Tip: tap Share, then \"Add to Home Screen\", to open this like an app."
+    : "Tip: tap ⋮, then \"Add to Home screen\" (or \"Install app\"), to open this like an app.");
+  $("installTip").classList.remove("hidden");
+}
+$("tipClose").onclick = () => { $("installTip").classList.add("hidden"); try { localStorage.setItem("boe-tip-done", "1"); } catch {} };
+
+// ── The lists ────────────────────────────────────────────────────────
+function fillFilter() {
+  const items = DATA[tab];
+  const opts = tab === "want"
+    ? ["All decks", ...[...new Set(items.map(c => c.forDeck || "Collection"))]
+        .sort((a, b) => a === "Collection" ? -1 : b === "Collection" ? 1 : a.localeCompare(b))]
+    : ["All colors", ...["W", "U", "B", "R", "G", "M", "C"].filter(k => items.some(c => c.color === k)).map(k => COLORS[k])];
+  $("filter").innerHTML = opts.map((o, i) => `<option value="${i === 0 ? "" : esc(o)}">${esc(o)}</option>`).join("");
+}
+
+function rows() {
+  const q = $("q").value.trim().toLowerCase();
+  const fv = $("filter").value;
+  const list = DATA[tab].filter(c =>
+    (!q || [c.name, c.back, c.set, c.setName, c.type, c.forDeck].join(" ").toLowerCase().includes(q)) &&
+    (!fv || (tab === "want" ? (c.forDeck || "Collection") === fv : COLORS[c.color] === fv)));
+  const s = $("sort").value;
+  return list.sort((a, b) => s === "price" ? (b.price || 0) - (a.price || 0)
+                         : s === "set" ? (a.setName || a.set).localeCompare(b.setName || b.set) || a.name.localeCompare(b.name)
+                         : a.name.localeCompare(b.name));
+}
+
+function render() {
+  const list = rows();
+  const copies = list.reduce((n, c) => n + (c.qty || 0), 0);
+  const value = list.reduce((n, c) => n + (c.price || 0) * (c.qty || 0), 0);
+  $("summary").textContent = `${list.length} card${list.length === 1 ? "" : "s"} · ${copies} cop${copies === 1 ? "y" : "ies"} · about ${money(value)}`;
+  $("list").innerHTML = list.length === 0
+    ? `<div class="empty">${DATA[tab].length === 0 ? (tab === "want" ? "Your Want List is empty." : "Your Trade Binder is empty.") : "Nothing matches."}</div>`
+    : list.map(c => `
+    <div class="card" data-i="${DATA[tab].indexOf(c)}">
+      <div class="pic"><img loading="lazy" alt="" src="${esc(pic(c, false))}"
+           onerror="this.parentNode.textContent='${esc(c.set)} #${esc(c.no)}'"></div>
+      <div class="info">
+        <div class="name">${esc(c.name)}${c.back ? ` <span class="back">// ${esc(c.back)}</span>` : ""}</div>
+        <div class="meta">${esc(c.setName || c.set)} · ${esc(c.set)} #${esc(c.no)}</div>
+        <div class="meta">${esc(c.type)}</div>
+        <div class="row">
+          <span class="pill">×${c.qty}</span>
+          ${c.finish && c.finish !== "Non-Foil" ? `<span class="pill foil">${esc(c.finish)}</span>` : ""}
+          ${tab === "want" ? `<span class="pill for">For ${esc(c.forDeck || "Collection")}</span>` : c.cond ? `<span class="pill">${esc(c.cond)}</span>` : ""}
+          <span class="price">${tab === "binder" && c.ask != null ? `<span class="ask">Ask ${money(c.ask)}</span><br>` : ""}<b>${money(c.price)}</b></span>
+        </div>
+      </div>
+    </div>`).join("");
+}
+
+function details(c) {
+  $("box").innerHTML = `
+    <div class="bigpic"><img alt="${esc(c.name)}" src="${esc(pic(c, true))}"
+         onerror="this.parentNode.textContent='No picture without signal'"></div>
+    <div class="name" style="font-size:18px">${esc(c.name)}${c.back ? ` // ${esc(c.back)}` : ""}</div>
+    <dl>
+      <dt>Set</dt><dd>${esc(c.setName || c.set)}</dd>
+      <dt>Number</dt><dd>${esc(c.set)} #${esc(c.no)}</dd>
+      <dt>Type</dt><dd>${esc(c.type)}</dd>
+      <dt>Finish</dt><dd>${esc(c.finish || "Non-Foil")}</dd>
+      <dt>${tab === "want" ? "Wanted" : "In binder"}</dt><dd>${c.qty}</dd>
+      ${tab === "want" ? `<dt>For</dt><dd>${esc(c.forDeck || "Collection")}</dd>`
+                       : `<dt>Condition</dt><dd>${esc(c.cond || "—")}${c.lang ? " · " + esc(c.lang) : ""}</dd>`}
+      <dt>Price</dt><dd>${money(c.price)}</dd>
+      ${tab === "binder" ? `<dt>Asking</dt><dd>${c.ask != null ? money(c.ask) : "Market price"}</dd>` : ""}
+    </dl>
+    <button class="close" id="closeSheet">Close</button>`;
+  $("closeSheet").onclick = () => $("sheet").classList.remove("open");
+  $("sheet").classList.add("open");
+}
+
+document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === b));
+  $("q").value = "";
+  fillFilter();
+  render();
+});
+$("q").oninput = render;
+$("filter").onchange = render;
+$("sort").onchange = render;
+$("list").onclick = e => { const el = e.target.closest(".card"); if (el) details(DATA[tab][+el.dataset.i]); };
+$("sheet").onclick = e => { if (e.target.id === "sheet") $("sheet").classList.remove("open"); };
+
+// ── Start: the lists kept on this phone, else the welcome ────────────
+let saved = null;
+try { saved = JSON.parse(localStorage.getItem(STORE) || "null"); } catch { saved = null; }
+if (valid(saved)) use(saved, false); else $("welcome").classList.remove("hidden");
+
+// Works offline once opened (only on the web address, not a file on the phone).
+if ("serviceWorker" in navigator && location.protocol === "https:")
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
