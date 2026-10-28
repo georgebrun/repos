@@ -8,9 +8,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ApplicationIcon>Resources\Icons\BreakersOfE.ico</ApplicationIcon>
-    <AssemblyVersion>2.1.1.0</AssemblyVersion>
-    <FileVersion>2.1.1.0</FileVersion>
-    <Version>2.1.1</Version>
+    <AssemblyVersion>2.1.2.0</AssemblyVersion>
+    <FileVersion>2.1.2.0</FileVersion>
+    <Version>2.1.2</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -38,6 +38,8 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.*" />
     <!-- SVG rendering for mana symbols -->
     <PackageReference Include="SharpVectors.Reloaded" Version="1.*" />
+    <!-- QR code for Settings → Phone Lists (the phone page's address) -->
+    <PackageReference Include="QRCoder" Version="1.6.0" />
   </ItemGroup>
 
 </Project>

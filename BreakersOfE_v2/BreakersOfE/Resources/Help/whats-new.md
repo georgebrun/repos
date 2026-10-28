@@ -1,5 +1,11 @@
-# What's New in 2.1.1
-> Two-sided tokens; and 2.1.0's deck builder, with card tags, combos, EDHREC, salt, a Want List per deck, print slips and deck versions.
+# What's New in 2.1.2
+> Your Trade Binder and Want List on your phone; 2.1.1's two-sided tokens; and 2.1.0's deck builder, with card tags, combos, EDHREC, salt, a Want List per deck, print slips and deck versions.
+
+## 2.1.2: Phone lists
+Your Trade Binder and Want List on your phone, iPhone or Android, for the store or a trade. See [[phone-lists]].
+- **📱 Phone…** on the Trade Binder and Want List (or **Settings → Phone lists**): BoE keeps a file, **BoE Lists.json**, in your cloud drive (OneDrive, Google Drive, iCloud Drive or Dropbox) up to date by itself as your collection changes.
+- The **BoE Lists** page on your phone opens it: pictures, the full set name, search, filters by color or deck, prices and your asking prices. Scan the QR code in Settings, add it to your Home Screen, and it opens like an app, even without signal.
+- Only the Trade Binder and Want List go in the file, never the rest of your collection or your decks. Free, with no account to make.
 
 ## 2.1.1: Two-sided tokens
 Many tokens have another token on the back, and Scryfall lists each side as its own token. Now BoE knows they're one card. See [[two-sided-tokens]].

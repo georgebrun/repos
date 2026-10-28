@@ -110,7 +110,17 @@ namespace BreakersOfE.Views.Pages
             _bottom.LoadPool(CollectionEditService.BinderTable);
             UpdateButtons();
             ShowStatus("", false);
+            OfferPhoneLists();
         }
+
+        /// <summary>📱 Phone…: the Phone Lists window.</summary>
+        private void BtnPhone_Click(object sender, RoutedEventArgs e) =>
+            Dialogs.PhoneListsWindow.Open(Window.GetWindow(this));
+
+        /// <summary>Once, while Phone lists are off: show the window when the page has opened.</summary>
+        private void OfferPhoneLists() =>
+            Dispatcher.BeginInvoke(new Action(() => { if (IsLoaded) Dialogs.PhoneListsWindow.OfferOnce(Window.GetWindow(this)); }),
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle);
 
         private void ShowTradePercent() =>
             TradePercentText.Text = $"Trade Value = market × {Math.Clamp(AppSettingsService.Current.TradePercent, 1, 100)}% (Trade %, a setting)";

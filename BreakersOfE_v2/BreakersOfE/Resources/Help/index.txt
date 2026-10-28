@@ -45,6 +45,7 @@ Your Cards
   two-sided-tokens.md
   trade-binder.md
   want-list.md
+  phone-lists.md
   decks.md
   build.md
   online.md

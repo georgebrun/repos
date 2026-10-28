@@ -132,7 +132,17 @@ namespace BreakersOfE.Views.Pages
             RefreshCounts();
             ShowStatus(orphans.Length > 0 ? orphans
                 : converted > 0 ? $"{converted} want(s) with \"For: deck\" in their notes are now wants for that deck (see the For column)." : "", false);
+            OfferPhoneLists();
         }
+
+        /// <summary>📱 Phone…: the Phone Lists window.</summary>
+        private void BtnPhone_Click(object sender, RoutedEventArgs e) =>
+            Dialogs.PhoneListsWindow.Open(Window.GetWindow(this));
+
+        /// <summary>Once, while Phone lists are off: show the window when the page has opened.</summary>
+        private void OfferPhoneLists() =>
+            Dispatcher.BeginInvoke(new Action(() => { if (IsLoaded) Dialogs.PhoneListsWindow.OfferOnce(Window.GetWindow(this)); }),
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle);
 
         /// <summary>
         /// Wants for decks that are gone (torn down before Tear Down asked):

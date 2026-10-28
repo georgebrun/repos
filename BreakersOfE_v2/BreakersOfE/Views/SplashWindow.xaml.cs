@@ -15,7 +15,7 @@ namespace BreakersOfE.Views
         {
             InitializeComponent();
             var v = Assembly.GetExecutingAssembly().GetName().Version;
-            VersionText.Text = v != null ? $"Version {v.Major}.{v.Minor}.{v.Build}" : "Version 2.1.1";
+            VersionText.Text = v != null ? $"Version {v.Major}.{v.Minor}.{v.Build}" : "Version 2.1.2";
         }
 
         /// <summary>

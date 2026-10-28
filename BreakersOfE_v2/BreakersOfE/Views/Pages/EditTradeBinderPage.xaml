@@ -86,8 +86,10 @@
                                 Click="BtnTraded_Click"
                                 ToolTip="Qty copies are gone: out of the Trade Binder AND your collection (asks first)"/>
 
-                        <Button x:Name="BtnUndo" Content="Undo" Padding="10,4" Margin="0,0,18,0"
+                        <Button x:Name="BtnUndo" Content="Undo" Padding="10,4" Margin="0,0,8,0"
                                 Click="BtnUndo_Click" ToolTip="Nothing to undo (Ctrl+Z)"/>
+                        <Button Content="📱 Phone…" Padding="10,4" Margin="0,0,18,0" Click="BtnPhone_Click"
+                                ToolTip="Your Trade Binder and Want List on your phone (Phone lists)"/>
 
                         <TextBlock x:Name="TradePercentText" VerticalAlignment="Center" FontSize="12"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"

@@ -59,6 +59,10 @@ namespace BreakersOfE.Views.Pages
             ThemeService.Changed -= OnThemeChanged;
             ThemeService.Changed += OnThemeChanged;
             Unloaded += (_, _) => ThemeService.Changed -= OnThemeChanged;
+            ShowPhoneLists();
+            PhoneListsWatcher.StatusChanged -= ShowPhoneStatus;
+            PhoneListsWatcher.StatusChanged += ShowPhoneStatus;
+            Unloaded += (_, _) => PhoneListsWatcher.StatusChanged -= ShowPhoneStatus;
         }
 
         private void ShowSettings()

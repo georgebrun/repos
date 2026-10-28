@@ -31,3 +31,6 @@ Wants made before the For column, with "For: Deck name" in their **Notes** (Find
 Importing into the Want List adds to (or, with Replace, replaces) the **Collection's** wants only; wants for decks are left alone.
 
 **Undo** or [Ctrl+Z] takes back the last 20 changes.
+
+## On your phone
+Take it with you: **📱 Phone…** (or **Settings → Phone lists**) puts your Trade Binder and Want List on your phone (iPhone or Android), kept up to date as they change. See [[phone-lists]].

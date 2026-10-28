@@ -148,6 +148,50 @@
                 </StackPanel>
             </Border>
 
+            <!-- ═══ PHONE LISTS ═══ -->
+            <Border Style="{StaticResource Section}">
+                <StackPanel>
+                    <TextBlock Text="Phone lists" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Style="{StaticResource Hint}"
+                               Text="Your Trade Binder and Want List on your phone (iPhone or Android), for the store or a trade. BoE keeps a file, BoE Lists.json, in your cloud drive up to date as your collection changes; the BoE Lists page on your phone opens it, with pictures, search and filters, and keeps it for when there's no signal. Only those two lists go in the file."/>
+                    <CheckBox x:Name="PhoneListsCheck" Margin="0,0,0,10" Click="PhoneLists_Changed"
+                              Content="Keep my Trade Binder and Want List on my phone"/>
+                    <StackPanel x:Name="PhoneListsPanel">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBlock Text="Cloud drive folder" Style="{StaticResource Label}"/>
+                            <TextBlock x:Name="PhoneFolderText" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="560"/>
+                        </StackPanel>
+                        <WrapPanel Margin="190,4,0,8">
+                            <Button Content="Change Folder…" Padding="10,4" Margin="0,0,8,0" Click="BtnPhoneFolder_Click"
+                                    ToolTip="A folder in OneDrive, Google Drive, iCloud Drive or Dropbox on this PC"/>
+                            <Button Content="Open Folder" Padding="10,4" Margin="0,0,8,0" Click="BtnPhoneOpenFolder_Click"/>
+                            <Button Content="Update Now" Padding="10,4" Click="BtnPhoneUpdate_Click"
+                                    ToolTip="Write the lists now (BoE also does it by itself whenever your collection changes)"/>
+                        </WrapPanel>
+                        <TextBlock x:Name="PhoneStatusText" Margin="0,0,0,10" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+
+                        <!-- On the phone: scan, Add to Home Screen, open the file once -->
+                        <DockPanel>
+                            <Border DockPanel.Dock="Left" Background="White" CornerRadius="8" Padding="8" Margin="0,0,16,0" VerticalAlignment="Top">
+                                <Image x:Name="PhoneQr" Width="150" Height="150" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                            </Border>
+                            <StackPanel>
+                                <TextBlock Text="On your phone" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                <TextBlock TextWrapping="Wrap" Margin="0,0,0,2" Text="1.  Point the camera at the code to open the BoE Lists page."/>
+                                <TextBlock TextWrapping="Wrap" Margin="0,0,0,2" Text="2.  Add it to your Home Screen (iPhone: Share → Add to Home Screen; Android: ⋮ → Add to Home screen)."/>
+                                <TextBlock TextWrapping="Wrap" Margin="0,0,0,8" Text="3.  Open it, tap Open my lists file, and pick BoE Lists.json in your cloud drive. Tap Update there to get newer lists."/>
+                                <WrapPanel>
+                                    <TextBlock x:Name="PhoneUrlText" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <Button Content="Copy Address" Padding="10,4" Click="BtnPhoneCopy_Click"/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </DockPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <!-- ═══ DATA FOLDER ═══ -->
             <Border Style="{StaticResource Section}">
                 <StackPanel>

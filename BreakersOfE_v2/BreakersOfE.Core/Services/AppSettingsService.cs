@@ -60,6 +60,15 @@ namespace BreakersOfE.Services
         /// <summary>The page the app opens on: pool, collection, decks, sets or keywords.</summary>
         public string StartPage { get; set; } = "pool";
 
+        /// <summary>Settings → Phone Lists: keep "BoE Lists.json" (Trade Binder and Want List) up to date for the phone.</summary>
+        public bool PhoneListsOn { get; set; }
+
+        /// <summary>Where "BoE Lists.json" goes ("" = OneDrive\Breakers of E when there's a OneDrive).</summary>
+        public string PhoneListsFolder { get; set; } = "";
+
+        /// <summary>The Phone Lists window was shown on the Trade Binder / Want List and "Don't show this again" ticked.</summary>
+        public bool PhoneListsOffered { get; set; }
+
         /// <summary>Suggested Tokens: offer your two-sided tokens before your single-sided ones (the window's Prefer choice).</summary>
         public bool PreferTwoSidedTokens { get; set; }
 

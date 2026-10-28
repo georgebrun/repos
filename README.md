@@ -113,6 +113,11 @@ Breakers of E (BoE) keeps track of every Magic card that exists, the cards you o
   <img src="docs/images/want-list-for.png" width="900" alt="The Want List: the card pool on top, the wants below, each for a deck or for the Collection">
 </p>
 
+### Phone lists
+- Your **Trade Binder and Want List on your phone** (iPhone or Android), for the store or a trade: pictures, search, filters by color or deck, prices and asking prices
+- BoE keeps a file in your cloud drive (OneDrive, Google Drive, iCloud Drive or Dropbox) up to date by itself; the **BoE Lists** page opens it, works offline, and adds to your Home Screen like an app
+- Free, no account to make; only those two lists go in the file
+
 ### Import and export
 - Import from **ManaBox**, **Moxfield, Archidekt, Deckbox, TCGplayer, Dragon Shield, MTGGoldfish, Deckstats, Delver Lens** CSVs, or a plain **text list**, into your collection, Want List or a new deck, with a preview of every line and **Undo Last Import**
 - **MTGO and Arena**: MTGO .dek and CSV files (matched exactly by MTGO id, foils included) and Arena lists into your online collections

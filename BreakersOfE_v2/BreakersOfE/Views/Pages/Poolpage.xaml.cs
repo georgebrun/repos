@@ -267,6 +267,7 @@ namespace BreakersOfE.Views.Pages
             if (_embeddedGalleryDefault is bool d)
                 _embeddedGallery = Services.GridLayoutService.GetEditGallery(EditGalleryKey(tag)) ?? d;
             SetViewMode(SwitchMode);
+            if (IsPhoneListTable) OfferPhoneLists();
         }
 
         /// <summary>

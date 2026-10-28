@@ -14,3 +14,6 @@ Your collection is on top and the Trade Binder below. Copies you put in the bind
 - **Notes**: double-click the Notes cell, or right-click → **Edit Notes…**.
 
 **Undo** or [Ctrl+Z] takes back the last 20 changes. See also [[howto-trade-binder]].
+
+## On your phone
+Take it with you: **📱 Phone…** (or **Settings → Phone lists**) puts your Trade Binder and Want List on your phone (iPhone or Android), kept up to date as they change. See [[phone-lists]].

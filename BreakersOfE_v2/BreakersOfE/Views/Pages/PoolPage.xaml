@@ -143,6 +143,11 @@
                         Visibility="Collapsed"
                         Click="BtnStatistics_Click"
                         ToolTip="Collection: statistics for the rows on screen (filters narrow it). Deck: statistics for the whole deck."/>
+                    <Button x:Name="BtnPhone" Content="📱 Phone…"
+                        Padding="10,4" Margin="0,0,8,0"
+                        Visibility="Collapsed"
+                        Click="BtnPhone_Click"
+                        ToolTip="Your Trade Binder and Want List on your phone (Phone lists)"/>
                     <Button x:Name="BtnSetCompletion" Content="Set Completion"
                         Padding="10,4" Margin="0,0,8,0"
                         Visibility="Collapsed"

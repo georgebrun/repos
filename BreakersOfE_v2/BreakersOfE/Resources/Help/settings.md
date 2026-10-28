@@ -20,6 +20,9 @@
 - **Remind me to update after**: when the update reminder appears (or Never).
 - **Restart Tour**: shows the Program Tour now, and again each time BoE starts until you tick **Do Not Show Again**.
 
+## Phone lists
+Your Trade Binder and Want List on your phone, iPhone or Android. Tick **Keep my Trade Binder and Want List on my phone**: BoE writes **BoE Lists.json** to a folder in your cloud drive (OneDrive\Breakers of E to start; **Change Folder…** for Google Drive, iCloud Drive or Dropbox), and writes it again by itself whenever your collection changes. Only those two lists go in the file. See [[phone-lists]].
+
 ## Data folder
 Shows where your data is and how big it is. **Open Folder**, **Move…** (see [[howto-move-folder]]) or **Use Documents\Breakers of E Again**. See [[data-folder]].
 

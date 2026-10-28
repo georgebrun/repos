@@ -100,8 +100,10 @@
                             <ComboBox x:Name="ConditionBox" SelectionChanged="Defaults_SelectionChanged" Width="180" Margin="0,0,18,0" VerticalAlignment="Center"
                                   ToolTip="Condition of the copies you got"/>
 
-                            <Button x:Name="BtnUndo" Content="Undo" Padding="10,4"
+                            <Button x:Name="BtnUndo" Content="Undo" Padding="10,4" Margin="0,0,8,0"
                                 Click="BtnUndo_Click" ToolTip="Nothing to undo (Ctrl+Z)"/>
+                            <Button Content="📱 Phone…" Padding="10,4" Click="BtnPhone_Click"
+                                ToolTip="Your Trade Binder and Want List on your phone (Phone lists)"/>
                         </WrapPanel>
                         <!-- The card the buttons act on -->
                         <TextBlock x:Name="ModeText" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"

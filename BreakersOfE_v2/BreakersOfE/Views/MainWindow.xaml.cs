@@ -49,6 +49,7 @@ namespace BreakersOfE.Views
                         "Data Folder", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
                 StartTourWhenReady();
                 _ = CheckForNewVersionAtStart();
+                Services.PhoneListsWatcher.Start();          // Settings → Phone Lists (does nothing while off)
             };
         }
 
