@@ -8,7 +8,7 @@ namespace BreakersOfE.Services
 {
     /// <summary>
     /// What Settings → Phone lists and the Phone Lists window share: the QR
-    /// code, picking the folder, opening it, copying the address.
+    /// code, Dropbox, picking the folder, opening it, copying the address.
     /// </summary>
     public static class PhoneListsUi
     {
@@ -110,6 +110,88 @@ namespace BreakersOfE.Services
                 return "Couldn't copy the address (the clipboard was busy). Try again.";
             }
         }
+
+        // ── Dropbox (hands-free) ─────────────────────────────────────────
+        /// <summary>Waiting for the browser sign-in (the button says so and can't be clicked again).</summary>
+        public static bool Connecting { get; private set; }
+
+        /// <summary>What the Dropbox line says.</summary>
+        public static string DropboxText()
+        {
+            if (Connecting)
+                return "Waiting for Dropbox: finish signing in on the page that opened in your browser.";
+            if (!DropboxService.Connected)
+                return "Not connected. Connect once and your phone gets the newest lists by itself, " +
+                       "every time you open the BoE Lists page: no picking files, no Update. Free; no Dropbox app needed on this PC.";
+            string who = DropboxService.AccountName;
+            return $"Connected{(who.Length > 0 ? $" ({who})" : "")}. BoE sends the lists to Dropbox › Apps › " +
+                   $"{DropboxService.AppName} whenever your collection changes.";
+        }
+
+        /// <summary>Connect Dropbox… / Disconnect. "" or what went wrong.</summary>
+        public static async Task<string> ToggleDropboxAsync()
+        {
+            if (DropboxService.Connected)
+            {
+                await DropboxService.DisconnectAsync();
+                await PhoneListsWatcher.WriteNowAsync();          // back to the cloud-drive folder
+                return "";
+            }
+            if (Connecting) return "";
+            Connecting = true;
+            using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromMinutes(5));
+            try
+            {
+                await DropboxService.ConnectAsync(url =>
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }), cts.Token);
+                Connecting = false;
+                await PhoneListsWatcher.WriteNowAsync();
+                return "";
+            }
+            catch (OperationCanceledException)
+            {
+                return "Dropbox didn't answer within 5 minutes. Try Connect Dropbox… again.";
+            }
+            catch (Exception ex)
+            {
+                return ex is System.Net.Http.HttpRequestException ? "Couldn't reach Dropbox. Check the internet connection and try again." : ex.Message;
+            }
+            finally
+            {
+                Connecting = false;
+            }
+        }
+
+        /// <summary>Dropbox's sign-up page (Dropbox Basic: free).</summary>
+        public const string SignUpUrl = "https://www.dropbox.com/register";
+
+        /// <summary>How to make one, under the Free Dropbox account link.</summary>
+        public const string SignUpSteps =
+            "Dropbox Basic is free (2 GB; the lists take a few hundred KB). Sign up with your name, email and a password, " +
+            "and confirm the email Dropbox sends. Skip any offer of a paid trial or of installing the Dropbox app: BoE doesn't need either. " +
+            "Then come back here and click Connect Dropbox….";
+
+        /// <summary>The Free Dropbox account link: Dropbox's sign-up page in the browser.</summary>
+        public static void OpenSignUp()
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(SignUpUrl) { UseShellExecute = true });
+            }
+            catch
+            {
+                // No browser set up: the address is in the tooltip.
+            }
+        }
+
+        public static string DropboxButton() =>
+            Connecting ? "Waiting for Dropbox…" : DropboxService.Connected ? "Disconnect" : "Connect Dropbox…";
+
+        /// <summary>Step 3 on the phone: sign in with Dropbox, or open the file.</summary>
+        public static string PhoneStep3() =>
+            DropboxService.Connected
+                ? "3.  Open it, tap Sign in with Dropbox, and allow it (once, with the same Dropbox). From then on it gets your newest lists by itself each time you open it."
+                : "3.  Open it, tap Open my lists file, and pick BoE Lists.json in your cloud drive. Tap Update there to get newer lists.";
 
         /// <summary>The status line: what the watcher last did, or Off.</summary>
         public static string StatusText() =>

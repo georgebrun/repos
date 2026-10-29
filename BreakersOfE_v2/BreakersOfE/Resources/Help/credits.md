@@ -15,6 +15,9 @@ Combos come from **Commander Spellbook** (commanderspellbook.com), the combo dat
 ## EDHREC
 Commander recommendations (the EDHREC tab in Deck Statistics), salt scores and card links come from **EDHREC** (edhrec.com). EDHREC has no official API: BoE reads the same files its pages use, keeps each commander's for 7 days, and asks again only when you open a commander that's older or click Refresh. Salt scores are downloaded with Update Database. BoE isn't made by or connected with EDHREC.
 
+## Dropbox
+Phone lists by Dropbox (Settings → Phone lists → **Connect Dropbox…**) use the **Dropbox** API: BoE and the BoE Lists page on your phone keep your lists in BoE's own folder of your Dropbox (Apps › Breakers of E Lists) and see nothing else there. Dropbox is a trademark of Dropbox, Inc. BoE isn't made by or connected with Dropbox.
+
 ## Printed slips and proxies
 **Print Slip** and **Print Ticked…** make plain paper slips to sleeve over a card: name, cost, type, rules text and power/toughness, with no card art, no frame and no set. Each carries "© Wizards of the Coast LLC" in place of the artist and set.
 - **Tokens** print plain.

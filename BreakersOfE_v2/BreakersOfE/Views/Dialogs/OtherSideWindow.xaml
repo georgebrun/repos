@@ -36,6 +36,7 @@
                                ToolTip="Each side becomes its own card again"/>
                     <DataGrid x:Name="PairedGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
                               GridLinesVisibility="None" RowHeaderWidth="0" SelectionMode="Single" MaxHeight="130" MinHeight="54"
+                              HorizontalScrollBarVisibility="Disabled"
                               SelectionChanged="PairedGrid_SelectionChanged">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Other side" Binding="{Binding Name}" Width="*"/>
@@ -82,6 +83,7 @@
 
             <DataGrid x:Name="ChoiceGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
                       GridLinesVisibility="None" RowHeaderWidth="0" SelectionMode="Single"
+                      HorizontalScrollBarVisibility="Disabled"
                       SelectionChanged="ChoiceGrid_SelectionChanged" MouseDoubleClick="ChoiceGrid_MouseDoubleClick">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*"/>

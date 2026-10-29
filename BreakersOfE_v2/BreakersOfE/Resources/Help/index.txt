@@ -26,6 +26,7 @@ How To
   howto-tear-down.md
   howto-trade-binder.md
   howto-import.md
+  howto-scan.md
   howto-export-backup.md
   howto-update.md
   howto-colors.md

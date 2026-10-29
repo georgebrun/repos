@@ -115,8 +115,12 @@ Breakers of E (BoE) keeps track of every Magic card that exists, the cards you o
 
 ### Phone lists
 - Your **Trade Binder and Want List on your phone** (iPhone or Android), for the store or a trade: pictures, search, filters by color or deck, prices and asking prices
-- BoE keeps a file in your cloud drive (OneDrive, Google Drive, iCloud Drive or Dropbox) up to date by itself; the **BoE Lists** page opens it, works offline, and adds to your Home Screen like an app
-- Free, no account to make; only those two lists go in the file
+- **Hands-free with Dropbox**: BoE sends the lists to your Dropbox as they change, and the **BoE Lists** page gets them by itself each time you open it (a free Dropbox account is all it takes; no Dropbox app needed)
+- Or BoE keeps a file in your cloud drive (OneDrive, Google Drive, iCloud Drive or Dropbox) up to date, and the page opens it
+- The page works offline and adds to your Home Screen like an app; free, and only those two lists go in the file
+
+### Scanning
+- Scan cards with the free **ManaBox** app on your phone and import its file: every card comes in as the exact printing and finish you scanned
 
 ### Import and export
 - Import from **ManaBox**, **Moxfield, Archidekt, Deckbox, TCGplayer, Dragon Shield, MTGGoldfish, Deckstats, Delver Lens** CSVs, or a plain **text list**, into your collection, Want List or a new deck, with a preview of every line and **Undo Last Import**
@@ -208,7 +212,7 @@ Installer                   — publish script and Inno Setup scripts
 
 ## Credits
 
-Card data, prices, rulings, card tags and images are provided by [Scryfall](https://scryfall.com). Combos come from [Commander Spellbook](https://commanderspellbook.com). Commander recommendations and salt scores come from [EDHREC](https://edhrec.com). Breakers of E is not affiliated with Scryfall, Commander Spellbook or EDHREC.
+Card data, prices, rulings, card tags and images are provided by [Scryfall](https://scryfall.com). Combos come from [Commander Spellbook](https://commanderspellbook.com). Commander recommendations and salt scores come from [EDHREC](https://edhrec.com). Phone lists by Dropbox use the [Dropbox](https://www.dropbox.com) API. Breakers of E is not affiliated with Scryfall, Commander Spellbook, EDHREC or Dropbox. Dropbox is a trademark of Dropbox, Inc.
 
 Breakers of E is unofficial Fan Content permitted under the [Fan Content Policy](https://company.wizards.com/en/legal/fancontentpolicy). Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.
 

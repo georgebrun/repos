@@ -14,8 +14,13 @@
 <!--
   Breakers of E — the phone lists (Trade Binder and Want List).
   One page for every BoE user; it holds nobody's cards. Each user's lists
-  come from the file BoE on their PC writes to their own cloud drive
-  ("BoE Lists.json"), opened here once and kept on the phone.
+  come from the file BoE on their PC writes ("BoE Lists.json"), kept on the
+  phone. Two ways to get it:
+  - Dropbox (hands-free): sign in once with the same Dropbox as BoE; the page
+    fetches the file from the app's own folder each time it opens or comes
+    back to the front. PKCE sign-in, no secret; the lasting sign-in stays in
+    this page's storage on the phone.
+  - A file in any cloud drive, picked here (Update picks it again).
 
   The file (written by BoE):
   { "format": "boe-lists", "version": 1, "exported": "2026-10-27T18:15:00",
@@ -97,6 +102,9 @@
   dd { margin: 0; }
   footer { color: var(--dim); font-size: 11px; text-align: center; padding: 10px 16px 30px; }
   .hidden { display: none !important; }
+  .or { text-align: center; color: var(--dim); font-size: 12.5px; margin: 14px 0 0; }
+  .link { background: none; border: none; color: var(--accent); padding: 0; font-size: inherit; text-decoration: underline; }
+  .sub .bad { color: #c0392b; }
 </style>
 </head>
 <body>
@@ -105,10 +113,15 @@
 <section id="welcome" class="welcome hidden">
   <img src="icon-192.png" alt="" width="64" height="64" style="border-radius:14px">
   <h2>Your Trade Binder and Want List</h2>
-  <p>Breakers of E on your PC keeps a file called <b>BoE Lists.json</b> in your cloud drive (OneDrive, Google Drive, iCloud Drive or Dropbox). Open it here once; it's kept on this phone, so it works without signal too.</p>
-  <button class="big-btn primary" id="btnOpen1">Open my lists file</button>
+  <p>Breakers of E on your PC keeps your lists up to date in your <b>Dropbox</b> or in a file, <b>BoE Lists.json</b>, in your cloud drive. They're kept on this phone, so they work without signal too.</p>
+  <button class="big-btn primary" id="btnDropbox">Sign in with Dropbox</button>
+  <p style="font-size:12.5px;margin-top:0">Hands-free: the same Dropbox as Breakers of E, once. After that this page gets your newest lists by itself.</p>
+  <p style="font-size:12.5px">No Dropbox yet? <a href="https://www.dropbox.com/register" target="_blank" rel="noopener" style="color:var(--accent)">Free Dropbox account</a><br>
+    Dropbox Basic is free. Sign up with your name, email and a password, and confirm the email Dropbox sends. Skip any offer of a paid trial or the Dropbox app; you don't need either. Then connect it in Breakers of E on your PC (<b>Settings → Phone Lists → Connect Dropbox…</b>) and come back here to sign in.</p>
+  <p class="or">or</p>
+  <button class="big-btn" id="btnOpen1">Open my lists file</button>
   <button class="big-btn" id="btnSample">Try it with sample cards</button>
-  <p style="font-size:12.5px">In Breakers of E: <b>Settings → Phone Lists</b> turns the file on and shows where it is.</p>
+  <p style="font-size:12.5px">In Breakers of E: <b>Settings → Phone Lists</b> turns the lists on, connects Dropbox, or shows where the file is.</p>
 </section>
 
 <!-- ═══ The lists ═══ -->
@@ -139,7 +152,7 @@
   <div class="summary" id="summary"></div>
 </header>
 <main id="list"></main>
-<footer>Card pictures: Scryfall (when online). Prices as of the update. Breakers of E is unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards.</footer>
+<footer><span id="source"></span>Card pictures: Scryfall (when online). Prices as of the update. Breakers of E is unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards. Dropbox is a trademark of Dropbox, Inc.; Breakers of E isn't made by or connected with Dropbox.</footer>
 </div>
 
 <input type="file" id="file" accept=".json,application/json" class="hidden">
@@ -180,15 +193,125 @@ function use(d, keep) {
   if (keep) try { localStorage.setItem(STORE, JSON.stringify(d)); } catch { /* full or private mode: still shows */ }
   $("welcome").classList.add("hidden");
   $("app").classList.remove("hidden");
-  const when = new Date(d.exported);
-  $("stamp").textContent = (d.sample ? "Sample cards · " : "Lists from ") +
-    (isNaN(when) ? d.exported : when.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }));
+  setStamp();
+  showSource();
   fillFilter();
   render();
   showInstallTip();
 }
 
+function stampText() {
+  const when = new Date(DATA.exported);
+  return (DATA.sample ? "Sample cards · " : "Lists from ") +
+    (isNaN(when) ? DATA.exported : when.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }));
+}
+function setStamp() { delete $("stamp").dataset.busy; $("stamp").textContent = stampText(); }
+
 function openFile() { $("file").value = ""; $("file").click(); }
+
+// ── Dropbox (hands-free) ─────────────────────────────────────────────
+const DBX = { key: "o285jtez789m1yd", redirect: "https://georgebrun.github.io/repos/lists/",
+              path: "/BoE Lists.json", store: "boe-dbx-v1", pending: "boe-dbx-pending" };
+let dbxAccess = null, dbxUntil = 0, fetching = false;
+const dbxToken = () => { try { return localStorage.getItem(DBX.store) || ""; } catch { return ""; } };
+const b64url = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const randomText = n => b64url(crypto.getRandomValues(new Uint8Array(n)));
+
+async function dbxSignIn() {
+  const verifier = randomText(48), state = randomText(16);
+  const challenge = b64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
+  try { localStorage.setItem(DBX.pending, JSON.stringify({ verifier, state })); } catch {}
+  location.href = "https://www.dropbox.com/oauth2/authorize?client_id=" + DBX.key +
+    "&response_type=code&token_access_type=offline&code_challenge=" + challenge +
+    "&code_challenge_method=S256&redirect_uri=" + encodeURIComponent(DBX.redirect) + "&state=" + state;
+}
+
+// Back from Dropbox's page: ?code=…&state=… (or ?error=…).
+async function dbxFinishSignIn() {
+  const q = new URLSearchParams(location.search);
+  if (!q.has("code") && !q.has("error")) return false;
+  history.replaceState(null, "", location.pathname);
+  let pending = null;
+  try { pending = JSON.parse(localStorage.getItem(DBX.pending) || "null"); localStorage.removeItem(DBX.pending); } catch {}
+  if (q.has("error")) { if (q.get("error") !== "access_denied") alert("Dropbox didn't sign in (" + (q.get("error_description") || q.get("error")) + ")."); return false; }
+  if (!pending || pending.state !== q.get("state")) {
+    alert("The Dropbox sign-in didn't finish on this page. Tap Sign in with Dropbox again.");
+    return false;
+  }
+  const t = await dbxTokenCall({ grant_type: "authorization_code", code: q.get("code"), code_verifier: pending.verifier,
+                                 client_id: DBX.key, redirect_uri: DBX.redirect });
+  if (!t.refresh_token) throw new Error("Dropbox didn't give a lasting sign-in");
+  try { localStorage.setItem(DBX.store, t.refresh_token); } catch {}
+  return true;
+}
+
+async function dbxTokenCall(form) {
+  const r = await fetch("https://api.dropboxapi.com/oauth2/token", { method: "POST", body: new URLSearchParams(form) });
+  const t = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(t.error_description || t.error || ("Dropbox " + r.status)); e.refused = r.status === 400 || r.status === 401; throw e; }
+  dbxAccess = t.access_token; dbxUntil = Date.now() + Math.max(60, (t.expires_in || 3600) - 120) * 1000;
+  return t;
+}
+
+async function dbxAccessToken() {
+  if (dbxAccess && Date.now() < dbxUntil) return dbxAccess;
+  try {
+    await dbxTokenCall({ grant_type: "refresh_token", refresh_token: dbxToken(), client_id: DBX.key });
+  } catch (e) {
+    if (e.refused) dbxSignOut(true);
+    throw e;
+  }
+  return dbxAccess;
+}
+
+function dbxSignOut(refused) {
+  try { localStorage.removeItem(DBX.store); } catch {}
+  dbxAccess = null;
+  if (DATA) showSource();
+  if (refused) alert("Dropbox no longer lets this page in. Sign in with Dropbox again (or open your lists file).");
+}
+
+// The newest lists from Dropbox; quietly keeps the ones on the phone when there's no signal.
+async function dbxFetch(loud) {
+  if (!dbxToken() || fetching) return;
+  fetching = true;
+  setStatus("Getting your newest lists…");
+  try {
+    const token = await dbxAccessToken();
+    const r = await fetch("https://content.dropboxapi.com/2/files/download", { method: "POST",
+      headers: { Authorization: "Bearer " + token, "Dropbox-API-Arg": JSON.stringify({ path: DBX.path }) } });
+    if (r.status === 409) throw new Error("no lists in your Dropbox yet. In Breakers of E: Settings → Phone Lists → Connect Dropbox…, with the same Dropbox");
+    if (!r.ok) throw new Error("Dropbox " + r.status);
+    const d = JSON.parse(await r.text());
+    if (!valid(d)) throw new Error("the file in Dropbox isn't a BoE lists file");
+    use(d, true);
+  } catch (e) {
+    const offline = e instanceof TypeError;            // fetch itself failed: no signal
+    if (!DATA) { $("welcome").classList.remove("hidden"); if (loud || !offline) alert("Couldn't get your lists from Dropbox: " + (offline ? "no connection." : e.message)); }
+    else setStatus(offline ? "No signal: showing the lists kept on this phone." : "Couldn't update: " + e.message, true);
+  } finally {
+    fetching = false;
+    if (DATA && $("stamp").dataset.busy) setStamp();
+  }
+}
+
+function setStatus(text, bad) {
+  if (!DATA) return;
+  $("stamp").dataset.busy = bad ? "" : "1";
+  $("stamp").innerHTML = bad ? stampText() + ` · <span class="bad">${esc(text)}</span>` : esc(text);
+}
+
+// The footer line and the Update button: Dropbox or a file.
+function showSource() {
+  const dbx = !!dbxToken();
+  $("btnOpen2").textContent = dbx ? "Refresh" : "Update";
+  $("btnOpen2").title = dbx ? "Get the newest lists from Dropbox" : "Open the newest lists file from your cloud drive";
+  $("source").innerHTML = dbx
+    ? `Lists from your Dropbox, by themselves. <button class="link" id="dbxOut">Sign out of Dropbox</button><br>`
+    : `<button class="link" id="dbxIn">Get lists by themselves with Dropbox</button><br>`;
+  if (dbx) $("dbxOut").onclick = () => { if (confirm("Sign out of Dropbox on this phone? The lists stay here until you open new ones.")) dbxSignOut(false); };
+  else $("dbxIn").onclick = dbxSignIn;
+}
 $("file").onchange = async () => {
   const f = $("file").files[0];
   if (!f) return;
@@ -201,11 +324,15 @@ $("file").onchange = async () => {
   }
 };
 $("btnOpen1").onclick = openFile;
-$("btnOpen2").onclick = openFile;
+$("btnOpen2").onclick = () => dbxToken() ? dbxFetch(true) : openFile();
+$("btnDropbox").onclick = dbxSignIn;
 $("btnSample").onclick = () => use(SAMPLE, false);
 
 // ── Home-screen tip (once) ───────────────────────────────────────────
+let tipShown = false;
 function showInstallTip() {
+  if (tipShown) return;
+  tipShown = true;
   const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
   if (standalone || localStorage.getItem("boe-tip-done")) return;
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -300,7 +427,16 @@ $("sheet").onclick = e => { if (e.target.id === "sheet") $("sheet").classList.re
 // ── Start: the lists kept on this phone, else the welcome ────────────
 let saved = null;
 try { saved = JSON.parse(localStorage.getItem(STORE) || "null"); } catch { saved = null; }
-if (valid(saved)) use(saved, false); else $("welcome").classList.remove("hidden");
+if (valid(saved)) use(saved, false);
+(async () => {
+  let signedIn = false;
+  try { signedIn = await dbxFinishSignIn(); }
+  catch (e) { alert("Dropbox didn't sign in (" + e.message + "). Tap Sign in with Dropbox again."); }
+  if (dbxToken()) await dbxFetch(signedIn);
+  else if (!DATA) $("welcome").classList.remove("hidden");
+})();
+// Back to the front (the app reopened from the Home Screen): the newest lists again.
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") dbxFetch(false); });
 
 // Works offline once opened (only on the web address, not a file on the phone).
 if ("serviceWorker" in navigator && location.protocol === "https:")

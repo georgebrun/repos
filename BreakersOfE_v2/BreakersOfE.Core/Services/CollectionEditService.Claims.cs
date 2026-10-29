@@ -491,6 +491,30 @@ namespace BreakersOfE.Services
         }
 
         /// <summary>
+        /// Suggested Tokens: the finish to take a token in. <paramref name="preferred"/>
+        /// when you have a free copy in it, else a finish you do have free
+        /// copies in (so an owned foil gets claimed), else <paramref name="preferred"/>.
+        /// </summary>
+        public static string FinishWithFreeCopies(string table, string sid, string preferred)
+        {
+            try
+            {
+                using var db = new CollectionDbContext();
+                var cache = new Dictionary<string, bool>(StringComparer.Ordinal);
+                bool eo = EtchedOnlyPrinting(table, sid, cache);
+                var free = Rows(db, table, sid)
+                    .GroupBy(r => KeyOf(r, eo).Finish)
+                    .ToDictionary(g => g.Key, g => g.Sum(r => Math.Max(0, r.Quantity - Math.Max(0, r.UsedCount))));
+                if (free.GetValueOrDefault(preferred) > 0) return preferred;
+                return Finishes.FirstOrDefault(f => free.GetValueOrDefault(f) > 0) ?? preferred;
+            }
+            catch
+            {
+                return preferred;
+            }
+        }
+
+        /// <summary>
         /// Deck → Collection, "Add as new copies": the copies go into the
         /// collection (a new or matching row) and are claimed for the deck.
         /// </summary>

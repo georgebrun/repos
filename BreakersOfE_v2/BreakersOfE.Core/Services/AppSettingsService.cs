@@ -69,6 +69,12 @@ namespace BreakersOfE.Services
         /// <summary>The Phone Lists window was shown on the Trade Binder / Want List and "Don't show this again" ticked.</summary>
         public bool PhoneListsOffered { get; set; }
 
+        /// <summary>Phone lists by Dropbox: the sign-in that lasts (encrypted for this Windows user; "" = not connected).</summary>
+        public string DropboxToken { get; set; } = "";
+
+        /// <summary>Phone lists by Dropbox: whose Dropbox ("George Brun"), for Settings.</summary>
+        public string DropboxAccount { get; set; } = "";
+
         /// <summary>Suggested Tokens: offer your two-sided tokens before your single-sided ones (the window's Prefer choice).</summary>
         public bool PreferTwoSidedTokens { get; set; }
 

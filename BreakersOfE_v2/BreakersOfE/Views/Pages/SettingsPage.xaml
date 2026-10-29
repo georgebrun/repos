@@ -153,20 +153,41 @@
                 <StackPanel>
                     <TextBlock Text="Phone lists" Style="{StaticResource SectionTitle}"/>
                     <TextBlock Style="{StaticResource Hint}"
-                               Text="Your Trade Binder and Want List on your phone (iPhone or Android), for the store or a trade. BoE keeps a file, BoE Lists.json, in your cloud drive up to date as your collection changes; the BoE Lists page on your phone opens it, with pictures, search and filters, and keeps it for when there's no signal. Only those two lists go in the file."/>
+                               Text="Your Trade Binder and Want List on your phone (iPhone or Android), for the store or a trade. BoE keeps a file, BoE Lists.json, up to date as your collection changes, in your Dropbox (hands-free: the phone gets it by itself) or a cloud drive folder (the phone picks the file). The BoE Lists page on your phone shows it with pictures, search and filters, and keeps it for when there's no signal. Only those two lists go in the file."/>
                     <CheckBox x:Name="PhoneListsCheck" Margin="0,0,0,10" Click="PhoneLists_Changed"
                               Content="Keep my Trade Binder and Want List on my phone"/>
                     <StackPanel x:Name="PhoneListsPanel">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                            <TextBlock Text="Cloud drive folder" Style="{StaticResource Label}"/>
-                            <TextBlock x:Name="PhoneFolderText" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="560"/>
+                            <TextBlock Text="Dropbox (hands-free)" Style="{StaticResource Label}"/>
+                            <TextBlock x:Name="PhoneDropboxText" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="560"/>
                         </StackPanel>
                         <WrapPanel Margin="190,4,0,8">
-                            <Button Content="Change Folder…" Padding="10,4" Margin="0,0,8,0" Click="BtnPhoneFolder_Click"
-                                    ToolTip="A folder in OneDrive, Google Drive, iCloud Drive or Dropbox on this PC"/>
-                            <Button Content="Open Folder" Padding="10,4" Margin="0,0,8,0" Click="BtnPhoneOpenFolder_Click"/>
+                            <Button x:Name="BtnPhoneDropbox" Content="Connect Dropbox…" Padding="10,4" Margin="0,0,8,0" Click="BtnPhoneDropbox_Click"
+                                    ToolTip="Sign in to your Dropbox in the browser. BoE only gets its own folder there (Apps › Breakers of E Lists)."/>
+                        </WrapPanel>
+                        <StackPanel x:Name="PhoneSignUpPanel" Margin="190,0,0,8">
+                            <TextBlock>
+                                <Run Text="No Dropbox yet?"/>
+                                <Hyperlink NavigateUri="https://www.dropbox.com/register" RequestNavigate="SignUp_RequestNavigate"
+                                           ToolTip="https://www.dropbox.com/register">Free Dropbox account ↗</Hyperlink>
+                            </TextBlock>
+                            <TextBlock x:Name="PhoneSignUpSteps" TextWrapping="Wrap" MaxWidth="560" FontSize="12" Margin="0,2,0,0"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                        <StackPanel x:Name="PhoneFolderPanel">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Or a cloud drive folder" Style="{StaticResource Label}"/>
+                                <TextBlock x:Name="PhoneFolderText" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="560"/>
+                            </StackPanel>
+                            <WrapPanel Margin="190,4,0,8">
+                                <Button Content="Change Folder…" Padding="10,4" Margin="0,0,8,0" Click="BtnPhoneFolder_Click"
+                                        ToolTip="A folder in OneDrive, Google Drive, iCloud Drive or Dropbox on this PC"/>
+                                <Button Content="Open Folder" Padding="10,4" Margin="0,0,8,0" Click="BtnPhoneOpenFolder_Click"/>
+                            </WrapPanel>
+                        </StackPanel>
+                        <WrapPanel Margin="190,0,0,4">
                             <Button Content="Update Now" Padding="10,4" Click="BtnPhoneUpdate_Click"
-                                    ToolTip="Write the lists now (BoE also does it by itself whenever your collection changes)"/>
+                                    ToolTip="Send the lists now (BoE also does it by itself whenever your collection changes)"/>
                         </WrapPanel>
                         <TextBlock x:Name="PhoneStatusText" Margin="0,0,0,10" FontSize="12" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
@@ -180,7 +201,7 @@
                                 <TextBlock Text="On your phone" FontWeight="SemiBold" Margin="0,0,0,4"/>
                                 <TextBlock TextWrapping="Wrap" Margin="0,0,0,2" Text="1.  Point the camera at the code to open the BoE Lists page."/>
                                 <TextBlock TextWrapping="Wrap" Margin="0,0,0,2" Text="2.  Add it to your Home Screen (iPhone: Share → Add to Home Screen; Android: ⋮ → Add to Home screen)."/>
-                                <TextBlock TextWrapping="Wrap" Margin="0,0,0,8" Text="3.  Open it, tap Open my lists file, and pick BoE Lists.json in your cloud drive. Tap Update there to get newer lists."/>
+                                <TextBlock x:Name="PhoneStep3Text" TextWrapping="Wrap" Margin="0,0,0,8"/>
                                 <WrapPanel>
                                     <TextBlock x:Name="PhoneUrlText" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="12"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>

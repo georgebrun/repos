@@ -16,7 +16,9 @@ namespace BreakersOfE.Services
     /// as one file, "BoE Lists.json", in a folder of your cloud drive. The BoE
     /// Lists page on your phone (<see cref="ViewerUrl"/>) opens it. BoE writes
     /// it again whenever your collection changes (see the app's watcher), so
-    /// the phone always gets the newest lists. Nothing else of your
+    /// the phone always gets the newest lists. With Dropbox connected
+    /// (<see cref="DropboxService"/>) the file goes straight to Dropbox instead,
+    /// and the phone page fetches it by itself. Nothing else of your
     /// collection goes in the file.
     /// </summary>
     public static class PhoneListsService
@@ -106,7 +108,20 @@ namespace BreakersOfE.Services
         {
             if (string.IsNullOrWhiteSpace(folder)) throw new InvalidOperationException("No folder chosen for the phone lists.");
             Directory.CreateDirectory(folder);
+            var (json, binder, want) = Build();
+            string path = FilePath(folder);
+            string tmp = path + ".tmp";
+            File.WriteAllBytes(tmp, json);
+            File.Move(tmp, path, overwrite: true);
+            return (binder, want);
+        }
 
+        /// <summary>
+        /// The file's contents (UTF-8 JSON) and the cards in each list: for a
+        /// cloud-drive folder (<see cref="Write"/>) or Dropbox (<see cref="DropboxService"/>).
+        /// </summary>
+        public static (byte[] Json, int Binder, int Want) Build()
+        {
             List<TradeBinderEntry> binder;
             List<WantListEntry> want;
             using (var db = new CollectionDbContext())
@@ -142,11 +157,7 @@ namespace BreakersOfE.Services
                     }).ToList(),
             };
 
-            string path = FilePath(folder);
-            string tmp = path + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(file, Json), new System.Text.UTF8Encoding(false));
-            File.Move(tmp, path, overwrite: true);
-            return (file.Binder.Count, file.Want.Count);
+            return (JsonSerializer.SerializeToUtf8Bytes(file, Json), file.Binder.Count, file.Want.Count);
         }
 
         /// <summary>

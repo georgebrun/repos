@@ -1,5 +1,13 @@
-# What's New in 2.1.2
-> Your Trade Binder and Want List on your phone; 2.1.1's two-sided tokens; and 2.1.0's deck builder, with card tags, combos, EDHREC, salt, a Want List per deck, print slips and deck versions.
+# What's New in 2.1.3
+> Phone lists by Dropbox, hands-free; 2.1.2's phone lists; 2.1.1's two-sided tokens; and 2.1.0's deck builder, with card tags, combos, EDHREC, salt, a Want List per deck, print slips and deck versions.
+
+## 2.1.3: Phone lists by Dropbox
+- **Connect Dropbox…** in **Settings → Phone lists** (or **📱 Phone…**): BoE sends your Trade Binder and Want List straight to your Dropbox as they change, and the BoE Lists page on your phone gets them by itself each time you open it. Sign in once on each; no picking files, no Update, no Dropbox app needed. See [[phone-lists]].
+- **Free Dropbox account** link and steps, for anyone without one.
+- BoE only gets its own folder in your Dropbox (Apps › Breakers of E Lists). The cloud drive folder way still works without Dropbox.
+- A new How-To, **Scan Cards with Your Phone**: scan with the free ManaBox app, import the file. See [[howto-scan]].
+- Fixed: the Other Side window no longer shows a sideways scroll bar it doesn't need.
+- Fixed: Suggested Tokens now claims a foil copy you already own.
 
 ## 2.1.2: Phone lists
 Your Trade Binder and Want List on your phone, iPhone or Android, for the store or a trade. See [[phone-lists]].

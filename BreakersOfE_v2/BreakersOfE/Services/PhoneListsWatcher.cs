@@ -9,12 +9,15 @@ namespace BreakersOfE.Services
     /// seconds it looks at when the collection last changed (any change: an
     /// edit, Got It, a deck claiming cards, an import) and, if it moved on,
     /// writes the file again in the background. Cheap when nothing changed.
+    /// With Dropbox connected the file goes to Dropbox instead of the folder;
+    /// when that fails (no internet) it tries again a minute later.
     /// </summary>
     public static class PhoneListsWatcher
     {
         private static DispatcherTimer? _timer;
         private static DateTime _written = DateTime.MinValue;
         private static bool _busy;
+        private static DateTime _retryAt = DateTime.MinValue;
 
         /// <summary>"Updated 6:42 PM: 34 binder cards, 12 wants." — or what went wrong.</summary>
         public static string Status { get; private set; } = "";
@@ -39,9 +42,10 @@ namespace BreakersOfE.Services
             var s = AppSettingsService.Current;
             if (!s.PhoneListsOn || _busy) return;
             var stamp = PhoneListsService.CollectionStamp();
-            if (!force && stamp == _written) return;
+            if (!force && (stamp == _written || DateTime.UtcNow < _retryAt)) return;
+            bool dropbox = DropboxService.Connected;
             string folder = PhoneListsService.Folder;
-            if (folder.Length == 0)
+            if (!dropbox && folder.Length == 0)
             {
                 Show("Pick a folder in your cloud drive (OneDrive, Google Drive, iCloud Drive, Dropbox) for the lists.", failed: true);
                 return;
@@ -49,20 +53,39 @@ namespace BreakersOfE.Services
             _busy = true;
             try
             {
-                var (binder, want) = await Task.Run(() => PhoneListsService.Write(folder));
+                int binder, want;
+                if (dropbox)
+                {
+                    var (json, b, w) = await Task.Run(PhoneListsService.Build);
+                    await DropboxService.UploadAsync(json);
+                    (binder, want) = (b, w);
+                }
+                else
+                {
+                    (binder, want) = await Task.Run(() => PhoneListsService.Write(folder));
+                }
                 _written = stamp;
-                Show($"Updated {DateTime.Now:t}: {binder} card{(binder == 1 ? "" : "s")} in the Trade Binder, " +
+                _retryAt = DateTime.MinValue;
+                Show($"{(dropbox ? "Sent to Dropbox" : "Updated")} {DateTime.Now:t}: {binder} card{(binder == 1 ? "" : "s")} in the Trade Binder, " +
                      $"{want} on the Want List.", failed: false);
             }
             catch (Exception ex)
             {
-                Show($"Couldn't write the phone lists: {ex.Message}", failed: true);
+                _retryAt = DateTime.UtcNow.AddMinutes(1);
+                Show(dropbox
+                    ? $"Couldn't send the phone lists to Dropbox (trying again in a minute): {Message(ex)}"
+                    : $"Couldn't write the phone lists: {ex.Message}", failed: true);
             }
             finally
             {
                 _busy = false;
             }
         }
+
+        private static string Message(Exception ex) =>
+            ex is System.Net.Http.HttpRequestException or TaskCanceledException
+                ? "no connection to Dropbox."
+                : ex.Message;
 
         private static void Show(string text, bool failed)
         {

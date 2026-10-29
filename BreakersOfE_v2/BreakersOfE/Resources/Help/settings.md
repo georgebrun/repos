@@ -21,7 +21,7 @@
 - **Restart Tour**: shows the Program Tour now, and again each time BoE starts until you tick **Do Not Show Again**.
 
 ## Phone lists
-Your Trade Binder and Want List on your phone, iPhone or Android. Tick **Keep my Trade Binder and Want List on my phone**: BoE writes **BoE Lists.json** to a folder in your cloud drive (OneDrive\Breakers of E to start; **Change Folder…** for Google Drive, iCloud Drive or Dropbox), and writes it again by itself whenever your collection changes. Only those two lists go in the file. See [[phone-lists]].
+Your Trade Binder and Want List on your phone, iPhone or Android. Tick **Keep my Trade Binder and Want List on my phone**. **Connect Dropbox…** for hands-free: BoE sends **BoE Lists.json** to your Dropbox and the phone page gets it by itself (no Dropbox yet? **Free Dropbox account**). Or BoE writes the file to a folder in your cloud drive (OneDrive\Breakers of E to start; **Change Folder…** for Google Drive, iCloud Drive or Dropbox) and the phone picks it. Either way BoE sends it again by itself whenever your collection changes. Only those two lists go in the file. See [[phone-lists]].
 
 ## Data folder
 Shows where your data is and how big it is. **Open Folder**, **Move…** (see [[howto-move-folder]]) or **Use Documents\Breakers of E Again**. See [[data-folder]].

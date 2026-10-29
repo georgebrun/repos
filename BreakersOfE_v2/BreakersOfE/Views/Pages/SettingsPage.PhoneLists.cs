@@ -20,6 +20,13 @@ namespace BreakersOfE.Views.Pages
             PhoneListsPanel.IsEnabled = s.PhoneListsOn;
             PhoneListsPanel.Opacity = s.PhoneListsOn ? 1 : 0.5;
             PhoneFolderText.Text = PhoneListsUi.FileText();
+            PhoneDropboxText.Text = PhoneListsUi.DropboxText();
+            BtnPhoneDropbox.Content = PhoneListsUi.DropboxButton();
+            BtnPhoneDropbox.IsEnabled = !PhoneListsUi.Connecting;
+            PhoneFolderPanel.Visibility = DropboxService.Connected ? Visibility.Collapsed : Visibility.Visible;
+            PhoneSignUpPanel.Visibility = PhoneFolderPanel.Visibility;
+            PhoneSignUpSteps.Text = PhoneListsUi.SignUpSteps;
+            PhoneStep3Text.Text = PhoneListsUi.PhoneStep3();
             PhoneUrlText.Text = PhoneListsService.ViewerUrl;
             PhoneQr.Source ??= PhoneListsUi.Qr;
             ShowPhoneStatus();
@@ -48,6 +55,25 @@ namespace BreakersOfE.Views.Pages
             var task = PhoneListsUi.ChangeFolderAsync(Window.GetWindow(this));
             await task;
             ShowPhoneLists();
+        }
+
+        private async void BtnPhoneDropbox_Click(object sender, RoutedEventArgs e)
+        {
+            var task = PhoneListsUi.ToggleDropboxAsync();
+            ShowPhoneLists();                              // "Waiting for Dropbox…"
+            string problem = await task;
+            ShowPhoneLists();
+            if (problem.Length > 0)
+            {
+                PhoneStatusText.Text = problem;
+                PhoneStatusText.Foreground = (System.Windows.Media.Brush)FindResource("BoeWarningBrush");
+            }
+        }
+
+        private void SignUp_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+        {
+            PhoneListsUi.OpenSignUp();
+            e.Handled = true;
         }
 
         private void BtnPhoneOpenFolder_Click(object sender, RoutedEventArgs e)

@@ -21,7 +21,10 @@ namespace BreakersOfE.Services
             picked.Select(s =>
             {
                 var t = DeckService.FromTokenCard(s.Token);
-                string fin = DefaultFinish(t);
+                // Your free copies' finish when you own some (an owned foil is claimed, not left aside).
+                string fin = s.Owned > 0
+                    ? CollectionEditService.FinishWithFreeCopies(CollectionEditService.TokensTable, t.ScryfallId, DefaultFinish(t))
+                    : DefaultFinish(t);
                 var added = DeckEditService.Add(deck, t, fin, copies, DeckCardCategory.Tokens);
                 if (added.Changed <= 0 || s.Owned == 0) return added;
                 var claimed = CollectionEditService.ClaimOwned(CollectionEditService.TokensTable, deck,

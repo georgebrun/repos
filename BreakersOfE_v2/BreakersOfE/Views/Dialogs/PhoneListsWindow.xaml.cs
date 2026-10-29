@@ -57,6 +57,13 @@ namespace BreakersOfE.Views.Dialogs
             OnPanel.IsEnabled = s.PhoneListsOn;
             OnPanel.Opacity = s.PhoneListsOn ? 1 : 0.5;
             FileText.Text = PhoneListsUi.FileText();
+            DropboxText.Text = PhoneListsUi.DropboxText();
+            DropboxButton.Content = PhoneListsUi.DropboxButton();
+            DropboxButton.IsEnabled = !PhoneListsUi.Connecting;
+            FolderPanel.Visibility = DropboxService.Connected ? Visibility.Collapsed : Visibility.Visible;
+            SignUpPanel.Visibility = FolderPanel.Visibility;
+            SignUpSteps.Text = PhoneListsUi.SignUpSteps;
+            Step3Text.Text = PhoneListsUi.PhoneStep3();
             ShowStatus();
         }
 
@@ -81,6 +88,26 @@ namespace BreakersOfE.Views.Dialogs
         {
             await PhoneListsUi.ChangeFolderAsync(this);
             Refresh();
+        }
+
+        private async void Dropbox_Click(object sender, RoutedEventArgs e)
+        {
+            var task = PhoneListsUi.ToggleDropboxAsync();
+            Refresh();                                     // "Waiting for Dropbox…"
+            string problem = await task;
+            if (!IsLoaded) return;                         // closed while signing in
+            Refresh();
+            if (problem.Length > 0)
+            {
+                StatusText.Text = problem;
+                StatusText.Foreground = (System.Windows.Media.Brush)FindResource("BoeWarningBrush");
+            }
+        }
+
+        private void SignUp_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+        {
+            PhoneListsUi.OpenSignUp();
+            e.Handled = true;
         }
 
         private void OpenFolder_Click(object sender, RoutedEventArgs e)
