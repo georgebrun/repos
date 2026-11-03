@@ -928,7 +928,7 @@ namespace BreakersOfE.Services
                     break;
 
                 default:
-                    var pc = ParsePoolCard<PoolCard>(card);
+                    var pc = ParsePaperCard(card);
                     pc.IsMeld = layout == "meld";
                     pool.Add(pc);
                     result.PoolCardsImported++;
@@ -1145,6 +1145,14 @@ namespace BreakersOfE.Services
         // ════════════════════════════════════════════════════════════════════
         private static PoolCard ParsePoolCard(JsonElement c) => ParsePoolCard<PoolCard>(c);
 
+        /// <summary>A paper or online pool card: also the mana it makes (Scryfall produced_mana).</summary>
+        private static PoolCard ParsePaperCard(JsonElement c)
+        {
+            var made = ParsePoolCard<PoolCard>(c);
+            made.ProducedMana = GetStringArray(c, "produced_mana");
+            return made;
+        }
+
         /// <summary>A full card (Cards, the online pool, Oversized).</summary>
         private static T ParsePoolCard<T>(JsonElement c) where T : PoolCardBase, new()
         {
@@ -1197,6 +1205,7 @@ namespace BreakersOfE.Services
         private static TokenCard ParseTokenCard(JsonElement c) => new()
         {
             ScryfallId = GetString(c, "id"),
+            ProducedMana = GetStringArray(c, "produced_mana"),
             OracleId = GetString(c, "oracle_id"),
             Name = GetString(c, "name"),
             TypeLine = GetString(c, "type_line"),

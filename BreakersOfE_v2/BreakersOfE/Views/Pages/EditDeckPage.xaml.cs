@@ -379,7 +379,7 @@ namespace BreakersOfE.Views.Pages
             bool side = _deck != null && _mode != DeckEditMode.DeckToCollection &&
                         (rule.SideboardMax != null || rule.Type == DeckType.Limited);
             AddToLabel.Visibility = AddToBox.Visibility = side ? Visibility.Visible : Visibility.Collapsed;
-            BtnDeckSettings.IsEnabled = BtnCloseDeck.IsEnabled = BtnSuggestTokens.IsEnabled = BtnVersions.IsEnabled =
+            BtnDeckSettings.IsEnabled = BtnCloseDeck.IsEnabled = BtnSuggestTokens.IsEnabled = BtnVersions.IsEnabled = BtnPlaytest.IsEnabled =
                 BtnTearDown.IsEnabled = BtnWholeOwned.IsEnabled = BtnWholeNew.IsEnabled = _deck != null;
         }
 
@@ -1067,6 +1067,13 @@ namespace BreakersOfE.Views.Pages
         }
 
         private void BtnSuggestTokens_Click(object sender, RoutedEventArgs e) => SuggestTokens(selectedOnly: false);
+
+        /// <summary>▶ Playtest: the deck at the playtest table, in its own window.</summary>
+        private void BtnPlaytest_Click(object sender, RoutedEventArgs e)
+        {
+            if (_deck == null) { ShowStatus("Pick a deck first.", true); return; }
+            global::BreakersOfE.Views.Playtest.PlaytestWindow.Open(_deck, Window.GetWindow(this));
+        }
 
         /// <summary>Versions…: save, compare and restore saved versions of the deck. A restore reopens it (its Undo starts over).</summary>
         private void BtnVersions_Click(object sender, RoutedEventArgs e)

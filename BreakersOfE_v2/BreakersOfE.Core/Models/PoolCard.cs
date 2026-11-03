@@ -193,7 +193,11 @@ namespace BreakersOfE.Models
     }
 
     /// <summary>A card in the card pool (Card Pool → Cards), and the online pool's rows.</summary>
-    public class PoolCard : PoolCardBase { }
+    public class PoolCard : PoolCardBase
+    {
+        /// <summary>The mana it can make (Scryfall "produced_mana"): "BCU" for Talisman of Dominance; "" = none, or not filled yet. Paper pool only.</summary>
+        public string ProducedMana { get; set; } = string.Empty;
+    }
 
     /// <summary>
     /// An oversized card (Card Pool → Oversized): Scryfall marks it oversized —

@@ -49,6 +49,7 @@ Your Cards
   phone-lists.md
   decks.md
   build.md
+  playtest.md
   online.md
 
 Tools

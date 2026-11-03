@@ -30,6 +30,8 @@ namespace BreakersOfE.Models
         public string ImageSmallUrl { get; set; } = string.Empty;
         public string ImageNormalUrl { get; set; } = string.Empty;
         public string Layout { get; set; } = string.Empty;
+        /// <summary>The mana it can make (Scryfall "produced_mana"): "WUBRG" for a Treasure.</summary>
+        public string ProducedMana { get; set; } = string.Empty;
         public bool IsFoil { get; set; }
         public bool IsNonFoil { get; set; }
         /// <summary>Exists as an etched foil (Scryfall "finishes" contains "etched").</summary>

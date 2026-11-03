@@ -201,6 +201,10 @@ namespace BreakersOfE.Services
         public static string SleeveImagesFolder =>
             EnsureFolder(Path.Combine(RootFolder, "Tabletop", "Sleeves"));
 
+        /// <summary>Pictures for a player's badge on the playtest table (beside their life).</summary>
+        public static string BadgeImagesFolder =>
+            EnsureFolder(Path.Combine(RootFolder, "Tabletop", "Badges"));
+
         // ── Collection database (separate from card pool) ──────────────────────
         public static string CollectionFolder =>
             EnsureFolder(Path.Combine(RootFolder, "Collection"));
@@ -219,6 +223,7 @@ namespace BreakersOfE.Services
             _ = CardImagesFolder;
             _ = PlaymatImagesFolder;
             _ = SleeveImagesFolder;
+            _ = BadgeImagesFolder;
             _ = CollectionFolder;
             _ = SetSymbolsFolder;
             _ = ManaSymbolsFolder;

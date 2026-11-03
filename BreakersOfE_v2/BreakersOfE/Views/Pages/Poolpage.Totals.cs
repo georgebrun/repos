@@ -252,6 +252,13 @@ namespace BreakersOfE.Views.Pages
         };
         private static string? Str(object row, string prop) => Val(row, prop) as string;
 
+        /// <summary>▶ Playtest (a deck on screen): the deck at the playtest table, in its own window.</summary>
+        private void BtnPlaytest_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentTag == DeckTableTag && _openDeck != null)
+                global::BreakersOfE.Views.Playtest.PlaytestWindow.Open(_openDeck, Window.GetWindow(this));
+        }
+
         /// <summary>Statistics button: overview of the rows on screen (Collection).</summary>
         private void BtnStatistics_Click(object sender, RoutedEventArgs e)
         {
