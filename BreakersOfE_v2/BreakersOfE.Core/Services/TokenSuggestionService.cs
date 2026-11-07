@@ -16,7 +16,7 @@ namespace BreakersOfE.Services
         public TokenCard Linked { get; init; } = new();
         /// <summary>Your best single-sided printing of it, if any.</summary>
         public TokenCard? OwnedSingle { get; init; }
-        /// <summary>Your best two-sided printing of it (paired, or a real double-faced token), if any.</summary>
+        /// <summary>Your best two-sided card with it (a two-sided token card, or a real double-faced token), if any.</summary>
         public TokenCard? OwnedTwoSided { get; init; }
         /// <summary>Every printing of this token.</summary>
         public List<TokenCard> Every { get; init; } = new();
@@ -127,7 +127,7 @@ namespace BreakersOfE.Services
                 : db.TokenCards.AsNoTracking().Where(t => oracleIds.Contains(t.OracleId)).ToList();
             var owned = OwnedTokens(allPrintings.Select(t => t.ScryfallId).Concat(ids).Distinct().ToList());
 
-            // Your real double-faced tokens (one of their faces can be what a card makes).
+            // Your real double-faced tokens and two-sided token cards (one of their faces can be what a card makes).
             var ownedDfcs = OwnedDoubleFaced(db);
             foreach (var (sid, n) in OwnedTokens(ownedDfcs.Select(d => d.ScryfallId).ToList())) owned[sid] = n;
 
@@ -147,10 +147,9 @@ namespace BreakersOfE.Services
                     .ThenByDescending(t => t.ReleasedAt, StringComparer.Ordinal)
                     .First();
 
-                // A real double-faced token you own with this face ("Incubator // Phyrexian" for a Phyrexian).
-                if (!every.Any(t => owned.GetValueOrDefault(t.ScryfallId) > 0))
-                    foreach (var d in ownedDfcs.Where(x => FaceNames(x.Name).Contains(linkedPick.Name, StringComparer.OrdinalIgnoreCase)))
-                        if (every.All(t => t.ScryfallId != d.ScryfallId)) every.Add(d);
+                // A two-sided card you own with this face ("Incubator // Phyrexian", "Officer // Treasure" for a Treasure).
+                foreach (var d in ownedDfcs.Where(x => FaceNames(x.Name).Contains(linkedPick.Name, StringComparer.OrdinalIgnoreCase)))
+                    if (every.All(t => t.ScryfallId != d.ScryfallId)) every.Add(d);
 
                 TokenCard? Best(bool twoSided) => every
                     .Where(t => owned.GetValueOrDefault(t.ScryfallId) > 0 && IsTwoSided(t) == twoSided)
@@ -190,53 +189,54 @@ namespace BreakersOfE.Services
             return sorted;
         }
 
-        /// <summary>The real double-faced tokens in your token collection (their pool cards).</summary>
+        /// <summary>The real double-faced tokens and two-sided token cards in your token collection (as card objects).</summary>
         private static List<TokenCard> OwnedDoubleFaced(AppDbContext db)
         {
             List<string> sids;
+            List<TokenCollectionEntry> pairRows;
             using (var cdb = new CollectionDbContext())
+            {
                 sids = cdb.TokenCollectionEntries.Where(e => e.Quantity > 0 && e.Layout == "double_faced_token")
                           .Select(e => e.ScryfallId).Distinct().ToList();
-            return sids.Count == 0 ? new List<TokenCard>()
+                pairRows = cdb.TokenCollectionEntries.AsNoTracking().Where(e => e.Quantity > 0 && e.ScryfallId.Contains("+")).ToList();
+            }
+            var list = sids.Count == 0 ? new List<TokenCard>()
                 : db.TokenCards.AsNoTracking().Where(t => sids.Contains(t.ScryfallId)).ToList();
+            foreach (var g in pairRows.GroupBy(r => r.ScryfallId, StringComparer.OrdinalIgnoreCase))
+            {
+                var card = TokenPairing.FromPool(g.Key) ?? TokenPairing.FromRow(g.First());
+                card.Layout = TokenPairing.Layout;
+                list.Add(card);
+            }
+            return list;
         }
 
         /// <summary>"Incubator // Phyrexian" → Incubator, Phyrexian.</summary>
         private static string[] FaceNames(string name) =>
             name.Split(" // ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        /// <summary>A two-sided printing: a real double-faced token, or one you've paired with another token.</summary>
+        /// <summary>A two-sided card: a real double-faced token, or a two-sided token card ("Officer // Treasure").</summary>
         public static bool IsTwoSided(TokenCard t) =>
             string.Equals(t.Layout, "double_faced_token", StringComparison.OrdinalIgnoreCase) ||
-            CollectionEditService.OtherSidesOfPrinting(t.ScryfallId).Count > 0;
+            TokenPairing.IsPairSid(t.ScryfallId);
 
-        /// <summary>The other side of a two-sided printing: the paired token's name, or a double-faced token's other face.</summary>
-        public static string OtherSideName(TokenCard t)
-        {
-            try
-            {
-                var paired = CollectionEditService.OtherSidesOfPrinting(t.ScryfallId);
-                if (paired.Count > 0) return string.Join(", ", paired.Select(p => p.Name).Distinct());
-            }
-            catch { /* no pairs to read */ }
-            return "";
-        }
+        /// <summary>Nothing to add any more: a two-sided card's name shows both its sides ("Officer // Treasure").</summary>
+        public static string OtherSideName(TokenCard t) => "";
 
         /// <summary>
-        /// Two suggestions offered as the two sides of one card you own (your
-        /// Treasure // Angel for a Treasure and an Angel): each is told about the
-        /// other, and the one card does both.
+        /// Two suggestions offered the same two-sided card you own (your
+        /// Officer // Treasure for an Officer and a Treasure): each is told about
+        /// the other, and the one card does both, one side at a time.
         /// </summary>
         public static void LinkShared(List<TokenSuggestion> list)
         {
             foreach (var s in list) s.SharedWith = null;
             for (int i = 0; i < list.Count; i++)
             {
-                var others = CollectionEditService.OtherSidesOfPrinting(list[i].Token.ScryfallId)
-                    .Select(o => o.Key.ScryfallId).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                if (others.Count == 0) continue;
+                if (!IsTwoSided(list[i].Token)) continue;
                 for (int j = i + 1; j < list.Count; j++)
-                    if (list[j].SharedWith == null && list[i].SharedWith == null && others.Contains(list[j].Token.ScryfallId))
+                    if (list[j].SharedWith == null && list[i].SharedWith == null &&
+                        string.Equals(list[j].Token.ScryfallId, list[i].Token.ScryfallId, StringComparison.OrdinalIgnoreCase))
                     {
                         list[i].SharedWith = list[j];
                         list[j].SharedWith = list[i];

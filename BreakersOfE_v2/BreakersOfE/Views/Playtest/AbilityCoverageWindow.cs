@@ -95,6 +95,10 @@ namespace BreakersOfE.Views.Playtest
                 foreach (var (wording, count, example) in cov.Missing)
                     sb.AppendLine($"{count,6} · {wording}{Environment.NewLine}         e.g. {example}");
                 sb.AppendLine();
+                sb.AppendLine("READ IN FULL, WORTH A CHECK (the sentence hangs on \"if\", \"instead\", \"unless\", \"for each\"…)");
+                foreach (var (wording, count, example) in cov.ToCheck)
+                    sb.AppendLine($"{count,6} · {wording}{Environment.NewLine}         e.g. {example}");
+                sb.AppendLine();
                 sb.AppendLine("COSTS NOT READ YET (yours to pay)");
                 foreach (var (wording, count, example) in cov.MissingCosts)
                     sb.AppendLine($"{count,6} · {wording}{Environment.NewLine}         e.g. {example}");

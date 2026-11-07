@@ -41,6 +41,40 @@ namespace BreakersOfE.Playtest
         Note,
         /// <summary>For the other players (in a game on your own, nothing to do here).</summary>
         Opponents,
+        /// <summary>
+        /// Two creatures: <see cref="Effect.What"/> "fight" (each deals damage equal to its power to the other)
+        /// or "bite" (the first, yours, deals damage equal to its power to the second). Two targets.
+        /// </summary>
+        Fight,
+        /// <summary>"…then draw that many cards (plus N)": as many as were just discarded (<see cref="Effect.N"/>: the plus).</summary>
+        DrawThatMany,
+        /// <summary>"Discard a card at random".</summary>
+        DiscardRandom,
+        /// <summary>"Discover N": exile from the top until a nonland card with mana value N or less; it goes to your hand (cast it free if you like), the rest to the bottom.</summary>
+        Discover,
+        /// <summary>"Amass Orcs N": N +1/+1 counters on your Army (made first, a 0/0 black token, when you have none). <see cref="Effect.What"/>: Orc, Zombie.</summary>
+        Amass,
+        /// <summary>"Incubate N": an Incubator artifact token with N +1/+1 counters.</summary>
+        Incubate,
+        /// <summary>"Earthbend N": target land you control becomes a 0/0 creature with haste (still a land) with N +1/+1 counters.</summary>
+        Earthbend,
+        /// <summary>"Exile target player's graveyard".</summary>
+        ExileGraveyard,
+        /// <summary>
+        /// "Each opponent sacrifices a creature (with the greatest power among creatures they control)":
+        /// <see cref="Effect.What"/> is the filter, then "|greatest", "|all" (each player). They choose when there's a choice.
+        /// </summary>
+        OpponentSacrifices,
+        /// <summary>"Shuffle your graveyard into your library".</summary>
+        ShuffleGraveyard,
+        /// <summary>"Double the number of +1/+1 counters on target creature" (<see cref="Effect.What"/>: the kind).</summary>
+        DoubleCounters,
+        /// <summary>"Put two cards from your hand on top of your library in any order" (Brainstorm): your hand opens to pick them.</summary>
+        PutBack,
+        /// <summary>"Tap all creatures your opponents control" (<see cref="Effect.What"/>: which, as for <see cref="UntapAll"/>).</summary>
+        TapAll,
+        /// <summary>"Return all enchantment cards from your graveyard to the battlefield" (<see cref="Effect.What"/>: which).</summary>
+        ReturnAllFromGraveyard,
         /// <summary>Not read: the table logs what the card says and you finish it.</summary>
         Reminder,
     }
@@ -65,6 +99,8 @@ namespace BreakersOfE.Playtest
         EachCreature,
         You,
         Opponents,
+        /// <summary>A player you pick: you or an opponent ("target player").</summary>
+        Player,
     }
 
     /// <summary>A token an ability makes: "two 1/1 white Soldier creature tokens with lifelink".</summary>
@@ -77,7 +113,7 @@ namespace BreakersOfE.Playtest
 
     /// <summary>One effect of an ability. <see cref="N"/> = -1: X.</summary>
     public sealed record Effect(EffectKind Kind, EffectOn On = EffectOn.None, int N = 0, string What = "", int P = 0, int T = 0,
-                                TokenSpec? Token = null, string Text = "", string Cond = "")
+                                TokenSpec? Token = null, string Text = "", string Cond = "", string Per = "", bool Other = false)
     {
         public int Amount(int x) => N < 0 ? x : N;
     }
@@ -86,7 +122,7 @@ namespace BreakersOfE.Playtest
     public enum ChoiceKind { Sacrifice, Tap, ExileFromGraveyard, Discard, ReturnToHand, ExileFromBattlefield, RemoveCounter, PutCounter }
 
     /// <summary>"Sacrifice another creature": Count 1, Filter "creature", Other. "Discard a card at random": Random.</summary>
-    public sealed record CostChoice(ChoiceKind Kind, int Count, string Filter, bool Other = false, bool Random = false, string Text = "", string Counter = "");
+    public sealed record CostChoice(ChoiceKind Kind, int Count, string Filter, bool Other = false, bool Random = false, string Text = "", string Counter = "", int Amount = 1);
 
     public enum AbilityKind
     {
@@ -129,6 +165,8 @@ namespace BreakersOfE.Playtest
         public bool ExileSelf { get; set; }
         public bool ReturnSelfToHand { get; set; }
         public int Life { get; set; }
+        /// <summary>"Pay X life".</summary>
+        public bool LifeX { get; set; }
         /// <summary>"Pay half your life, rounded up".</summary>
         public bool HalfLife { get; set; }
         public int Energy { get; set; }
@@ -160,10 +198,22 @@ namespace BreakersOfE.Playtest
         public int ChooseCount { get; set; } = 1;
 
         /// <summary>Asks for X (in the cost or the effect).</summary>
-        public bool HasX => ManaCost.Contains("{X}") || LoyaltyX || Effects.Any(e => e.N < 0);
+        public bool HasX => ManaCost.Contains("{X}") || LoyaltyX || LifeX || Effects.Any(e => e.N < 0 || e.What == "multi:-1");
 
         /// <summary>Needs a permanent (or a player) picked.</summary>
         public bool NeedsTarget => Effects.Any(e => e.On is EffectOn.Target or EffectOn.AnyTarget);
+
+        /// <summary>Needs a player picked: you or an opponent ("target player").</summary>
+        public bool NeedsPlayer => Effects.Any(e => e.On == EffectOn.Player);
+
+        /// <summary>Two creatures picked, one after the other (fight, "deals damage equal to its power to").</summary>
+        public bool NeedsTwoTargets => Effects.Any(e => e.Kind == EffectKind.Fight && e.On == EffectOn.Target);
+
+        /// <summary>
+        /// Several targets: "divided as you choose among" (damage split between them),
+        /// "to each of up to two targets", "Tap two target creatures". Null when one target will do.
+        /// </summary>
+        public Effect? Spread => Effects.FirstOrDefault(e => e.What.StartsWith("divided:") || e.What.StartsWith("each:") || e.What.StartsWith("multi:"));
 
         /// <summary>Everything in it is read: the table does it all.</summary>
         public bool Understood => OtherCosts.Count == 0 && Effects.Count > 0 && Effects.All(e => e.Kind != EffectKind.Reminder);
@@ -361,6 +411,10 @@ namespace BreakersOfE.Playtest
                 else if (Regex.IsMatch(part, @"^Discard ~$", I)) { a.DiscardSelf = true; a.From = Zone.Hand; }
                 else if (Regex.IsMatch(part, @"^Reveal ~ from your hand$", I)) a.From = Zone.Hand;
                 else if (Regex.IsMatch(part, @"^Exile ~ from your graveyard$", I)) { a.ExileSelf = true; a.From = Zone.Graveyard; }
+                else if (Regex.IsMatch(part, @"^Exile ~ from your hand$", I)) { a.ExileSelf = true; a.From = Zone.Hand; }
+                else if (Regex.IsMatch(part, @"^Pay X life$", I)) a.LifeX = true;
+                else if ((g = Regex.Match(part, $@"^Blight {Num}$", I)).Success)
+                    a.Choices.Add(new CostChoice(ChoiceKind.PutCounter, 1, "creature", Text: part, Counter: "-1/-1", Amount: Math.Max(1, Number(g.Groups[1].Value) ?? 1)));
                 else if (Regex.IsMatch(part, @"^Exile ~$", I)) a.ExileSelf = true;
                 else if (Regex.IsMatch(part, @"^Return ~ to its owner's hand$", I)) a.ReturnSelfToHand = true;
                 else if ((g = Regex.Match(part, @"^Pay (\d+) life$", I)).Success) a.Life += int.Parse(g.Groups[1].Value);
@@ -410,9 +464,13 @@ namespace BreakersOfE.Playtest
         /// <summary>"creatures and planeswalkers" → "creature or planeswalker"; "nonland permanents you control" → "nonland" (yours).</summary>
         private static string AllFilter(string what)
         {
+            // "creatures with power 2 or less" (Puppet's Verdict): only those, not every creature.
+            var pt = Regex.Match(what, @"\bwith (power|toughness) (\d+) or (less|greater)\b", I);
             string w = Regex.Replace(what, @"\s+(you control|your opponents control|with .+|that .+|other than .+)$", "", I);
             w = Regex.Replace(w, @",\s*(and\s+)?|\s+and\s+", " or ", I);
-            return Filter(w) + (what.Contains("you control", StringComparison.OrdinalIgnoreCase) ? "|yours" : "");
+            return Filter(w) + (what.Contains("your opponents control", StringComparison.OrdinalIgnoreCase) || what.Contains("an opponent controls", StringComparison.OrdinalIgnoreCase) ? "|theirs"
+                                : what.Contains("you control", StringComparison.OrdinalIgnoreCase) ? "|yours" : "") +
+                   (pt.Success ? $"|{pt.Groups[1].Value.ToLowerInvariant()}{(pt.Groups[3].Value.Equals("less", StringComparison.OrdinalIgnoreCase) ? "<=" : ">=")}{pt.Groups[2].Value}" : "");
         }
 
         private static int Count(Group g) => g.Success ? Math.Max(1, Number(g.Value) ?? 1) : 1;
@@ -426,6 +484,10 @@ namespace BreakersOfE.Playtest
             w = Regex.Replace(w, @"\b(\w{3,}?)s\b(?!\w)", m => m.Value.EndsWith("ss") ? m.Value : m.Groups[1].Value);
             return w.Length == 0 ? "card" : w;
         }
+
+        /// <summary>"instant and sorcery cards" → "instant or sorcery"; "Forests" → "Forest"; "cards" → "card" (anything).</summary>
+        public static string FilterFor(string what) =>
+            Filter(Regex.Replace(what, @",\s*(and\s+)?|\s+and/or\s+|\s+and\s+", " or ", I));
 
         /// <summary>Does a card fit a choice's filter ("creature", "artifact or creature", "Food", "nontoken creature", "card")?</summary>
         public static bool Fits(GameCard c, string filter)
@@ -505,7 +567,8 @@ namespace BreakersOfE.Playtest
             Effect? prev = null;
             foreach (var s0 in Sentences(effect))
             {
-                string s = s0;
+                string s = Regex.Replace(s0, @"^Then\s+(?!those creatures)", "", RegexOptions.IgnoreCase);       // "… token. Then creatures you control gain haste"
+                if (s.Length > 0) s = char.ToUpperInvariant(s[0]) + s[1..];
                 if (Regex.IsMatch(s, @"^(Activate|Any player may activate|This ability costs|Activate this ability only|You may activate)", I))
                 {
                     a.Timing += (a.Timing.Length > 0 ? " " : "") + s + ".";
@@ -514,8 +577,20 @@ namespace BreakersOfE.Playtest
                 // "It deals 1 damage …", "Tap it", "It gains haste …": the target just picked, or the card itself.
                 string it = prev?.On is EffectOn.Target or EffectOn.AnyTarget ? "target creature" : "~";
                 if (IsNote(s)) { a.Effects.Add(new Effect(EffectKind.Note, Text: s)); continue; }       // before "It" becomes "~"
+                // "You may discard a card. If you do, draw a card" (Haggle): the draw only when a card was discarded.
+                var ifDo = Regex.Match(s, $@"^If you do, draw {Num} cards?$", I);
+                if (ifDo.Success && prev?.Kind is EffectKind.Discard or EffectKind.DiscardRandom)
+                {
+                    var draw = new Effect(EffectKind.DrawThatMany, EffectOn.You, Number(ifDo.Groups[1].Value) ?? 1, What: "ifdone", Text: s);
+                    a.Effects.Add(draw);
+                    prev = draw;
+                    continue;
+                }
+                // "You draw cards equal to the sacrificed creature's power, then you gain life equal to its toughness" (Momentous Fall).
+                if (prev?.What.StartsWith("sacrificed") == true) s = Regex.Replace(s, @"\bequal to its (power|toughness)$", "equal to the sacrificed creature's $1", I);
                 s = Regex.Replace(s, @"^(It|They)\b", it);
-                s = Regex.Replace(s, @"^(Tap|Untap|Sacrifice|Exile|Destroy) (it|them|that creature|those creatures)$", "$1 " + it, I);
+                if (it == "target creature") s = Regex.Replace(s, @"^That creature\b", it);
+                s = Regex.Replace(s, @"^(Tap|Untap|Sacrifice|Exile|Destroy|Regenerate) (it|them|that creature|those creatures)$", "$1 " + it, I);
                 s = Regex.Replace(s, @"\bon (it|that creature)$", "on " + it, I);
                 if (it == "target creature") s = Regex.Replace(s, @"^target creature gain\b", "target creature gains");
                 var e = ReadEffect(s);
@@ -538,7 +613,21 @@ namespace BreakersOfE.Playtest
             }
             Match m;
             int N(int group) => Number(m.Groups[group].Value) ?? 1;
+            // An action that only happens "if …" or "unless …" (Hydroblast's "Destroy target permanent if it's red"):
+            // the table can't judge the condition, so it's yours, not done regardless.
+            if (Regex.IsMatch(s, @"^(Destroy|Exile|Return|Tap|Untap|Sacrifice|Draw|You gain|You lose|Put|Create)\b.*\s(if|unless)\s", I) ||
+                Regex.IsMatch(s, @"^~ deals .+\s(if|unless)\s", I))
+                return new(EffectKind.Reminder, Text: s);
+            // "… for each Elf you control", "Draw a card for each creature you control": the amount times the count (counted as it's done).
+            var per = Regex.Match(s, @"^(.+?) for each (.+)$", I);
+            if (per.Success && !Regex.IsMatch(s, @"^You gain \w+ life for each creature you control$", I) && Regex.IsMatch(per.Groups[1].Value, @"^(Put|Draw|You gain|You lose|~ deals|Create|Each opponent loses|Target player loses|Target opponent loses)\b", I))
+            {
+                var inner = ReadEffect(per.Groups[1].Value);
+                if (inner.Kind != EffectKind.Reminder) return inner with { Per = per.Groups[2].Value, Text = s };
+            }
             s = Regex.Replace(s, @",\s+where X is .+$", "", I);                    // X is asked for when it's activated
+            s = Regex.Replace(s, @"^(Tap|Untap|Exile|Destroy|Return) another target\b", "$1 target", I);   // "another" target: still one you pick
+            if (ReadTwoOrMore(s) is { } more) return more;
             if ((m = Regex.Match(s, $@"^(?:Each player|Target player) draws {Num} cards?$", I)).Success)
                 return new(EffectKind.Draw, EffectOn.You, Number(m.Groups[1].Value) ?? 1, Text: s);
             if ((m = Regex.Match(s, $@"^Draw {Num} cards?$", I)).Success) return new(EffectKind.Draw, EffectOn.You, N(1), Text: s);
@@ -569,17 +658,22 @@ namespace BreakersOfE.Playtest
                 return new(EffectKind.GainKeywords, OnOf(m.Groups[1].Value), What: "Can't block", Text: s);
             if ((m = Regex.Match(s, @"^Regenerate (~|target [^,.]+|enchanted creature|equipped creature)$", I)).Success)
                 return new(EffectKind.Regenerate, OnOf(m.Groups[1].Value), Text: s);
-            if ((m = Regex.Match(s, $@"^(?:Target player |Each player |You )?mills? {Num} cards?$", I)).Success) return new(EffectKind.Mill, EffectOn.You, N(1), Text: s);
+            if ((m = Regex.Match(s, $@"^Target (?:player|opponent) mills {Num} cards?$", I)).Success) return new(EffectKind.Mill, EffectOn.Player, N(1), Text: s);
+            if ((m = Regex.Match(s, $@"^Each (player|opponent) mills {Num} cards?$", I)).Success)
+                return new(EffectKind.Mill, EffectOn.You, N(2), What: m.Groups[1].Value.Equals("player", StringComparison.OrdinalIgnoreCase) ? "each" : "others", Text: s);
+            if ((m = Regex.Match(s, $@"^(?:You )?mill {Num} cards?$", I)).Success) return new(EffectKind.Mill, EffectOn.You, N(1), Text: s);
             if (Regex.IsMatch(s, @"^Mill a card$", I)) return new(EffectKind.Mill, EffectOn.You, 1, Text: s);
             if ((m = Regex.Match(s, $@"^Scry {Num}$", I)).Success) return new(EffectKind.Scry, EffectOn.You, N(1), Text: s);
             if ((m = Regex.Match(s, $@"^Surveil {Num}$", I)).Success) return new(EffectKind.Surveil, EffectOn.You, N(1), Text: s);
+            if ((m = Regex.Match(s, $@"^(?:Look at|Reveal) the top {Num} cards? of target (?:player|opponent)'s library", I)).Success) return new(EffectKind.LookTop, EffectOn.Player, N(1), Text: s);
+            if (Regex.IsMatch(s, @"^(?:Look at|Reveal) the top card of target (?:player|opponent)'s library", I)) return new(EffectKind.LookTop, EffectOn.Player, 1, Text: s);
             if ((m = Regex.Match(s, $@"^(?:Look at|Reveal) the top {Num} cards? of your library", I)).Success) return new(EffectKind.LookTop, EffectOn.You, N(1), Text: s);
             if (Regex.IsMatch(s, @"^(?:Look at|Reveal) the top card of your library", I)) return new(EffectKind.LookTop, EffectOn.You, 1, Text: s);
             if ((m = Regex.Match(s, $@"^Exile the top {Num} cards? of your library", I)).Success) return new(EffectKind.ExileTop, EffectOn.You, N(1), Text: s);
             if (Regex.IsMatch(s, @"^Exile the top card of your library", I)) return new(EffectKind.ExileTop, EffectOn.You, 1, Text: s);
             if (Regex.IsMatch(s, @"^Search your library for", I)) return new(EffectKind.Search, EffectOn.You, Text: s);
             if (Regex.IsMatch(s, @"^Investigate$", I)) return new(EffectKind.Token, EffectOn.You, 1, Token: new TokenSpec("", "", "", "Clue", false, ""), Text: s);
-            if ((m = Regex.Match(s, $@"^Create {Num} (.+?) tokens?(?: with (.+))?$", I)).Success && ReadToken(m.Groups[2].Value, m.Groups[3].Value) is { } spec)
+            if ((m = Regex.Match(Regex.Replace(s, @" (tokens?) named [^,]+?(?= with |$)", " $1", I), $@"^Create {Num} (.+?) tokens?(?: with (.+))?$", I)).Success && ReadToken(m.Groups[2].Value, m.Groups[3].Value) is { } spec)
                 return new(EffectKind.Token, EffectOn.You, N(1), Token: spec, Text: s);
             if ((m = Regex.Match(s, $@"^~ deals {Num} damage to each creature and each player$", I)).Success)
                 return new(EffectKind.Damage, EffectOn.Everything, N(1), Text: s);
@@ -660,6 +754,139 @@ namespace BreakersOfE.Playtest
             return new(EffectKind.Reminder, Text: s);
         }
 
+        /// <summary>
+        /// Fights, damage equal to power, damage divided between targets, several targets
+        /// at once, and the newer keyword actions (Discover, Amass, Incubate, Earthbend).
+        /// </summary>
+        private static Effect? ReadTwoOrMore(string s)
+        {
+            Match m;
+            int K(string v) => v.ToLowerInvariant() switch
+            {
+                "any number of" => 99, "one or two" => 2, "one, two, or three" => 3, "one or more" => 99,
+                _ => Number(v) ?? 1,
+            };
+            // Fights: "Target creature you control fights target creature you don't control / an opponent controls".
+            if (Regex.IsMatch(s, @"^target creature(?: you control)? fights (?:up to one )?(?:another )?target creature( you don't control| an opponent controls)?$", I))
+                return new(EffectKind.Fight, EffectOn.Target, What: "fight", Text: s);
+            if (Regex.IsMatch(s, @"^target creature(?: you control)? deals damage equal to its power to (?:up to one )?(?:another )?target (creature|creature or planeswalker|creature or planeswalker you don't control|creature you don't control|creature an opponent controls|creature or planeswalker an opponent controls)$", I))
+                return new(EffectKind.Fight, EffectOn.Target, What: "bite", Text: s);
+            if (Regex.IsMatch(s, @"^(?:Then )?those creatures fight each other$", I))
+                return new(EffectKind.Fight, EffectOn.Target, What: "fight", Text: s);
+            // Damage equal to power: the card's own, the sacrificed creature's, the target's to itself, and back.
+            if ((m = Regex.Match(s, $@"^~ deals damage equal to its power to {Target}$", I)).Success)
+                return new(EffectKind.Damage, OnOf(m.Groups[1].Value), What: "power", Text: s);
+            if ((m = Regex.Match(s, $@"^~ deals damage equal to the sacrificed (?:creature|artifact)'s power to {Target}$", I)).Success)
+                return new(EffectKind.Damage, OnOf(m.Groups[1].Value), What: "sacrificed", Text: s);
+            if (Regex.IsMatch(s, @"^Target creature deals damage to itself equal to its power$", I))
+                return new(EffectKind.Damage, EffectOn.Target, What: "own", Text: s);
+            if (Regex.IsMatch(s, @"^(That|target) creature deals damage equal to its power to ~$", I))
+                return new(EffectKind.Damage, EffectOn.Self, What: "back", Text: s);
+            if ((m = Regex.Match(s, @"^You gain life equal to the sacrificed creature's (power|toughness)$", I)).Success)
+                return new(EffectKind.GainLife, EffectOn.You, What: "sacrificed " + m.Groups[1].Value.ToLowerInvariant(), Text: s);
+            if (Regex.IsMatch(s, @"^You gain life equal to the life lost this way$", I))
+                return new(EffectKind.GainLife, EffectOn.You, What: "lost", Text: s);
+            // Damage divided between targets, or to each of several.
+            if ((m = Regex.Match(s, $@"^~ deals {Num} damage divided as you choose among (any number of|one or two|one, two, or three|{Num}) (targets|target creatures(?: and/or planeswalkers)?|target creatures and/or players)$", I)).Success)
+                return new(EffectKind.Damage, m.Groups[4].Value.Contains("creature", StringComparison.OrdinalIgnoreCase) && !m.Groups[4].Value.Contains("player", StringComparison.OrdinalIgnoreCase) ? EffectOn.Target : EffectOn.AnyTarget,
+                           Number(m.Groups[1].Value) ?? 1, What: $"divided:{K(m.Groups[2].Value)}", Text: s);
+            if ((m = Regex.Match(s, $@"^~ deals {Num} damage to each of up to (\w+) (targets|target creatures?(?: and/or planeswalkers)?)$", I)).Success)
+                return new(EffectKind.Damage, m.Groups[3].Value.StartsWith("targets", StringComparison.OrdinalIgnoreCase) ? EffectOn.AnyTarget : EffectOn.Target,
+                           Number(m.Groups[1].Value) ?? 1, What: $"each:{K(m.Groups[2].Value)}", Text: s);
+            // Several targets at once: "Tap two target creatures", "Untap up to two target lands", "Return two target creatures to their owners' hands".
+            if ((m = Regex.Match(s, $@"^(Tap|Untap) (?:up to )?{Num} target ([^.]+)$", I)).Success && (Number(m.Groups[2].Value) ?? 1) != 1)
+                return new(m.Groups[1].Value.Equals("Tap", StringComparison.OrdinalIgnoreCase) ? EffectKind.Tap : EffectKind.Untap, EffectOn.Target,
+                           What: $"multi:{Number(m.Groups[2].Value) ?? 1}", Text: s);
+            if ((m = Regex.Match(s, $@"^(Return|Destroy|Exile) (?:up to )?{Num} target ([^.]+?)(?: to their owners'? hands?)?$", I)).Success && (Number(m.Groups[2].Value) ?? 1) != 1 &&
+                (m.Groups[1].Value.Equals("Return", StringComparison.OrdinalIgnoreCase) == s.Contains("hand", StringComparison.OrdinalIgnoreCase)) && !s.Contains("graveyard", StringComparison.OrdinalIgnoreCase))
+            {
+                var kind = m.Groups[1].Value.ToLowerInvariant() switch { "return" => EffectKind.ToHand, "destroy" => EffectKind.Destroy, _ => EffectKind.Exile };
+                return new(kind, EffectOn.Target, What: $"multi:{Number(m.Groups[2].Value) ?? 1}", Text: s);
+            }
+            // Edicts: "Each opponent sacrifices a creature", "… with the greatest power among creatures that player controls".
+            if ((m = Regex.Match(s, $@"^(Each opponent|Target opponent|Target player|Each player) sacrifices {Num} (.+?)(?: of their choice)?( with the greatest power among creatures (?:that player|they) controls?)?$", I)).Success)
+            {
+                string who = m.Groups[1].Value.ToLowerInvariant();
+                return new(EffectKind.OpponentSacrifices, who == "target player" ? EffectOn.Player : EffectOn.Opponents, Number(m.Groups[2].Value) ?? 1,
+                           What: Filter(m.Groups[3].Value) + (m.Groups[4].Success ? "|greatest" : "") + (who == "each player" ? "|all" : ""), Text: s);
+            }
+            // "One or two target creatures each get +2/+0 until end of turn": up to two targets.
+            if ((m = Regex.Match(s, @"^(One or two|Up to (\w+)|(\w+)) target creatures each get ([+\-−]\w+)/([+\-−]\w+) until end of turn$", I)).Success)
+            {
+                int most = m.Groups[1].Value.Equals("One or two", StringComparison.OrdinalIgnoreCase) ? 2
+                         : Number(m.Groups[2].Success ? m.Groups[2].Value : m.Groups[3].Value) ?? 1;
+                int Sg(string v) { v = v.Replace('−', '-'); int sign = v.StartsWith("-") ? -1 : 1; return (Number(v.TrimStart('+', '-')) is int k && k >= 0 ? k : 0) * sign; }
+                if (most != 1) return new(EffectKind.Pump, EffectOn.Target, What: $"multi:{most}", P: Sg(m.Groups[4].Value), T: Sg(m.Groups[5].Value), Text: s);
+            }
+            if ((m = Regex.Match(s, $@"^Untap up to {Num} lands$", I)).Success)
+                return new(EffectKind.Untap, EffectOn.Target, What: $"multi:{Number(m.Groups[1].Value) ?? 1}", Text: s);
+            if (Regex.IsMatch(s, @"^Regenerate each creature you control$", I)) return new(EffectKind.Regenerate, EffectOn.EachYours, Text: s);
+            if ((m = Regex.Match(s, $@"^Investigate {Num} times$", I)).Success)
+                return new(EffectKind.Token, EffectOn.You, Number(m.Groups[1].Value) ?? 1, Token: new TokenSpec("", "", "", "Clue", false, ""), Text: s);
+            if (Regex.IsMatch(s, @"^Put target [^,.]+ into its owner's library second from the top$", I))
+                return new(EffectKind.ToLibraryTop, EffectOn.Target, What: "second", Text: s);
+            if ((m = Regex.Match(s, @"^Return all (.+?) cards from your graveyard to the battlefield( tapped)?$", I)).Success)
+                return new(EffectKind.ReturnAllFromGraveyard, EffectOn.You, What: FilterFor(m.Groups[1].Value) + (m.Groups[2].Success ? "|tapped" : ""), Text: s);
+            // "If it's your turn, scry 2": only on your own turn.
+            if ((m = Regex.Match(s, @"^If it's your turn, (.+)$", I)).Success)
+            {
+                var inner = ReadEffect(char.ToUpperInvariant(m.Groups[1].Value[0]) + m.Groups[1].Value[1..]);
+                if (inner.Kind != EffectKind.Reminder) return inner with { Cond = "yourturn", Text = s };
+            }
+            if (Regex.IsMatch(s, @"^(?:You )?draw cards equal to the greatest power among creatures you control$", I))
+                return new(EffectKind.Draw, EffectOn.You, What: "greatest power", Text: s);
+            if ((m = Regex.Match(s, @"^~ deals damage to (target [^,.]+?|any target) equal to the number of (.+)$", I)).Success)
+                return new(EffectKind.Damage, OnOf(m.Groups[1].Value), 1, Text: s, Per: m.Groups[2].Value);
+            if (Regex.IsMatch(s, @"^You gain life equal to the damage dealt this way$", I))
+                return new(EffectKind.GainLife, EffectOn.You, What: "dealt", Text: s);
+            if ((m = Regex.Match(s, @"^Attacking creatures( you control)? get ([+\-−]\w+)/([+\-−]\w+) until end of turn$", I)).Success)
+            {
+                int Sg(string v) { v = v.Replace('−', '-'); int sign = v.StartsWith("-") ? -1 : 1; return (Number(v.TrimStart('+', '-')) is int k && k >= 0 ? k : 0) * sign; }
+                return new(EffectKind.Pump, EffectOn.EachCreature, What: "|attacking", P: Sg(m.Groups[2].Value), T: Sg(m.Groups[3].Value), Text: s);
+            }
+            if ((m = Regex.Match(s, @"^Other creatures you control get ([+\-−]\w+)/([+\-−]\w+) until end of turn$", I)).Success)
+            {
+                int Sg(string v) { v = v.Replace('−', '-'); int sign = v.StartsWith("-") ? -1 : 1; return (Number(v.TrimStart('+', '-')) is int k && k >= 0 ? k : 0) * sign; }
+                return new(EffectKind.Pump, EffectOn.EachYours, P: Sg(m.Groups[1].Value), T: Sg(m.Groups[2].Value), Text: s, Other: true);
+            }
+            if ((m = Regex.Match(s, @"^Tap all (.+?)$", I)).Success) return new(EffectKind.TapAll, EffectOn.None, What: AllFilter(m.Groups[1].Value), Text: s);
+            if (Regex.IsMatch(s, @"^Creatures without flying can't block this turn$", I))
+                return new(EffectKind.GainKeywords, EffectOn.EachCreature, What: "Can't block|-flying", Text: s);
+            if ((m = Regex.Match(s, $@"^~ deals {Num} damage to each creature and each planeswalker$", I)).Success)
+                return new(EffectKind.Damage, EffectOn.EachCreature, Number(m.Groups[1].Value) ?? 1, What: "+walkers", Text: s);
+            if (Regex.IsMatch(s, @"^Put ~ on the bottom of its owner's library$", I)) return new(EffectKind.ToLibraryTop, EffectOn.Self, What: "bottom", Text: s);
+            if ((m = Regex.Match(s, @"^Return ~ from your graveyard to the battlefield( tapped)? with an? (\w+) counter on (?:it|~)$", I)).Success)
+                return new(EffectKind.ReturnSelf, EffectOn.Self, What: "Battlefield" + (m.Groups[1].Success ? " tapped" : "") + "|" + m.Groups[2].Value, Text: s);
+            if ((m = Regex.Match(s, @"^(?:You )?draw cards equal to the sacrificed creature's (power|toughness)$", I)).Success)
+                return new(EffectKind.Draw, EffectOn.You, What: "sacrificed " + m.Groups[1].Value.ToLowerInvariant(), Text: s);
+            if (Regex.IsMatch(s, @"^Put ~ on top of its owner's library$", I)) return new(EffectKind.ToLibraryTop, EffectOn.Self, Text: s);
+            if (Regex.IsMatch(s, @"^Create a token that's a copy of ~$", I)) return new(EffectKind.CopyToken, EffectOn.Self, Text: s);
+            if (Regex.IsMatch(s, @"^Return (?:a|an|up to \w+) [^,.]*?cards? from your graveyard to (?:the battlefield|your hand)$", I))
+                return new(EffectKind.FromGraveyard, EffectOn.You, Text: s);
+            if (Regex.IsMatch(s, @"^Shuffle your graveyard into your library$", I)) return new(EffectKind.ShuffleGraveyard, EffectOn.You, Text: s);
+            if ((m = Regex.Match(s, @"^Double the number of (\S+) counters on (target creature|~)$", I)).Success)
+                return new(EffectKind.DoubleCounters, OnOf(m.Groups[2].Value), What: m.Groups[1].Value, Text: s);
+            if ((m = Regex.Match(s, $@"^Put {Num} cards? from your hand on top of your library(?: in any order)?$", I)).Success)
+                return new(EffectKind.PutBack, EffectOn.You, Number(m.Groups[1].Value) ?? 1, Text: s);
+            // Equipment moving itself: "Attach ~ to target creature you control".
+            if (Regex.IsMatch(s, @"^Attach ~ to target [^,.]+$", I)) return new(EffectKind.Attach, EffectOn.Target, Text: s);
+            if (Regex.IsMatch(s, @"^Exile target (player|opponent)'s graveyard$", I)) return new(EffectKind.ExileGraveyard, EffectOn.Player, Text: s);
+            // Draw and discard.
+            if ((m = Regex.Match(s, $@"^(?:then )?draws? that many cards(?: plus {Num})?$", I)).Success)
+                return new(EffectKind.DrawThatMany, EffectOn.You, m.Groups[1].Success ? Number(m.Groups[1].Value) ?? 0 : 0, Text: s);
+            if ((m = Regex.Match(s, $@"^(?:then )?discard {Num} cards? at random$", I)).Success)
+                return new(EffectKind.DiscardRandom, EffectOn.You, Number(m.Groups[1].Value) ?? 1, Text: s);
+            if ((m = Regex.Match(s, $@"^(?:You may )?discard (up to {Num}|any number of) cards$", I)).Success)
+                return new(EffectKind.Discard, EffectOn.You, m.Groups[2].Success ? Number(m.Groups[2].Value) ?? 1 : 99, What: "up to", Text: s);
+            // Keyword actions.
+            if ((m = Regex.Match(s, $@"^Discover {Num}$", I)).Success) return new(EffectKind.Discover, EffectOn.You, Number(m.Groups[1].Value) ?? 1, Text: s);
+            if ((m = Regex.Match(s, $@"^Amass (\w+?)s? {Num}$", I)).Success)
+                return new(EffectKind.Amass, EffectOn.You, Number(m.Groups[2].Value) ?? 1, What: m.Groups[1].Value, Text: s);
+            if ((m = Regex.Match(s, $@"^Incubate {Num}$", I)).Success) return new(EffectKind.Incubate, EffectOn.You, Number(m.Groups[1].Value) ?? 1, Text: s);
+            if ((m = Regex.Match(s, $@"^Earthbend {Num}$", I)).Success) return new(EffectKind.Earthbend, EffectOn.Target, Number(m.Groups[1].Value) ?? 1, Text: s);
+            return null;
+        }
+
         /// <summary>Information or a choice that's yours, with nothing for the table to do ("It's still a land", "Put the rest into your graveyard").</summary>
         private static bool IsNote(string s) => Regex.IsMatch(s,
             @"^((It|~|target creature)('s| is) still a land|(It|~|target creature|They) can't be regenerated|You may choose new targets|You may choose the same mode|" +
@@ -675,7 +902,12 @@ namespace BreakersOfE.Playtest
             @"You may play an additional land|Switch .* power and toughness|~ becomes the creature type|(Target|target) land becomes the basic land type|" +
             @"The next time a source of your choice|If that spell would be put into your graveyard|~'re still lands|They're still lands|Exile that card$|" +
             @"You may cast (that card|the copy|it|the exiled card) without paying|You may cast the exiled card|When you next cast|~ becomes an artifact creature|Goad target|" +
-            @"Beam me up|Transmute|Teamwork|Converge|Raid|Delirium)", RegexOptions.IgnoreCase);
+            @"Beam me up|Transmute|Teamwork|Converge|Raid|Delirium|You may play (it|them|that card|those cards) (this turn|until)|" +
+            @"You may cast ~ for as long as it remains exiled|The flashback cost is equal to|If you don't, you lose the game|" +
+            @"Reveal (those cards|them|it), put (them|it) into your hand|Put (N|\w+) of those cards into your hand|You may cast a spell with mana value|" +
+            @"You become the monarch|Damage can't be prevented|Choose another player|You skip your next turn|End the turn|Epic$|Paradigm$|" +
+            @"A (creature|permanent) destroyed this way can't be regenerated|Round up each time|Remove ~ from your deck before playing if you're not playing for ante|" +
+            @"At the beginning of that turn's end step, you lose the game|~ can block an additional creature this turn|Dredge \w+$)", RegexOptions.IgnoreCase);
 
         private static readonly string[] ColorWords = { "white", "blue", "black", "red", "green", "colorless" };
 
@@ -716,6 +948,11 @@ namespace BreakersOfE.Playtest
             public List<(string Wording, int Count, string Example)> Missing { get; } = new();
             /// <summary>Costs not read, most common first.</summary>
             public List<(string Wording, int Count, string Example)> MissingCosts { get; } = new();
+            /// <summary>
+            /// Read in full, but with a sentence that hangs on something else ("if", "instead",
+            /// "unless", "for each", "only if"): worth checking that the table does the right thing.
+            /// </summary>
+            public List<(string Wording, int Count, string Example)> ToCheck { get; } = new();
         }
 
         /// <summary>Read every card (name, type line, rules text), one per Oracle card, and count what's understood.</summary>
@@ -724,6 +961,8 @@ namespace BreakersOfE.Playtest
             var cov = new Coverage();
             var missing = new Dictionary<string, (int Count, string Example)>();
             var missingCosts = new Dictionary<string, (int Count, string Example)>();
+            var toCheck = new Dictionary<string, (int Count, string Example)>();
+            var risky = new Regex(@"\b(if|instead|unless|for each|only if|as long as)\b", I);
             static string Norm(string s) => Regex.Replace(Regex.Replace(s, @"\b(\d+|one|two|three|four|five|six|seven|X)\b", "N", I), @"\{[^}]+\}", "{M}");
             foreach (var (name, type, text) in cards)
             {
@@ -744,7 +983,15 @@ namespace BreakersOfE.Playtest
                         if (a.Effects.All(e => e.Kind == EffectKind.Mana) && a.Kind == AbilityKind.Activated) continue;   // mana: the mana reader's
                         any = true;
                         cov.Abilities++;
-                        if (a.Understood) cov.Understood++;
+                        if (a.Understood)
+                        {
+                            cov.Understood++;
+                            foreach (var sentence in Regex.Split(a.EffectText, @"(?<=\.)\s+").Where(x => risky.IsMatch(x)))
+                            {
+                                string k = Norm(sentence.Trim().TrimEnd('.'));
+                                toCheck[k] = toCheck.TryGetValue(k, out var v) ? (v.Count + 1, v.Example) : (1, $"{faceName}: {a.Text}");
+                            }
+                        }
                         else if (a.PartlyUnderstood) cov.Partly++;
                         foreach (var e in a.Effects.Where(e => e.Kind == EffectKind.Reminder))
                         {
@@ -761,6 +1008,7 @@ namespace BreakersOfE.Playtest
                 if (any) cov.CardsWithAbilities++;
             }
             cov.Missing.AddRange(missing.OrderByDescending(kv => kv.Value.Count).Take(top).Select(kv => (kv.Key, kv.Value.Count, kv.Value.Example)));
+            cov.ToCheck.AddRange(toCheck.OrderByDescending(kv => kv.Value.Count).Take(top).Select(kv => (kv.Key, kv.Value.Count, kv.Value.Example)));
             cov.MissingCosts.AddRange(missingCosts.OrderByDescending(kv => kv.Value.Count).Take(top / 2).Select(kv => (kv.Key, kv.Value.Count, kv.Value.Example)));
             return cov;
         }

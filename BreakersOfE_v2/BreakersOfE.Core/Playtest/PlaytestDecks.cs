@@ -32,6 +32,9 @@ namespace BreakersOfE.Playtest
                 foreach (var r in db.TokenCards.AsNoTracking().Where(p => tokenIds.Contains(p.ScryfallId))
                                     .Select(p => new { p.ScryfallId, p.Layout }).ToList())
                     result[r.ScryfallId] = r.Layout ?? "";
+                // A two-sided token card ("Officer // Treasure") turns over like a double-faced token.
+                foreach (var id in tokenIds.Where(Services.TokenPairing.IsPairSid))
+                    result[id] = "double_faced_token";
             }
             catch
             {

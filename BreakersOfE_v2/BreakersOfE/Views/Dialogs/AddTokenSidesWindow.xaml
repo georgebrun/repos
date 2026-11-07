@@ -25,7 +25,7 @@
             <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
                 <TextBlock x:Name="HeaderText" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
                 <TextBlock x:Name="SubText" Style="{StaticResource BoeHint}" TextWrapping="Wrap" Margin="0,2,0,0"
-                           Text="Is another token printed on the back of this card? Pick it and Add to Collection: both sides go in as two rows, paired (a deck that takes one side takes the card). No other side: Single-Sided."/>
+                           Text="Is another token printed on the back of this card? Pick it and Add to Collection: the two-sided card goes in as one row of its own (&quot;Officer // Treasure&quot;). No other side: Single-Sided."/>
                 <DockPanel Margin="0,10,0,0">
                     <TextBlock DockPanel.Dock="Left" Text="Find" VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <TextBox x:Name="FindBox" TextChanged="Filter_Changed"
@@ -59,7 +59,7 @@
                     <DataGridTextColumn Header="No." Binding="{Binding Number}" Width="55" SortMemberPath="NumberSort"/>
                     <DataGridTextColumn Header="P/T" Binding="{Binding PT}" Width="50"/>
                     <DataGridTextColumn x:Name="OwnedColumn" Header="Owned" Binding="{Binding OwnedText}" Width="65" SortMemberPath="Owned"/>
-                    <DataGridTextColumn x:Name="PairedColumn" Header="Paired with" Binding="{Binding PairedWith}" Width="150"/>
+                    <DataGridTextColumn x:Name="PairedColumn" Header="Your cards with it" Binding="{Binding PairedWith}" Width="150"/>
                 </DataGrid.Columns>
             </DataGrid>
         </DockPanel>

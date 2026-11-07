@@ -42,7 +42,7 @@ namespace BreakersOfE.Views
                                       (string Label, string Value)? Stats, string OracleText, string FlavorText);
 
         /// <summary>The side to open on: the front for a card with a back picture, else the whole card.</summary>
-        public static int FirstSide(object card) => HasBack(card) ? 0 : -1;
+        public static int FirstSide(object card) => HasBack(card) || Services.TokenPairing.IsPair(card) ? 0 : -1;
 
         /// <summary>One side (0 = front, 1 = back) or the whole card (-1).</summary>
         public static FaceInfo Face(object card, int side)
@@ -145,19 +145,26 @@ namespace BreakersOfE.Views
         /// <summary>The card has a back face picture (double-faced): show the flip button.</summary>
         public static bool HasBack(object card) => Get(card, "ImageBackUrl").Length > 0;
 
-        // ── Two-sided tokens (two Scryfall tokens paired as one card) ─────
-        /// <summary>The pool tokens on the other side of a paired token row or deck token line (none: single-sided).</summary>
+        // ── Two-sided tokens (two Scryfall tokens printed back to back: one card, "Officer // Treasure") ─────
+        /// <summary>A two-sided card's second side, from the token pool (none for anything else, or a card with its own back picture).</summary>
         public static List<object> OtherSideCards(object? card)
         {
-            if (card == null || HasBack(card)) return new List<object>();
+            if (card == null || HasBack(card) || !Services.TokenPairing.IsPair(card)) return new List<object>();
             try
             {
-                return Services.CollectionEditService.OtherSidesOfRow(card)
-                    .Select(s => s.Key.ScryfallId).Distinct(StringComparer.OrdinalIgnoreCase)
-                    .Select(sid => Services.CollectionEditService.FindPoolCard(Services.CollectionEditService.TokensTable, sid))
-                    .Where(c => c != null).Cast<object>().ToList();
+                var (_, b) = Services.TokenPairing.PoolSides(Get(card, "ScryfallId"));
+                return b == null ? new List<object>() : new List<object> { b };
             }
             catch { return new List<object>(); }
+        }
+
+        /// <summary>The name shown after a side's own name: "  // Treasure" on a two-sided card's first side, "  // Officer" on its second.</summary>
+        public static string OtherSideName(object? card, bool secondSide)
+        {
+            if (card == null || !Services.TokenPairing.IsPair(card)) return "";
+            var (a, b) = Services.TokenPairing.SideNames(Get(card, "Name"));
+            string other = secondSide ? a : b;
+            return other.Length == 0 ? "" : "  // " + other;
         }
 
         /// <summary>"🔄 Show Other Side (Angel)".</summary>

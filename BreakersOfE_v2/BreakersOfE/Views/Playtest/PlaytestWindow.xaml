@@ -67,6 +67,8 @@
                 <Button x:Name="BtnPassTurn" Content="Next Turn" Padding="10,4" Margin="12,0,10,0" Click="BtnPassTurn_Click"
                         ToolTip="Next turn: untap everything and draw (N)"/>
                 <TextBlock x:Name="TurnText" VerticalAlignment="Center" FontSize="15" FontWeight="SemiBold"/>
+                <Button x:Name="BtnSwitchSides" Content="⇅ Switch Sides" Padding="10,4" Margin="14,0,0,0" Click="BtnSwitchSides_Click"
+                        Visibility="Collapsed" ToolTip="Turn the table round: sit at the other player's side (W)"/>
             </WrapPanel>
             <WrapPanel DockPanel.Dock="Right" VerticalAlignment="Center">
                 <TextBlock x:Name="DeckText" VerticalAlignment="Center" Margin="0,0,12,0" FontSize="12"
@@ -112,6 +114,8 @@
                                 </StackPanel>
                             </StackPanel>
                         </Border>
+                        <TextBlock x:Name="MyInfo" Style="{StaticResource PileName}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,-4,0,8" Visibility="Collapsed"
+                                   ToolTip="Combat damage you've taken from each commander: 21 from one loses the game"/>
                         <!-- Mana pool: click +1, right-click −1; MANA empties it or keeps it this turn -->
                         <Border Style="{StaticResource PileBox}" Margin="0,0,0,8" Padding="6,4">
                             <StackPanel>
@@ -273,6 +277,25 @@
                     </Grid.RowDefinitions>
                     <StackPanel Grid.Row="0">
                         <!-- "At the beginning of …" reminders for the steps just entered -->
+                        <!-- Combat: attackers, blocks, damage -->
+                        <Border x:Name="GameOverBar" Background="#E0403010" Padding="12,8" Visibility="Collapsed">
+                            <DockPanel>
+                                <StackPanel x:Name="GameOverButtons" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center"/>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock x:Name="GameOverTitle" FontWeight="SemiBold" FontSize="15" Foreground="White" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="GameOverInfo" FontSize="12" Foreground="#E0E0D8C8" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                        <Border x:Name="CombatBar" Background="#E0381E1E" Padding="12,6" Visibility="Collapsed">
+                            <DockPanel>
+                                <StackPanel x:Name="CombatButtons" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center"/>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock x:Name="CombatTitle" FontWeight="SemiBold" Foreground="White" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="CombatInfo" FontSize="12" Foreground="#E0E0D8C8" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
                         <Border x:Name="ReminderBar" Background="#E0202A38" Padding="12,6" Visibility="Collapsed">
                             <DockPanel>
                                 <Button DockPanel.Dock="Right" Content="Done" Padding="10,3" Margin="8,0,0,0" VerticalAlignment="Top"
@@ -346,6 +369,17 @@
 
         <!-- The card being dragged floats here, over everything -->
         <Canvas x:Name="DragLayer" Grid.RowSpan="5" IsHitTestVisible="False"/>
+
+        <!-- Pass the screen (two players on one screen): the table covered as it turns round, until Ready -->
+        <Grid x:Name="PassCover" Grid.Row="1" Grid.RowSpan="4" Visibility="Collapsed" Background="#FF1E2A3E">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock x:Name="PassTitle" FontSize="30" FontWeight="SemiBold" Foreground="White" HorizontalAlignment="Center"/>
+                <TextBlock x:Name="PassInfo" FontSize="15" Foreground="#D0FFFFFF" HorizontalAlignment="Center" Margin="0,8,0,0"
+                           TextAlignment="Center" TextWrapping="Wrap" MaxWidth="560"/>
+                <Button x:Name="BtnPassReady" Content="Ready (Enter)" Padding="22,8" Margin="0,22,0,0" HorizontalAlignment="Center"
+                        FontSize="15" Click="BtnPassReady_Click"/>
+            </StackPanel>
+        </Grid>
 
         <!-- Zoom (Z, double-click, L): the card big, both faces of a two-faced card; a click or any key closes it -->
         <Grid x:Name="ZoomLayer" Grid.RowSpan="5" Background="#D0000000" Visibility="Collapsed"

@@ -27,7 +27,8 @@ namespace BreakersOfE.Views.Playtest
         private readonly Dictionary<string, string> _layouts;
         private readonly Dictionary<string, string> _loyalties;
         private Game _game = null!;
-        private Seat Me => _game.Seats[0];
+        /// <summary>The player at the near side of the table (two players: whose side you sit at, PlaytestWindow.Seats.cs).</summary>
+        private Seat Me => _game.Seats[Math.Clamp(_viewSeat, 0, Math.Max(0, _game.Seats.Count - 1))];
         private static PlaytestSettings S => PlaytestSettings.Current;
 
         /// <summary>The card under the mouse (keys act on it).</summary>
@@ -74,7 +75,8 @@ namespace BreakersOfE.Views.Playtest
         {
             if (_game != null) _game.Changed -= Render;
             _game = resume != null ? Game.Load(resume) : new Game();
-            _game.FreeFirstMulligan = S.FreeFirstMulligan && _deck.DeckType != DeckType.Standard && _deck.DeckType != DeckType.Limited;
+            _viewSeat = 0;                                                // the first player's side until the game is set up
+            _game.FreeFirstMulligan = S.FreeFirstMulligan;                // each player by their own deck's format (Game.FirstMulliganFree)
             LogList.Items.Clear();
             foreach (var line in _game.Log) LogList.Items.Add(line);
             _game.Logged += line =>
@@ -82,18 +84,46 @@ namespace BreakersOfE.Views.Playtest
                 LogList.Items.Add(line);
                 LogList.ScrollIntoView(line);
             };
-            _comboWatch ??= new ComboWatch(_deck);
-            _comboWatch.Reset();
+            _game.ShowReminders = S.ShowReminders;
+            _game.Reminded += list =>                                     // combat's "whenever … attacks / blocks / dies"
+            {
+                _reminders.AddRange(list);
+                RenderReminders();
+            };
+            _gameOverSeen = "";
+            _seatLayouts.Clear();
+            _seatCombos.Clear();
+            KnowDeck(0, _deck);
             ComboBanner.Visibility = Visibility.Collapsed;
             _reminders.Clear();
             RenderReminders();
             if (resume == null)
             {
                 int life = S.StartingLife > 0 ? S.StartingLife : PlaytestDecks.DefaultLife(_deck);
-                _game.AddSeat(_deck, "You", life, _layouts, _loyalties);
+                _game.AddSeat(_deck, _oppDeck != null ? S.PlayerNameOrDefault() : "You", life, _layouts, _loyalties);   // two players: named, so the log reads the same from either side
                 if (_oppDeck != null) SeatOpponent(_oppDeck);           // Player 2 across the table
+                if (_game.Seats.Count > 1)
+                {
+                    int first = S.GoesFirst switch
+                    {
+                        FirstPlayer.You => 0,
+                        FirstPlayer.PlayerTwo => 1,
+                        _ => System.Security.Cryptography.RandomNumberGenerator.GetInt32(2),
+                    };
+                    _game.ChooseFirst(first, S.GoesFirst == FirstPlayer.CoinFlip ? "Coin flip" : "Who goes first");
+                }
             }
-            else _game.Note($"Carried on from the game saved {resume.Saved:g}.");
+            else
+            {
+                _game.Note($"Carried on from the game saved {resume.Saved:g}.");
+                FindOpponentDeck();
+            }
+            // Whose side you sit at: the first player's in a new game (opening hands go round), whoever's turn it is in one carried on.
+            _viewSeat = _game.Seats.Count > 1 ? _game.ActiveSeat : 0;    // whoever goes first decides their opening hand first
+            _lastActive = _game.ActiveSeat;
+            _openingHands = resume == null && _game.Seats.Count > 1;
+            _quietTurn = false;
+            PassCover.Visibility = Visibility.Collapsed;
             if (LogList.Items.Count > 0) LogList.ScrollIntoView(LogList.Items[^1]);
             _game.ManaEmpties = S.ManaEmpties;
             _game.Changed += Render;
@@ -101,18 +131,19 @@ namespace BreakersOfE.Views.Playtest
             _discardDown = 0;
             _handScroll = 0;
             _oppHoverId = 0;
-            ShowOpponentLook();
+            _portraitBadge = "\0";
+            ApplySettings();                                              // both sides' sleeves and playmats
             Render();
         }
 
         /// <summary>The table's settings (after the ⚙ Table window, and at the start).</summary>
         private void ApplySettings()
         {
-            _sleeve = LoadSleeve(_deck.DeckId);
+            _sleeve = LoadSleeve(MyDeckId);                               // the near-side player's deck's look
             TableBorder.Background = TableBrush(S.TableColor);
-            string mat = S.PlaymatPath(_deck.DeckId);
+            string mat = S.PlaymatPath(MyDeckId);
             _matSource = mat.Length > 0 ? ImageCacheService.LoadBitmap(mat, 2400) : null;
-            _matKey = PlaytestSettings.PlaymatKey(S.PlaymatFor(_deck.DeckId));
+            _matKey = PlaytestSettings.PlaymatKey(S.PlaymatFor(MyDeckId));
             ShowPlaymat();
             if (_game is not null) ShowOpponentLook();
             if (_game is not null) _game.ManaEmpties = S.ManaEmpties;
@@ -281,8 +312,14 @@ namespace BreakersOfE.Views.Playtest
             RenderHand();
             RenderPiles();
             RenderMulligan();
+            RenderCombat();
+            RenderGameOver();
             LifeText.Text = Me.Life.ToString();
-            TurnText.Text = $"Turn {_game.Turn}";
+            var taken = Me.CommanderDamage.Where(kv => kv.Value > 0).Select(kv => $"{(_game.FindAny(kv.Key)?.ShownName ?? "Commander").ToUpperInvariant()} · {kv.Value}/21").ToList();
+            MyInfo.Text = string.Join("\n", taken);
+            MyInfo.Visibility = taken.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            TurnText.Text = _game.Seats.Count > 1 ? $"Turn {_game.Turn} · {(_game.Active.IsYou ? "You" : _game.Active.Name)}" : $"Turn {_game.Turn}";
+            BtnSwitchSides.Visibility = _game.Seats.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
             RenderPhaseBar();
             RenderPlayerCounters();
             RenderMana();
@@ -290,6 +327,7 @@ namespace BreakersOfE.Views.Playtest
             RenderOpponent();
             RenderStack();
             CheckCombos();
+            QueueSeatCheck();
             BtnUndo.IsEnabled = _game.CanUndo;
             BtnUndo.ToolTip = _game.CanUndo ? $"Undo: {_game.UndoWhat} (Ctrl+Z)" : "Nothing to undo (Ctrl+Z)";
             BtnTokens.ToolTip = Me.Tokens.Count > 0
@@ -356,7 +394,9 @@ namespace BreakersOfE.Views.Playtest
                 });
             }
             // Power and toughness when counters or until-end-of-turn changes make them differ from what's printed.
-            if (!hidden && !c.FaceDown && c.PowerToughnessChanged && c.PowerNow is int pw && c.ToughnessNow is int tn)
+            // A printed * the table counted (Tarmogoyf, a Lhurgoyf) shows too, so you can see what it made of it.
+            bool starred = c.IsCreatureNow && c.HasStar && (c.StarPower != null || c.StarToughness != null);
+            if (!hidden && !c.FaceDown && (c.PowerToughnessChanged || starred) && c.PowerNow is int pw && c.ToughnessNow is int tn)
             {
                 int boost = c.PowerMod + c.ToughnessMod +
                             2 * (c.Counters.GetValueOrDefault("+1/+1") - c.Counters.GetValueOrDefault("-1/-1"));     // up: green, down: red
@@ -367,7 +407,9 @@ namespace BreakersOfE.Views.Playtest
                     Background = new SolidColorBrush(boost > 0 ? Color.FromArgb(240, 30, 120, 50)
                                                    : boost < 0 ? Color.FromArgb(240, 170, 40, 40) : Color.FromArgb(240, 120, 95, 20)),
                     BorderBrush = Brushes.White, BorderThickness = new Thickness(1),
-                    ToolTip = c.PowerMod != 0 || c.ToughnessMod != 0
+                    ToolTip = starred && c.PowerMod == 0 && c.ToughnessMod == 0 && !c.PowerToughnessChanged
+                        ? $"Its * counted by the table from its rules text ({c.Card.Power}/{c.Card.Toughness} printed)"
+                        : c.PowerMod != 0 || c.ToughnessMod != 0
                         ? $"Until end of turn: {(c.PowerMod >= 0 ? "+" : "")}{c.PowerMod}/{(c.ToughnessMod >= 0 ? "+" : "")}{c.ToughnessMod}"
                         : "With its counters",
                     Child = new TextBlock
@@ -379,6 +421,13 @@ namespace BreakersOfE.Views.Playtest
             }
             if (!hidden && !c.FaceDown && S.ShowKeywords && c.IsCreatureNow && Me.ZoneOf(c) == Zone.Battlefield)
                 AddKeywordBadges(grid, c, w, h);
+            if (!hidden && CombatMark(c) is { Length: > 0 } mark)
+            {
+                var cb = Badge(mark, w, top: false);
+                cb.Background = new SolidColorBrush(c.Blocking != 0 ? Color.FromArgb(230, 30, 70, 140) : Color.FromArgb(230, 160, 30, 30));
+                cb.Margin = new Thickness(0, 0, 0, h * 0.30);
+                grid.Children.Add(cb);
+            }
             double angle = (c.Tapped ? 90 : 0) + (c.Flipped ? 180 : 0);
             if (angle != 0) grid.RenderTransform = new RotateTransform(angle, w / 2, h / 2);
             grid.Tag = c.Id;
@@ -505,6 +554,7 @@ namespace BreakersOfE.Views.Playtest
         private void RenderMulligan()
         {
             if (RenderPickBar()) return;                              // choosing what to attach to / mutate onto
+            BtnKeep.Content = "Keep (K)";
             BtnSkipDiscard.Visibility = Visibility.Collapsed;
             BtnSkipDiscard.Content = "Skip";
             BtnKeep.Visibility = BtnMulligan.Visibility = Visibility.Visible;
@@ -532,7 +582,7 @@ namespace BreakersOfE.Views.Playtest
                 MulliganButtons.Visibility = Visibility.Collapsed;
                 MulliganTitle.Text = $"Click {Me.BottomPending} card{(Me.BottomPending == 1 ? "" : "s")} in your hand to put on the bottom of your library.";
                 MulliganInfo.Text = "London mulligan: one card for each mulligan" +
-                                    (_game.FreeFirstMulligan ? " (the first was free)." : ".");
+                                    (_game.FirstMulliganFree(Me) ? " (the first was free)." : ".");
                 return;
             }
             MulliganButtons.Visibility = Visibility.Visible;

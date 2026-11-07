@@ -78,14 +78,41 @@ namespace BreakersOfE.Views.Playtest
         private void HandArea_MouseMove(object sender, MouseEventArgs e)
         {
             if (_drag?.Started == true || Me.Hand.Count == 0) return;
-            double x = e.GetPosition(HandArea).X - _handStart;
+            var p = e.GetPosition(HandArea);
+            // Above the fan, on the lifted card (reading it, or reaching for its buttons): it stays up.
+            // Along the fan itself, the strip under the mouse decides, so no card is skipped.
+            if (p.Y < 0 && LiftedHandId() is int lifted && _visuals.TryGetValue(lifted, out var lv) && PointerOn(lv))
+            {
+                if (_hoverId != lifted) { _hoverId = lifted; QueueHandRender(); }
+                return;
+            }
+            double x = p.X - _handStart;
             int i = _handStep <= 0 ? 0 : (int)Math.Floor(x / _handStep);
             i = Math.Clamp(i, 0, Me.Hand.Count - 1);
             var c = Me.Hand[i];
             if (c.Id == _hoverId) return;
             _hoverId = c.Id;
             ShowInPanel(c);
-            QueueRender();
+            QueueHandRender();
+        }
+
+        private bool _handRenderQueued;
+
+        /// <summary>
+        /// The card under the mouse changed in the hand: redraw just the hand (and the
+        /// action bar beside it), not the whole table, so running along the hand stays smooth.
+        /// </summary>
+        private void QueueHandRender()
+        {
+            if (_handRenderQueued) return;
+            _handRenderQueued = true;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _handRenderQueued = false;
+                if (_drag?.Started == true || _game == null || _game.Seats.Count == 0) return;
+                RenderHand();
+                Dispatcher.BeginInvoke(new Action(PlaceActionBar), System.Windows.Threading.DispatcherPriority.Loaded);
+            }), System.Windows.Threading.DispatcherPriority.Render);
         }
 
         /// <summary>The card keys act on: the selected one, else the one under the mouse.</summary>
@@ -137,6 +164,8 @@ namespace BreakersOfE.Views.Playtest
             {
                 case Zone.Hand:
                     row.Children.Add(BarButton(c.IsModal ? "Play…" : "Play", () => PlayCard(c), "Play it (Enter)"));
+                    if (!c.IsInstantOrSorceryNow)
+                        row.Children.Add(BarButton("Play Tapped", () => PlayCard(c, tapped: true), "It enters the battlefield tapped (as it resolves, when it goes on the stack)"));
                     row.Children.Add(BarButton("Face Down", () => PlayCard(c, faceDown: true), "Play it face down"));
                     row.Children.Add(BarButton("Discard", () => _game.Move(c, Zone.Graveyard), "Into the graveyard (G)"));
                     AddAbilityButtons(row, c);
@@ -148,6 +177,7 @@ namespace BreakersOfE.Views.Playtest
                     row.Children.Add(BarButton("Untap All", () => _game.SetTapped(Me, pile, false), "Every land in the pile"));
                     break;
                 case Zone.Battlefield:
+                    AddCombatButtons(row, c);
                     row.Children.Add(BarButton(c.Tapped ? "Untap" : "Tap", () => ToggleTap(c), "Enter or Space"));
                     if (!c.Tapped && !AsksOnTap(c) && Mana(c).Count > 0)
                         row.Children.Add(BarButton("Mana…", () => OfferMana(new List<GameCard> { c }, Mana(c), justTap: false), "Tap it for mana"));
@@ -292,6 +322,9 @@ namespace BreakersOfE.Views.Playtest
         /// <summary>Why cards are being discarded, when it isn't the end of turn ("Merfolk Looter: click 1 card to discard.").</summary>
         private string _discardWhy = "";
 
+        /// <summary>Cards discarded since an ability asked ("…then draw that many cards").</summary>
+        private int _discardCount;
+
         /// <summary>
         /// Leaving the end step (cleanup): down to the maximum hand size first,
         /// unless there's none; then <paramref name="next"/>. Skip is always there.
@@ -327,6 +360,7 @@ namespace BreakersOfE.Views.Playtest
         private void DiscardForHandSize(GameCard c)
         {
             _game.Move(c, Zone.Graveyard);
+            _discardCount++;
             _discardDown--;
             if (_discardDown <= 0) FinishDiscard();
             else Render();

@@ -22,6 +22,14 @@ namespace BreakersOfE.Playtest
     /// The playtest table's own settings (the ⚙ button on the table), kept
     /// apart from BoE's: Tabletop\PlaytestSettings.json in the data folder.
     /// </summary>
+    /// <summary>Two players: who takes the first turn.</summary>
+    public enum FirstPlayer
+    {
+        CoinFlip,
+        You,
+        PlayerTwo,
+    }
+
     public sealed class PlaytestSettings
     {
         /// <summary>Card back for your library and face-down cards: a picture in Tabletop\Sleeves ("" = the Magic card back).</summary>
@@ -56,11 +64,28 @@ namespace BreakersOfE.Playtest
         /// </summary>
         public string Badge { get; set; } = "";
 
+        /// <summary>
+        /// Player 1 (you, at the near side) in a two-player game: the name the table and the log use,
+        /// so the log reads the same from either side. "" = "Player 1". On your own you're "You".
+        /// </summary>
+        public string PlayerName { get; set; } = "";
+
         /// <summary>Player 2 (the deck across the table): the name the table and the log use.</summary>
         public string OpponentName { get; set; } = "Opponent";
 
         /// <summary>Player 2's badge picture, from Tabletop\Badges. "" = none (a plain person icon).</summary>
         public string OpponentBadge { get; set; } = "";
+
+        /// <summary>Two players: the table turns round to whoever's turn it is (their hand in front of you).</summary>
+        public bool FollowTurn { get; set; } = true;
+
+        /// <summary>Two players on one screen: cover the table as it turns round, until the next player clicks Ready.</summary>
+        public bool PassScreen { get; set; }
+
+        /// <summary>Player 1's name in a two-player game: never "You" (the log names both players), "Player 1" when blank.</summary>
+        public string PlayerNameOrDefault() =>
+            string.IsNullOrWhiteSpace(PlayerName) || PlayerName.Trim().Equals("You", System.StringComparison.OrdinalIgnoreCase)
+                ? "Player 1" : PlayerName.Trim();
 
         /// <summary>Player 2's name, never "You" (that's the player at the near side).</summary>
         public string OpponentNameOrDefault() =>
@@ -83,8 +108,11 @@ namespace BreakersOfE.Playtest
         /// <summary>Pass Turn draws a card for the next turn.</summary>
         public bool DrawOnNewTurn { get; set; } = true;
 
-        /// <summary>The first mulligan is free (only in Commander-style decks).</summary>
+        /// <summary>The first mulligan is free (only in Commander-style decks; each player by their own deck).</summary>
         public bool FreeFirstMulligan { get; set; } = true;
+
+        /// <summary>Two players: who goes first (a coin flip by default, as at a real table).</summary>
+        public FirstPlayer GoesFirst { get; set; } = FirstPlayer.CoinFlip;
 
         /// <summary>Spells (anything but a land) go on the stack first (Resolve, or R, finishes them); off: permanents straight onto the battlefield, instants and sorceries to the graveyard.</summary>
         public bool StackFirst { get; set; } = true;

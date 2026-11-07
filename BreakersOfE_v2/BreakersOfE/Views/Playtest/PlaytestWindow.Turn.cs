@@ -46,6 +46,7 @@ namespace BreakersOfE.Views.Playtest
         /// <summary>P / Next Step: on to the next step (leaving the end step is the cleanup: hand size first).</summary>
         private void NextStep()
         {
+            EnsureActiveView();
             if (!Me.Kept) _game.Keep(Me);
             void Go()
             {
@@ -59,6 +60,7 @@ namespace BreakersOfE.Views.Playtest
         private void GoToPhase(Phase target)
         {
             if (target == _game.Phase) return;
+            EnsureActiveView();
             if (!Me.Kept) _game.Keep(Me);
             void Go()
             {
@@ -237,13 +239,12 @@ namespace BreakersOfE.Views.Playtest
         }
 
         // ── Combos ───────────────────────────────────────────────────────
-        private ComboWatch? _comboWatch;
         private Combo? _shownCombo;
 
         private void CheckCombos()
         {
-            if (_comboWatch == null || !S.ComboAlerts) return;
-            var fresh = _comboWatch.Check(Me);
+            if (ComboFor(Me) is not { } watch || !S.ComboAlerts) return;
+            var fresh = watch.Check(Me);
             foreach (var c in fresh)
                 _game.Note($"Combo ready: {string.Join(" + ", c.Cards)}" + (c.Results.Count > 0 ? $" ({string.Join("; ", c.Results)})" : ""));
             if (fresh.Count == 0) return;

@@ -65,8 +65,6 @@ namespace BreakersOfE.Services
         internal List<Dictionary<string, object?>> Rows = new();
         /// <summary>The same printings right after the edit: Undo only runs if nothing changed them since.</summary>
         internal List<Dictionary<string, object?>>? After;
-        /// <summary>Tokens: the two-sided pairs these printings were on (Undo puts them back as they were).</summary>
-        internal List<TokenPair>? Pairs;
         /// <summary>The collection table the snapshot belongs to.</summary>
         public string Table => CollTag;
         /// <summary>The printings (Scryfall ids) it covers.</summary>
@@ -136,6 +134,8 @@ namespace BreakersOfE.Services
                     using var odb = new OnlineDbContext();
                     return odb.OnlineCards.AsNoTracking().FirstOrDefault(c => c.ScryfallId == scryfallId);
                 }
+                // A two-sided token card ("Officer // Treasure"): made of its two sides' pool cards.
+                if (collTag == TokensTable && TokenPairing.IsPairSid(scryfallId)) return TokenPairing.FromPool(scryfallId);
                 using var db = new AppDbContext();
                 return collTag switch
                 {
@@ -645,7 +645,6 @@ namespace BreakersOfE.Services
             try
             {
                 snap.Rows = Capture(collTag, snap.Sids);
-                if (collTag == TokensTable) snap.Pairs = PairsOfPrintings(snap.Sids);
                 return snap;
             }
             catch (Exception ex)
@@ -720,7 +719,6 @@ namespace BreakersOfE.Services
 
                 var touched = RestoreInto(db, snap);
                 db.SaveChanges();
-                if (snap.Pairs != null) RestorePairs(db, snap.Sids, snap.Pairs);     // tokens: the pairs as they were
                 return new EditResult { Changed = 1, Message = $"Undone: {description}", Touched = touched };
             }
             catch (Exception ex)
@@ -1063,12 +1061,7 @@ namespace BreakersOfE.Services
         /// <summary>"Deck A, Deck B" — who uses this printing (main collection only).</summary>
         private static string UsedBy(CollectionDbContext db, string collTag, string sid)
         {
-            if (collTag == TokensTable)
-            {
-                try { return TokenUsedBy(db, sid); }
-                catch { return "in use"; }
-            }
-            if (collTag != CardsTable) return "in use";
+            if (collTag != CardsTable && collTag != TokensTable) return "in use";
             try
             {
                 var names = db.DeckUsages.Where(u => u.ScryfallId == sid && (u.EnteredNonFoil + u.EnteredFoil + u.EnteredEtched) > 0)
@@ -1082,13 +1075,13 @@ namespace BreakersOfE.Services
         private static string TextFor(string collTag, RowKey key) =>
             IsOnline(collTag) ? CardFinish.Display(key.Finish) : key.Text;
 
-        private static int? GetInt(object o, string prop) =>
+        internal static int? GetInt(object o, string prop) =>
             o.GetType().GetProperty(prop)?.GetValue(o) as int?;
 
         private static bool GetBool(object o, string prop) =>
             o.GetType().GetProperty(prop)?.GetValue(o) is bool b && b;
 
-        private static string GetString(object o, string prop) =>
+        internal static string GetString(object o, string prop) =>
             o.GetType().GetProperty(prop)?.GetValue(o) as string ?? "";
     }
 }

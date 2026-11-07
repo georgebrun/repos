@@ -381,6 +381,7 @@ namespace BreakersOfE.Views.Pages
             AddToLabel.Visibility = AddToBox.Visibility = side ? Visibility.Visible : Visibility.Collapsed;
             BtnDeckSettings.IsEnabled = BtnCloseDeck.IsEnabled = BtnSuggestTokens.IsEnabled = BtnVersions.IsEnabled = BtnPlaytest.IsEnabled =
                 BtnTearDown.IsEnabled = BtnWholeOwned.IsEnabled = BtnWholeNew.IsEnabled = _deck != null;
+            BtnPlaytest.Visibility = Features.Playtest ? Visibility.Visible : Visibility.Collapsed;   // not finished yet: hidden
         }
 
         private DeckCardCategory AddSection =>
@@ -509,18 +510,24 @@ namespace BreakersOfE.Views.Pages
                 return PoolFor(Str(row, "ScryfallId"), row is TokenCollectionEntry) switch
                 {
                     PoolCard pc => DeckService.FromPoolCard(pc),
-                    TokenCard tc => DeckService.FromTokenCard(tc),
+                    TokenCard tc => FromToken(tc),
+                    // A two-sided token card whose sides the pool hasn't (any more): from the row's own card data.
+                    _ when row is TokenCollectionEntry te && TokenPairing.IsPair(te) => TokenPairing.ToDeckCard(te),
                     _ => null,
                 };
             if (row is DeckCard line)
                 return PoolFor(line.ScryfallId, line.IsTokenLine) switch
                 {
                     PoolCard pc => DeckService.FromPoolCard(pc),
-                    TokenCard tc => DeckService.FromTokenCard(tc),
+                    TokenCard tc => FromToken(tc),
                     _ => line,
                 };
             return null;
         }
+
+        /// <summary>A token as a deck line (a two-sided token card with its second side as the back picture).</summary>
+        private static DeckCard FromToken(TokenCard t) =>
+            TokenPairing.IsPairSid(t.ScryfallId) ? TokenPairing.ToDeckCard(t) : DeckService.FromTokenCard(t);
 
         /// <summary>A deck line's own finish for + / − / Delete: the one it has (non-foil first).</summary>
         private static string LineFinish(DeckCard line) =>
@@ -1072,6 +1079,7 @@ namespace BreakersOfE.Views.Pages
         private void BtnPlaytest_Click(object sender, RoutedEventArgs e)
         {
             if (_deck == null) { ShowStatus("Pick a deck first.", true); return; }
+            if (!Features.Playtest) return;
             global::BreakersOfE.Views.Playtest.PlaytestWindow.Open(_deck, Window.GetWindow(this));
         }
 

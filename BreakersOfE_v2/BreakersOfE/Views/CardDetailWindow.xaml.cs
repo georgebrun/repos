@@ -322,16 +322,9 @@ namespace BreakersOfE.Views
         }
 
         // ── Button handlers ─────────────────────────────────────────────
-        /// <summary>A two-sided token: "  // Angel"; else nothing.</summary>
-        private string OtherSideNames()
-        {
-            try
-            {
-                var sides = Services.CollectionEditService.OtherSidesOfRow(_card);
-                return sides.Count == 0 ? "" : "  // " + string.Join(", ", sides.Select(x => x.Name).Distinct());
-            }
-            catch { return ""; }
-        }
+        /// <summary>A two-sided card's first side, without its own back picture: "  // Treasure"; else nothing.</summary>
+        private string OtherSideNames() =>
+            CardDetailText.HasBack(_card) ? "" : CardDetailText.OtherSideName(_card, secondSide: false);
 
         private List<object> _others = new();
         private int _otherAt = -1;
@@ -352,7 +345,7 @@ namespace BreakersOfE.Views
             _ = Services.CardPictures.ShowAsync(CardImage, CardDetailText.Get(o, "ScryfallId"),
                 CardDetailText.Get(o, "ImageNormalUrl"), CardDetailText.Get(o, "LocalImagePath"), () => v == _picVersion);
             var face = CardDetailText.Face(o, -1);
-            CardName.Text = face.Name + "  // " + Get("Name");
+            CardName.Text = face.Name + CardDetailText.OtherSideName(_card, secondSide: true);
             CardType.Text = face.TypeLine;
             Services.ManaCostConverter.Fill(ManaCostPanel, face.ManaCost);
             PTLabel.Text = face.Stats?.Label ?? "";

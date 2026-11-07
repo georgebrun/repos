@@ -12,8 +12,8 @@ namespace BreakersOfE.Views.Dialogs
     /// <summary>
     /// Adding a token on Edit → Pool → Collection → Tokens: the card pool's
     /// tokens of its release (all its token sets) to pick the other side
-    /// from. Add to Collection: <see cref="OtherSide"/> is the pick (both go
-    /// in, paired). Single-Sided: <see cref="Single"/>. Cancel: neither.
+    /// from. Add to Collection: <see cref="OtherSide"/> is the pick (the
+    /// two-sided card goes in: one row of its own, "Officer // Treasure"). Single-Sided: <see cref="Single"/>. Cancel: neither.
     /// The token it was paired with before comes picked.
     /// </summary>
     public partial class AddTokenSidesWindow : FluentWindow
@@ -48,7 +48,7 @@ namespace BreakersOfE.Views.Dialogs
             {
                 ChoiceGrid.SelectedItem = prev;
                 ChoiceGrid.ScrollIntoView(prev);
-                StatusText.Text = $"Paired with {prev.Name} ({prev.SetCode} #{prev.Number}) before: Add to Collection (Enter) pairs these the same way.";
+                StatusText.Text = $"Paired with {prev.Name} ({prev.SetCode} #{prev.Number}) before: Add to Collection (Enter) adds the same two-sided card.";
                 BtnSingle.IsDefault = false;
                 BtnAdd.IsDefault = true;
             }
@@ -118,7 +118,7 @@ namespace BreakersOfE.Views.Dialogs
         {
             BtnAdd.IsEnabled = ChoiceGrid.SelectedItem is TokenChoice;
             if (ChoiceGrid.SelectedItem is TokenChoice c)
-                StatusText.Text = $"Other side: {c.Name} ({c.SetCode} #{c.Number}). Add to Collection adds both, paired.";
+                StatusText.Text = $"Other side: {c.Name} ({c.SetCode} #{c.Number}). Add to Collection adds the two-sided card (one row).";
         }
 
         private void ChoiceGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)

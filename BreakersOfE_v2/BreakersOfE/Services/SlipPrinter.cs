@@ -52,25 +52,23 @@ namespace BreakersOfE.Services
         /// </summary>
         public static List<Slip> WithOtherSides(object card, bool thisSideOnly = false)
         {
-            var slips = FromCard(card);
-            bool token = card is TokenCard || card is TokenCollectionEntry || (card is DeckCard d && d.IsTokenLine);
-            if (thisSideOnly || !token || slips.Count != 1) return slips;     // a real double-faced token prints both faces already
-            List<CollectionEditService.OtherSideRef> others;
-            try { others = CollectionEditService.OtherSideRefs(card); }
-            catch { return slips; }
-            if (others.Count == 0) return slips;
-            var list = new List<Slip>();
-            int n = 1 + others.Count;
-            list.Add(Renumber(slips[0], 1, n));
-            int i = 2;
-            foreach (var o in others)
+            // A two-sided token card ("Officer // Treasure"): each side's slip, from the token pool.
+            string sid = Get(card, "ScryfallId");
+            if (TokenPairing.IsPairSid(sid))
             {
-                var pool = CollectionEditService.FindPoolCard(CollectionEditService.TokensTable, o.ScryfallId);
-                if (pool == null) continue;
-                foreach (var sl in FromCard(pool)) list.Add(Renumber(sl, i, n));
-                i++;
+                var (a, b) = TokenPairing.PoolSides(sid);
+                if (a != null && b != null)
+                {
+                    var front = FromCard(a);
+                    if (thisSideOnly) return front;
+                    var back = FromCard(b);
+                    var both = new List<Slip>();
+                    if (front.Count > 0) both.Add(Renumber(front[0], 1, 2));
+                    if (back.Count > 0) both.Add(Renumber(back[0], 2, 2));
+                    return both;
+                }
             }
-            return list;
+            return FromCard(card);
         }
 
         private static Slip Renumber(Slip s, int side, int of) => new()

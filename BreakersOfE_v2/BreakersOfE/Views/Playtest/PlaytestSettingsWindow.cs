@@ -24,7 +24,10 @@ namespace BreakersOfE.Views.Playtest
         private static PlaytestSettings S => PlaytestSettings.Current;
 
         private readonly Deck _deck;
-        private bool _forDeck;
+        /// <summary>Whose sleeves and playmat are being set: null = your defaults (every deck), else that deck's id (this deck, or Player 2's).</summary>
+        private string? _scopeId;
+        private string _scopeName = "";
+        private bool _forDeck => _scopeId != null;
         private bool _loading;
 
         private readonly ComboBox _sleeveBox = new() { Width = 300, Margin = new Thickness(0, 0, 0, 6) };
@@ -61,7 +64,7 @@ namespace BreakersOfE.Views.Playtest
 
         private readonly double _fieldAspect;
 
-        internal PlaytestSettingsWindow(Window owner, Deck deck, double fieldAspect)
+        internal PlaytestSettingsWindow(Window owner, Deck deck, double fieldAspect, (string Id, string Name)? other = null)
         {
             _deck = deck;
             _fieldAspect = Math.Clamp(fieldAspect, 0.5, 4);
@@ -95,14 +98,21 @@ namespace BreakersOfE.Views.Playtest
 
             // ── Whose look ──
             lookTab.Children.Add(Heading("SLEEVES AND PLAYMAT FOR"));
-            var scope = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
-            var all = new RadioButton { Content = "Every deck (my defaults)", IsChecked = true, Margin = new Thickness(0, 0, 18, 0), GroupName = "scope" };
-            var mine = new RadioButton { Content = $"This deck only: {deck.Name}", GroupName = "scope" };
-            all.Checked += (_, _) => { _forDeck = false; FillPictures(); };
-            mine.Checked += (_, _) => { _forDeck = true; FillPictures(); };
+            var scope = new WrapPanel { Margin = new Thickness(0, 2, 0, 0) };
+            var all = new RadioButton { Content = "Every deck (my defaults)", IsChecked = true, Margin = new Thickness(0, 0, 18, 4), GroupName = "scope" };
+            var mine = new RadioButton { Content = $"This deck only: {deck.Name}", GroupName = "scope", Margin = new Thickness(0, 0, 18, 4) };
+            all.Checked += (_, _) => { _scopeId = null; _scopeName = ""; FillPictures(); };
+            mine.Checked += (_, _) => { _scopeId = deck.DeckId; _scopeName = deck.Name; FillPictures(); };
             scope.Children.Add(all);
             scope.Children.Add(mine);
             if (string.IsNullOrEmpty(deck.DeckId)) mine.IsEnabled = false;
+            // Two players: Player 2's deck gets its own sleeves and playmat here too.
+            if (other is { } p2 && p2.Id.Length > 0 && p2.Id != deck.DeckId)
+            {
+                var theirs = new RadioButton { Content = $"Player 2's deck: {p2.Name}", GroupName = "scope", Margin = new Thickness(0, 0, 18, 4) };
+                theirs.Checked += (_, _) => { _scopeId = p2.Id; _scopeName = p2.Name; FillPictures(); };
+                scope.Children.Add(theirs);
+            }
             lookTab.Children.Add(scope);
             _scopeHint.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
             lookTab.Children.Add(_scopeHint);
@@ -162,6 +172,22 @@ namespace BreakersOfE.Views.Playtest
                 Save();
             };
 
+            // ── Player 1 ──
+            playerTab.Children.Add(Heading("PLAYER 1"));
+            playerTab.Children.Add(Hint("You, at the near side. Against another deck the log names both players, so it reads the same from either side; on your own you're \"You\". A new name shows from the next New Game."));
+            var myNameRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 4) };
+            myNameRow.Children.Add(new TextBlock { Text = "Name", Width = 86, VerticalAlignment = VerticalAlignment.Center });
+            var myName = new TextBox { Width = 230, Text = S.PlayerNameOrDefault(), Padding = new Thickness(6, 3, 6, 3) };
+            myName.LostFocus += (_, _) =>
+            {
+                S.PlayerName = myName.Text.Trim();
+                myName.Text = S.PlayerNameOrDefault();
+                S.PlayerName = myName.Text;
+                Save();
+            };
+            myNameRow.Children.Add(myName);
+            playerTab.Children.Add(myNameRow);
+
             // ── Badge ──
             playerTab.Children.Add(Heading("BADGE"));
             playerTab.Children.Add(Hint("You, the player: the picture beside your life on the table, whichever deck you play. None: a plain person icon."));
@@ -219,6 +245,12 @@ namespace BreakersOfE.Views.Playtest
             playerTab.Children.Add(oppBadgeRow);
             _oppBadgeBox.SelectionChanged += (_, _) => { if (!_loading) SetOppBadge(Pick(_oppBadgeBox, _oppBadgeValues)); };
 
+            // ── Taking turns at one screen ──
+            playerTab.Children.Add(Heading("TAKING TURNS"));
+            playerTab.Children.Add(Check("The table turns to whoever's turn it is (their hand in front of you)", S.FollowTurn, v => S.FollowTurn = v));
+            playerTab.Children.Add(Check("Pass the screen: cover the table as it turns, until the next player clicks Ready", S.PassScreen, v => S.PassScreen = v));
+            playerTab.Children.Add(Hint("Playing both sides yourself, leave the cover off. Switch Sides [W] turns the table any time, to answer on the other player's side."));
+
             // ── Table color ──
             lookTab.Children.Add(Heading("TABLE COLOR"));
             lookTab.Children.Add(Hint("Behind the playmat, the zones and your hand."));
@@ -255,7 +287,17 @@ namespace BreakersOfE.Views.Playtest
             lifeRow.Children.Add(life);
             rulesTab.Children.Add(lifeRow);
             rulesTab.Children.Add(Hint("By the format: 40 in Commander, 30 Pauper Commander, 25 Brawl, 20 the rest. Takes effect with the next New Game."));
-            rulesTab.Children.Add(Check("The first mulligan is free (Commander-style decks)", S.FreeFirstMulligan, v => S.FreeFirstMulligan = v));
+            rulesTab.Children.Add(Check("The first mulligan is free (Commander-style decks; each player by their own deck)", S.FreeFirstMulligan, v => S.FreeFirstMulligan = v));
+            var firstRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 4) };
+            firstRow.Children.Add(new TextBlock { Text = "Who goes first", Width = 150, VerticalAlignment = VerticalAlignment.Center });
+            var firstBox = new ComboBox { Width = 230 };
+            var firstChoices = new[] { (FirstPlayer.CoinFlip, "Flip a coin"), (FirstPlayer.You, "You (the first deck)"), (FirstPlayer.PlayerTwo, "Player 2") };
+            foreach (var (_, label) in firstChoices) firstBox.Items.Add(label);
+            firstBox.SelectedIndex = Math.Max(0, Array.FindIndex(firstChoices, f => f.Item1 == S.GoesFirst));
+            firstBox.SelectionChanged += (_, _) => { S.GoesFirst = firstChoices[Math.Max(0, firstBox.SelectedIndex)].Item1; Save(); };
+            firstRow.Children.Add(firstBox);
+            rulesTab.Children.Add(firstRow);
+            rulesTab.Children.Add(Hint("Two players: the log says who won the flip. The first player starts at Main 1 (no draw on the first turn) and decides their opening hand first. Takes effect with the next New Game."));
             rulesTab.Children.Add(Heading("EACH TURN"));
             rulesTab.Children.Add(Check("Next Turn draws a card", S.DrawOnNewTurn, v => S.DrawOnNewTurn = v));
             var handRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 4) };
@@ -321,8 +363,14 @@ namespace BreakersOfE.Views.Playtest
                 int gone = SavedGames.DeleteAll();
                 clear.Content = $"Cleared ({gone})";
                 clear.IsEnabled = false;
+                FillSaved();
             };
             gamesTab.Children.Add(clear);
+            _clearSaved = clear;
+            gamesTab.Children.Add(Heading("KEPT NOW"));
+            gamesTab.Children.Add(Hint("Newest first. Playtesting a deck offers its game back; Delete lets one go."));
+            gamesTab.Children.Add(_savedList);
+            FillSaved();
 
             var close = new Button { Content = "Close", Padding = new Thickness(16, 4, 16, 4), IsCancel = true, IsDefault = true, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
             close.Click += (_, _) => Close();
@@ -353,9 +401,9 @@ namespace BreakersOfE.Views.Playtest
         private void FillPictures()
         {
             _loading = true;
-            var lookNow = S.LookOf(_deck.DeckId);
+            var lookNow = S.LookOf(_scopeId);
             _scopeHint.Text = _forDeck
-                ? "This deck plays in these; \"Use my default\" follows your defaults."
+                ? $"{_scopeName} plays in these, whichever side of the table it's on; \"Use my default\" follows your defaults."
                 : "Every deck plays in these unless it has its own (choose \"This deck only\").";
 
             _sleeveValues = new List<string?>();
@@ -401,14 +449,16 @@ namespace BreakersOfE.Views.Playtest
 
         private PlaytestSettings.DeckLook DeckLook()
         {
-            if (!S.Decks.TryGetValue(_deck.DeckId, out var l)) S.Decks[_deck.DeckId] = l = new PlaytestSettings.DeckLook();
+            string id = _scopeId ?? _deck.DeckId;
+            if (!S.Decks.TryGetValue(id, out var l)) S.Decks[id] = l = new PlaytestSettings.DeckLook();
             return l;
         }
 
         private void TidyDeckLook()
         {
-            if (S.Decks.TryGetValue(_deck.DeckId, out var l) && l.Sleeve == null && l.Playmat == null)
-                S.Decks.Remove(_deck.DeckId);
+            string id = _scopeId ?? _deck.DeckId;
+            if (S.Decks.TryGetValue(id, out var l) && l.Sleeve == null && l.Playmat == null)
+                S.Decks.Remove(id);
         }
 
         private void SetSleeve(string? value)
@@ -458,7 +508,7 @@ namespace BreakersOfE.Views.Playtest
             Save();
         }
 
-        private string? ScopeDeck => _forDeck ? _deck.DeckId : null;
+        private string? ScopeDeck => _scopeId;
 
         private void ShowPreviews()
         {
@@ -587,6 +637,59 @@ namespace BreakersOfE.Views.Playtest
             };
             b.MouseLeftButtonUp += (_, _) => { S.TableColor = hex; Save(); FillSwatches(); };
             return b;
+        }
+
+        // ── Saved games ──────────────────────────────────────────────────
+        private readonly StackPanel _savedList = new() { Margin = new Thickness(0, 6, 0, 0) };
+        private Button? _clearSaved;
+
+        /// <summary>Every kept game: the deck (and the one against it), the turn and step, when it was saved; Delete for each.</summary>
+        private void FillSaved()
+        {
+            _savedList.Children.Clear();
+            var games = SavedGames.All();
+            if (_clearSaved != null && games.Count == 0) { _clearSaved.IsEnabled = false; }
+            else if (_clearSaved != null) { _clearSaved.IsEnabled = true; _clearSaved.Content = $"Clear Saved Games ({games.Count})"; }
+            if (games.Count == 0)
+            {
+                _savedList.Children.Add(Hint("No games kept."));
+                return;
+            }
+            HashSet<string> ids;
+            try { ids = DeckIndexService.AllDecks().Select(d => d.Deck.DeckId ?? "").Where(i => i.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase); }
+            catch { ids = new HashSet<string>(); }
+            foreach (var (file, state) in games)
+            {
+                string what, whenText;
+                bool gone = false;
+                if (state == null || state.Seats.Count == 0)
+                {
+                    what = System.IO.Path.GetFileNameWithoutExtension(file) + " (can't be read)";
+                    whenText = "";
+                    gone = true;
+                }
+                else
+                {
+                    var first = state.Seats[0];
+                    what = first.DeckName + (state.Seats.Count > 1 ? $" against {state.Seats[1].DeckName}" : "");
+                    string whose = state.Seats.Count > 1 && state.ActiveSeat < state.Seats.Count ? $" ({state.Seats[state.ActiveSeat].Name})" : "";
+                    whenText = $"Turn {state.Turn}{whose}, {Game.PhaseName(state.Phase)} · saved {state.Saved:g}";
+                    gone = first.DeckId.Length > 0 && ids.Count > 0 && !ids.Contains(first.DeckId);
+                }
+                var row = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
+                string path = file;
+                var delete = new Button { Content = "Delete", Padding = new Thickness(10, 2, 10, 3), VerticalAlignment = VerticalAlignment.Center };
+                delete.Click += (_, _) => { SavedGames.DeleteFile(path); FillSaved(); };
+                DockPanel.SetDock(delete, Dock.Right);
+                row.Children.Add(delete);
+                var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+                text.Children.Add(new TextBlock { Text = what, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+                var sub = Hint(whenText + (gone ? (whenText.Length > 0 ? " · " : "") + "its deck is gone: safe to delete" : ""));
+                sub.Margin = new Thickness(0);
+                text.Children.Add(sub);
+                row.Children.Add(text);
+                _savedList.Children.Add(row);
+            }
         }
 
         // ── Bits ─────────────────────────────────────────────────────────

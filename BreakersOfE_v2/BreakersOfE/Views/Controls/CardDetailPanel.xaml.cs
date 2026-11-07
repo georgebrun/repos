@@ -102,7 +102,7 @@ namespace BreakersOfE.Views.Controls
             _ = Services.CardPictures.ShowAsync(DetailCardImage, CardDetailText.Get(o, "ScryfallId"),
                 CardDetailText.Get(o, "ImageNormalUrl"), CardDetailText.Get(o, "LocalImagePath"), () => v == _picVersion);
             var face = CardDetailText.Face(o, -1);
-            DetailName.Text = face.Name + "  // " + CardDetailText.Get(_card, "Name");
+            DetailName.Text = face.Name + CardDetailText.OtherSideName(_card, secondSide: true);
             DetailType.Text = face.TypeLine;
             Services.ManaCostConverter.Fill(DetailManaCost, face.ManaCost);
             DetailOracle.Text = face.OracleText;
@@ -128,16 +128,9 @@ namespace BreakersOfE.Views.Controls
             DetailPTLabel.Visibility = DetailPT.Visibility = face.Stats != null ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        /// <summary>A two-sided token (token row or deck token line): "  // Angel"; else nothing.</summary>
-        private static string OtherSideText(object card)
-        {
-            try
-            {
-                var sides = Services.CollectionEditService.OtherSidesOfRow(card);
-                return sides.Count == 0 ? "" : "  // " + string.Join(", ", sides.Select(s => s.Name).Distinct());
-            }
-            catch { return ""; }
-        }
+        /// <summary>A two-sided card's first side, without its own back picture: "  // Treasure"; else nothing.</summary>
+        private static string OtherSideText(object card) =>
+            CardDetailText.HasBack(card) ? "" : CardDetailText.OtherSideName(card, secondSide: false);
 
         private void ShowTags(object? card)
         {

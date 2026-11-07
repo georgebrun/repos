@@ -4,6 +4,10 @@ using System.ComponentModel.DataAnnotations;
 namespace BreakersOfE.Models
 {
     /// <summary>
+    /// THE OLD MODEL, kept only so the one-time conversion can read it
+    /// (CollectionEditService.ConvertTokenPairs): a two-sided card is a row of
+    /// its own now (see TokenPairing). Nothing writes these any more.
+    ///
     /// Two token rows that are the two sides of one physical card (Reality
     /// Fracture's two-sided tokens: Scryfall lists each side as its own
     /// token). Stored per copy: "Treasure / Angel × 1" and "Treasure / Goblin

@@ -87,6 +87,24 @@ namespace BreakersOfE.Playtest
         /// </summary>
         public int PendingTarget { get; set; }
         public bool PendingMutate { get; set; }
+
+        /// <summary>Combat: it's attacking (declared this combat).</summary>
+        public bool Attacking { get; set; }
+
+        /// <summary>What it attacks: 0 = the defending player, else a planeswalker's (or battle's) id.</summary>
+        public int AttackTarget { get; set; }
+
+        /// <summary>Combat: the attacker it blocks (0 = not blocking).</summary>
+        public int Blocking { get; set; }
+
+        /// <summary>Combat damage has been dealt this combat (on the attackers; Undo takes it back with them).</summary>
+        public bool DealtCombat { get; set; }
+
+        /// <summary>Blocking: its place in the attacker's damage order (lowest takes damage first).</summary>
+        public int BlockOrder { get; set; }
+
+        /// <summary>Played tapped (Play Tapped): it enters the battlefield tapped, from the stack too.</summary>
+        public bool PendingTapped { get; set; }
         /// <summary>Mutating onto the top (true) or underneath.</summary>
         public bool PendingOnTop { get; set; }
 
@@ -164,6 +182,12 @@ namespace BreakersOfE.Playtest
             MergedInto = 0;
             PendingTarget = 0;
             PendingMutate = false;
+            PendingTapped = false;
+            Attacking = false;
+            AttackTarget = 0;
+            Blocking = 0;
+            BlockOrder = 0;
+            DealtCombat = false;
             Counters.Clear();
         }
 
@@ -212,11 +236,34 @@ namespace BreakersOfE.Playtest
         /// <summary>A creature (the face that's up).</summary>
         public bool IsCreatureNow => FaceType(BackUp ? 1 : 0).Contains("Creature", StringComparison.OrdinalIgnoreCase);
 
-        /// <summary>Toughness now, with +1/+1 and -1/-1 counters and until-end-of-turn changes (null when it has none printed, like */*).</summary>
-        public int? ToughnessNow => Printed(Card.Toughness) is int n ? n + CounterBoost + ToughnessMod : null;
+        /// <summary>Toughness now, with +1/+1 and -1/-1 counters and until-end-of-turn changes (a printed * as the table counted it; null when it couldn't).</summary>
+        public int? ToughnessNow => (Printed(Card.Toughness) ?? WithStar(Card.Toughness, StarToughness)) is int n ? n + CounterBoost + ToughnessMod : null;
 
         /// <summary>Power now, the same way.</summary>
-        public int? PowerNow => Printed(Card.Power) is int n ? n + CounterBoost + PowerMod : null;
+        public int? PowerNow => (Printed(Card.Power) ?? WithStar(Card.Power, StarPower)) is int n ? n + CounterBoost + PowerMod : null;
+
+        /// <summary>A printed * (Tarmogoyf's "*/1+*", a Lhurgoyf's "*/*") as the table counted it from its rules text (<see cref="Stars"/>): null when it couldn't.</summary>
+        public int? StarPower { get; set; }
+        public int? StarToughness { get; set; }
+
+        /// <summary>Its power or toughness has a * in it (the face that's up).</summary>
+        public bool HasStar => Face(Card.Power).Contains('*') || Face(Card.Toughness).Contains('*');
+
+        private string Face(string value)
+        {
+            var t = CardFaces.Sides(value);
+            int s = BackUp ? 1 : 0;
+            return s < t.Length ? t[s] : t.Length > 0 ? t[0] : "";
+        }
+
+        /// <summary>"*" → the count; "1+*" → 1 plus it; "*+1" the same.</summary>
+        private int? WithStar(string value, int? star)
+        {
+            if (star is not int s) return null;
+            var m = System.Text.RegularExpressions.Regex.Match(Face(value).Replace(" ", ""), @"^(?:(\d+)\+)?\*(?:\+(\d+))?$");
+            if (!m.Success) return null;
+            return s + (m.Groups[1].Success ? int.Parse(m.Groups[1].Value) : 0) + (m.Groups[2].Success ? int.Parse(m.Groups[2].Value) : 0);
+        }
 
         /// <summary>The printed number on the face that's up (null for * or none).</summary>
         private int? Printed(string value)
@@ -258,8 +305,10 @@ namespace BreakersOfE.Playtest
             Id = Id, Card = Card, Layout = Layout, Seat = Seat, IsToken = IsToken, IsCommander = IsCommander, Loyalty = Loyalty,
             PowerMod = PowerMod, ToughnessMod = ToughnessMod, EnteredTurn = EnteredTurn,
             TempKeywords = new List<string>(TempKeywords), LoyaltyUsedTurn = LoyaltyUsedTurn,
+            StarPower = StarPower, StarToughness = StarToughness,
+            Attacking = Attacking, AttackTarget = AttackTarget, Blocking = Blocking, BlockOrder = BlockOrder, DealtCombat = DealtCombat,
             Tapped = Tapped, BackUp = BackUp, FaceDown = FaceDown, Flipped = Flipped, Damage = Damage, StackOrder = StackOrder,
-            AttachedTo = AttachedTo, MergedInto = MergedInto, PendingTarget = PendingTarget, PendingMutate = PendingMutate, PendingOnTop = PendingOnTop,
+            AttachedTo = AttachedTo, MergedInto = MergedInto, PendingTarget = PendingTarget, PendingMutate = PendingMutate, PendingOnTop = PendingOnTop, PendingTapped = PendingTapped,
             Counters = new Dictionary<string, int>(Counters, StringComparer.OrdinalIgnoreCase),
             X = X, Y = Y,
         };

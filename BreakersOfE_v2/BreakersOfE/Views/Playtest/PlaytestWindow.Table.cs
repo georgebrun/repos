@@ -44,8 +44,8 @@ namespace BreakersOfE.Views.Playtest
         /// </summary>
         private void RenderBadge()
         {
-            string path = S.BadgePath();
-            var f = S.FramingOf(PlaytestSettings.BadgeKey(S.Badge));
+            string path = BadgePathOf(Me);                                   // the near-side player's own picture
+            var f = S.FramingOf(PlaytestSettings.BadgeKey(BadgeFileOf(Me)));
             string shown = path.Length == 0 ? "" : $"{path}|{f.Zoom}|{f.CenterX}|{f.CenterY}";
             if (shown != _portraitBadge)
             {
@@ -68,7 +68,7 @@ namespace BreakersOfE.Views.Playtest
                     };
                 }
             }
-            MyName.Text = (Me.IsYou ? "YOU" : Me.Name.ToUpperInvariant()) + (_deck.Name.Length > 0 ? " · " + _deck.Name.ToUpperInvariant() : "");
+            MyName.Text = (Me.IsYou ? "YOU" : Me.Name.ToUpperInvariant()) + (Me.DeckName.Length > 0 ? " · " + Me.DeckName.ToUpperInvariant() : "");
             bool myTurn = _game.Seats.Count < 2 || _game.ActiveSeat == Me.Index;
             MyPortraitBox.BorderBrush = myTurn ? Brushes.Gold : new SolidColorBrush(Color.FromArgb(0x70, 255, 255, 255));
             MatBox.BorderBrush = myTurn && _game.Seats.Count > 1 ? Brushes.Gold : new SolidColorBrush(Color.FromArgb(0x50, 0, 0, 0));
@@ -107,13 +107,14 @@ namespace BreakersOfE.Views.Playtest
                 _handStart = (room - total) / 2;                    // centered in front of you
             }
             _handStep = step;
+            int liftId = LiftedHandId() ?? 0;
             double mid = (n - 1) / 2.0;
             for (int i = 0; i < n; i++)
             {
                 var c = Me.Hand[i];
                 double t = n == 1 ? 0 : (i - mid) / Math.Max(1, mid);          // -1 … 1 across the fan
                 double left = _handStart + i * step;
-                bool lifted = c.Id == _hoverId && _drag?.Started != true;
+                bool lifted = c.Id == liftId;
                 FrameworkElement v;
                 if (lifted)
                 {
@@ -141,13 +142,25 @@ namespace BreakersOfE.Views.Playtest
             }
         }
 
-        /// <summary>The mouse left the hand: the lifted card goes back into the fan.</summary>
+        /// <summary>
+        /// The hand card that's up out of the fan: the one under the mouse, else the
+        /// selected one (so its action bar stays put while you reach for a button).
+        /// </summary>
+        private int? LiftedHandId()
+        {
+            if (_drag?.Started == true || _game == null || _game.Seats.Count == 0) return null;
+            if (_hoverId != 0 && Me.Hand.Any(h => h.Id == _hoverId)) return _hoverId;
+            if (_selectedId != 0 && Me.Hand.Any(h => h.Id == _selectedId)) return _selectedId;
+            return null;
+        }
+
+        /// <summary>The mouse left the hand: the lifted card goes back into the fan (a selected one stays up).</summary>
         private void HandRow_MouseLeave(object sender, MouseEventArgs e)
         {
             if (_drag?.Started == true || Find(_hoverId) is not { } held || Me.ZoneOf(held) != Zone.Hand) return;
             if (HandRow.IsMouseOver) return;
             _hoverId = 0;
-            QueueRender();
+            QueueHandRender();
         }
 
         // ── The card under the mouse, grown ──────────────────────────────

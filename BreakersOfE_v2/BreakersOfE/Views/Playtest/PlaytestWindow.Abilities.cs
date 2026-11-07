@@ -19,6 +19,14 @@ namespace BreakersOfE.Views.Playtest
         /// <summary>An ability waiting for its target to be clicked, with its X.</summary>
         private (Ability Ability, int X, List<int> Paid)? _pendingAbility;
 
+        /// <summary>Two targets (fights): the first one clicked (yours), while the second is picked.</summary>
+        private int _firstTarget;
+
+        /// <summary>Several targets being picked ("divided as you choose", "each of up to two targets", "Tap two target creatures"): the ones so far, with their share of the damage.</summary>
+        private List<(int Target, int Amount)>? _spread;
+        private int _spreadMax, _spreadLeft;
+        private bool _spreadDivided, _spreadPlayers;
+
         /// <summary>The abilities shown for a card where it is: the battlefield's, the hand's (cycling, channel) or the graveyard's.</summary>
         private List<Ability> AbilitiesHere(GameCard c)
         {
@@ -106,6 +114,17 @@ namespace BreakersOfE.Views.Playtest
 
         private void AfterCosts(GameCard c, Ability a, int x, List<int> paid)
         {
+            if (a.Spread is { } sp) { StartSpread(c, a, x, paid, sp); return; }
+            if (a.NeedsTwoTargets) { _firstTarget = 0; PickAbilityTarget(c, a, x, paid); return; }
+            if (a.NeedsPlayer && !a.NeedsTarget)
+            {
+                var pm = new ContextMenu { Placement = PlacementMode.MousePoint };
+                pm.Items.Add(new MenuItem { Header = $"{c.ShownName}: which player?", IsEnabled = false });
+                pm.Items.Add(Item("You", () => RunAbility(c, a, -1, x, paid)));
+                pm.Items.Add(Item(Opp is { } other ? other.Name : "An opponent", () => RunAbility(c, a, -2, x, paid)));
+                pm.IsOpen = true;
+                return;
+            }
             if (!a.NeedsTarget) { RunAbility(c, a, 0, x, paid); return; }
             if (a.Effects.Any(e => e.On == EffectOn.AnyTarget))
             {
@@ -269,6 +288,79 @@ namespace BreakersOfE.Views.Playtest
             m.IsOpen = true;
         }
 
+        // ── Several targets ──────────────────────────────────────────────
+        /// <summary>Start picking several targets: up to the most it allows, damage divided as you say.</summary>
+        private void StartSpread(GameCard c, Ability a, int x, List<int> paid, Effect sp)
+        {
+            string[] parts = sp.What.Split(':');
+            int most = parts.Length > 1 && int.TryParse(parts[1], out int k) ? k : 1;
+            _spreadMax = most < 0 ? Math.Max(1, x) : most;                    // "Tap X target creatures"
+            _spreadDivided = sp.What.StartsWith("divided:");
+            _spreadLeft = _spreadDivided ? sp.Amount(x) : 0;
+            _spreadPlayers = sp.On == EffectOn.AnyTarget;
+            _spread = new List<(int Target, int Amount)>();
+            _pendingAbility = (a, x, paid);
+            if (_spreadDivided && _spreadLeft <= 0) { FinishSpread(c); return; }
+            NextSpread(c);
+        }
+
+        /// <summary>The next target: a menu (a creature, you, an opponent, Done) when players count, else a click on the table.</summary>
+        private void NextSpread(GameCard c)
+        {
+            if (!_spreadPlayers) { StartPick(c, PickKind.Ability); if (_pick == null) FinishSpread(c); return; }
+            var m = new ContextMenu { Placement = PlacementMode.MousePoint };
+            m.Items.Add(new MenuItem
+            {
+                Header = $"{c.ShownName}: target {_spread!.Count + 1}" + (_spreadMax < 99 ? $" of up to {_spreadMax}" : "") +
+                         (_spreadDivided ? $" ({_spreadLeft} damage left)" : ""),
+                IsEnabled = false,
+            });
+            m.Items.Add(Item("A creature or planeswalker (click it)…", () => StartPick(c, PickKind.Ability)));
+            if (!_spread.Any(t => t.Target == -1)) m.Items.Add(Item("You", () => AddSpreadTarget(c, -1)));
+            if (!_spread.Any(t => t.Target == -2)) m.Items.Add(Item(Opp is { } other ? other.Name : "An opponent", () => AddSpreadTarget(c, -2)));
+            m.Items.Add(new Separator());
+            m.Items.Add(Item("Done", () => FinishSpread(c), enabled: _spread.Count > 0));
+            m.Items.Add(Item("Cancel", () => { _spread = null; _pendingAbility = null; Render(); }));
+            m.IsOpen = true;
+        }
+
+        private string TargetName(int id) => id == -1 ? "you" : id == -2 ? (Opp?.Name ?? "an opponent") : _game.FindAny(id)?.ShownName ?? "that";
+
+        /// <summary>One more target (with its share, when the damage is divided); the last one finishes.</summary>
+        private void AddSpreadTarget(GameCard c, int id)
+        {
+            if (_spread == null) return;
+            if (_spread.Any(t => t.Target == id)) { NextSpread(c); return; }             // each target once
+            int amount = 0;
+            if (_spreadDivided)
+            {
+                bool last = _spread.Count + 1 >= _spreadMax;
+                string? s = BreakersOfE.Views.Dialogs.TextPromptDialog.Ask(this, c.ShownName,
+                    $"How much of the {_spreadLeft} damage to {TargetName(id)}?", (last ? _spreadLeft : 1).ToString());
+                if (s == null || !int.TryParse(s.Trim(), out amount) || amount <= 0) { NextSpread(c); return; }
+                amount = Math.Min(amount, _spreadLeft);
+                _spreadLeft -= amount;
+            }
+            _spread.Add((id, amount));
+            if (_spread.Count >= _spreadMax || (_spreadDivided && _spreadLeft <= 0)) FinishSpread(c);
+            else NextSpread(c);
+        }
+
+        /// <summary>Those are the targets: the damage left over (if any) goes to the last one, then it's done as one move.</summary>
+        private void FinishSpread(GameCard c)
+        {
+            var list = _spread;
+            var pa = _pendingAbility;
+            _spread = null;
+            _pendingAbility = null;
+            _pick = null;
+            if (list == null || pa is not { } p) { Render(); return; }
+            if (_spreadDivided && _spreadLeft > 0 && list.Count > 0)
+                list[^1] = (list[^1].Target, list[^1].Amount + _spreadLeft);
+            int first = list.Select(t => t.Target).FirstOrDefault(t => t > 0);
+            RunAbility(c, p.Ability, first, p.X, p.Paid, list);
+        }
+
         private void PickAbilityTarget(GameCard c, Ability a, int x, List<int> paid)
         {
             _pendingAbility = (a, x, paid);
@@ -277,13 +369,18 @@ namespace BreakersOfE.Views.Playtest
         }
 
         /// <summary>Activate it, then do what's left: look at or search the library, discard, make a token by hand.</summary>
-        private void RunAbility(GameCard c, Ability a, int target, int x, List<int>? paid = null)
+        private void RunAbility(GameCard c, Ability a, int target, int x, List<int>? paid = null,
+                                List<(int Target, int Amount)>? spread = null, int target2 = 0)
         {
-            var left = _game.Activate(Me, c, a, target, x, TokenFor, paid, card => FreeSpot(card.Lane));
+            var left = _game.Activate(Me, c, a, target, x, TokenFor, paid, card => FreeSpot(card.Lane), spread, target2);
             foreach (var f in left)
             {
                 switch (f.Kind)
                 {
+                    case EffectKind.LookTop when f.Seat >= 0 && f.Seat < _game.Seats.Count:
+                        // "the top N cards of target player's library": that player's
+                        if (_game.Seats[f.Seat].Library.Count > 0) OpenBrowser(Zone.Library, Math.Max(1, f.N), _game.Seats[f.Seat]);
+                        break;
                     case EffectKind.Scry:
                     case EffectKind.Surveil:
                     case EffectKind.LookTop:
@@ -299,10 +396,34 @@ namespace BreakersOfE.Views.Playtest
                     case EffectKind.Discard:
                         if (Me.Hand.Count > 0)
                         {
+                            bool upTo = f.Text.Contains("up to", StringComparison.OrdinalIgnoreCase) || f.Text.Contains("any number", StringComparison.OrdinalIgnoreCase);
                             _discardDown = Math.Min(f.N, Me.Hand.Count);
+                            _discardCount = 0;
                             _afterDiscard = null;
-                            _discardWhy = $"{c.ShownName}: click {_discardDown} card{(_discardDown == 1 ? "" : "s")} to discard.";
+                            _discardWhy = upTo ? $"{c.ShownName}: click up to {_discardDown} card{(_discardDown == 1 ? "" : "s")} to discard, then Skip when you're done."
+                                               : $"{c.ShownName}: click {_discardDown} card{(_discardDown == 1 ? "" : "s")} to discard.";
                             Render();
+                        }
+                        break;
+                    case EffectKind.DrawThatMany when f.Text.StartsWith("If you do", StringComparison.OrdinalIgnoreCase):
+                    {
+                        // "You may discard a card. If you do, draw a card": the draw only once a card was discarded.
+                        int draws = f.N;
+                        if (_discardDown > 0) _afterDiscard = () => { if (_discardCount > 0) _game.Draw(Me, draws); else Render(); };
+                        break;
+                    }
+                    case EffectKind.DrawThatMany:
+                    {
+                        int plus = f.N;
+                        if (_discardDown > 0) _afterDiscard = () => { if (_discardCount + plus > 0) _game.Draw(Me, _discardCount + plus); else Render(); };
+                        else if (plus > 0) _game.Draw(Me, plus);
+                        break;
+                    }
+                    case EffectKind.PutBack:
+                        if (Me.Hand.Count > 0)
+                        {
+                            _game.Note($"{c.ShownName}: put {f.N} card{(f.N == 1 ? "" : "s")} from your hand on top of your library (drag them onto the library, in the order you want).");
+                            OpenBrowser(Zone.Hand);
                         }
                         break;
                     case EffectKind.Token:
@@ -313,6 +434,44 @@ namespace BreakersOfE.Views.Playtest
                         break;
                 }
             }
+            // Edicts with a choice: each player chooses what they sacrifice, one after the other.
+            ChooseSacrifices(left.Where(f => f.Kind == EffectKind.OpponentSacrifices && f.Choices != null).ToList(), 0);
+        }
+
+        /// <summary>"Each opponent sacrifices a creature": the player picks which (a menu of the ones that qualify), then the next player.</summary>
+        private void ChooseSacrifices(List<Game.AbilityFollowUp> asks, int index)
+        {
+            if (index >= asks.Count) return;
+            var f = asks[index];
+            var choices = f.Choices!.Select(id => _game.FindAny(id)).Where(o => o != null).Select(o => o!).ToList();
+            if (choices.Count == 0 || f.Seat < 0 || f.Seat >= _game.Seats.Count) { ChooseSacrifices(asks, index + 1); return; }
+            var who = _game.Seats[f.Seat];
+            var m = new ContextMenu { Placement = PlacementMode.MousePoint };
+            m.Items.Add(new MenuItem { Header = $"{(who.IsYou ? "You choose" : who.Name + " chooses")} what to sacrifice ({f.Text})", IsEnabled = false });
+            foreach (var o in choices)
+            {
+                var pick = o;
+                var mi = new MenuItem
+                {
+                    Header = pick.ShownName + (pick.PowerNow is int p && pick.ToughnessNow is int t ? $"  {p}/{t}" : "  (power varies: the table can't count it)") +
+                             (pick.IsToken ? " (token)" : ""),
+                };
+                mi.Click += (_, _) =>
+                {
+                    _game.Move(pick, Zone.Graveyard);
+                    if (f.N > 1)
+                    {
+                        var rest = f with { N = f.N - 1, Choices = f.Choices!.Where(id => id != pick.Id).ToList() };
+                        asks[index] = rest;
+                        ChooseSacrifices(asks, index);
+                    }
+                    else ChooseSacrifices(asks, index + 1);
+                };
+                m.Items.Add(mi);
+            }
+            m.Items.Add(new Separator());
+            m.Items.Add(Item("They'll do it themselves", () => ChooseSacrifices(asks, index + 1)));
+            m.IsOpen = true;
         }
 
         private static readonly (string Word, char Letter)[] ColorLetters =
@@ -351,7 +510,7 @@ namespace BreakersOfE.Views.Playtest
             foreach (var t in Me.Tokens)
             {
                 int s = Score(t.Name, t.TypeLine, t.Power, t.Toughness, t.ColorIdentity, t.OracleText) + 3;   // the deck's own first
-                if (s > bestScore) { bestScore = s; best = t; layout = _layouts.GetValueOrDefault(t.ScryfallId ?? "", ""); }
+                if (s > bestScore) { bestScore = s; best = t; layout = MyLayouts.GetValueOrDefault(t.ScryfallId ?? "", ""); }
             }
             if (best == null || bestScore < 13)
                 foreach (var t in PlaytestDecks.AllTokens())

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace BreakersOfE.Playtest
 {
@@ -75,6 +76,106 @@ namespace BreakersOfE.Playtest
                 if (Phrases[p].Any(ph => StartsWord(lower, ph)))
                     yield return line;
             }
+        }
+
+        // ── Combat: "whenever … attacks / blocks / dies" ─────────────────
+        /// <summary>The card's own lines: a trigger ("When…", "Whenever…") or a keyword line ("Annihilator 2", "Flying, exalted").</summary>
+        private static IEnumerable<string> TextLines(GameCard c) =>
+            string.IsNullOrWhiteSpace(c.ShownText) ? Enumerable.Empty<string>()
+                : c.ShownText.Replace("\r", "").Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0);
+
+        private static bool IsTrigger(string line) => line.StartsWith("When", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>The line speaks of the card itself: its name, "this creature", or "~".</summary>
+        private static bool AboutItself(string line, GameCard c)
+        {
+            string name = c.FaceName(c.BackUp ? 1 : 0);
+            string front = name.Split(',')[0];                                   // "Krenko, Mob Boss" is "Krenko" in its text
+            return line.Contains("this creature", StringComparison.OrdinalIgnoreCase) || line.Contains("this vehicle", StringComparison.OrdinalIgnoreCase) ||
+                   line.Contains('~') || (name.Length > 0 && line.Contains(name, StringComparison.OrdinalIgnoreCase)) ||
+                   (front.Length > 2 && line.Contains(front, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>A keyword line (no reminder text needed) holding one of these keywords: "Flying, exalted" has exalted.</summary>
+        private static bool HasKeywordLine(string line, params string[] keywords) =>
+            !IsTrigger(line) && keywords.Any(k => Regex.IsMatch(Regex.Replace(line, @"\([^)]*\)", ""), $@"(^|[,;]\s*){Regex.Escape(k)}\b", RegexOptions.IgnoreCase));
+
+        private static void AddOnce(List<Reminder> list, GameCard c, string line)
+        {
+            if (!list.Any(r => r.Card.Id == c.Id && r.Text == line)) list.Add(new Reminder(c, Phase.Combat, line));
+        }
+
+        /// <summary>
+        /// Attackers declared: each attacker's "Whenever ~ attacks" (and annihilator, battle cry, melee, myriad, mentor, training,
+        /// dethrone …); the attacking player's "whenever a creature you control attacks" and exalted (one attacker alone);
+        /// the defending player's "whenever a creature attacks you".
+        /// </summary>
+        public static List<Reminder> Attacks(Seat attacker, IEnumerable<Seat> seats, IReadOnlyList<GameCard> attackers)
+        {
+            var list = new List<Reminder>();
+            foreach (var a in attackers)
+                foreach (var line in TextLines(a))
+                {
+                    if (IsTrigger(line) && Regex.IsMatch(line, @"\battacks?\b", RegexOptions.IgnoreCase) && AboutItself(line, a) &&
+                        !Regex.IsMatch(line, @"\battacks? you\b", RegexOptions.IgnoreCase)) AddOnce(list, a, line);
+                    else if (HasKeywordLine(line, "Annihilator", "Battle cry", "Melee", "Myriad", "Mentor", "Training", "Dethrone")) AddOnce(list, a, line);
+                }
+            var ids = attackers.Select(a => a.Id).ToHashSet();
+            foreach (var s in seats)
+                foreach (var c in s.Battlefield.Where(c => !c.FaceDown && c.MergedInto == 0))
+                    foreach (var line in TextLines(c))
+                    {
+                        string l = line.ToLowerInvariant();
+                        if (s.Index == attacker.Index)
+                        {
+                            if (IsTrigger(line) && (l.Contains("you control attack") || l.Contains("whenever you attack") ||
+                                                    l.Contains("whenever a creature attacks") || l.Contains("creatures attack")) &&
+                                !(ids.Contains(c.Id) && list.Any(r => r.Card.Id == c.Id && r.Text == line))) AddOnce(list, c, line);
+                            else if (attackers.Count == 1 && HasKeywordLine(line, "Exalted")) AddOnce(list, c, line + " (attacking alone)");
+                        }
+                        else if (IsTrigger(line) && (l.Contains("attacks you") || l.Contains("attack you") || l.Contains("an opponent attacks") ||
+                                                     l.Contains("whenever a creature attacks") || l.Contains("an opponent controls attack")))
+                            AddOnce(list, c, line);
+                    }
+            return list;
+        }
+
+        /// <summary>A block: the blocker's "Whenever ~ blocks", the attacker's "Whenever ~ becomes blocked" (and bushido, flanking, rampage, afflict).</summary>
+        public static List<Reminder> Blocks(GameCard blocker, GameCard attacker, bool firstBlock)
+        {
+            var list = new List<Reminder>();
+            foreach (var line in TextLines(blocker))
+            {
+                if (IsTrigger(line) && Regex.IsMatch(line, @"\bblocks\b", RegexOptions.IgnoreCase) && AboutItself(line, blocker)) AddOnce(list, blocker, line);
+                else if (HasKeywordLine(line, "Bushido")) AddOnce(list, blocker, line);
+            }
+            if (firstBlock)                                                          // "becomes blocked" triggers once, however many block it
+                foreach (var line in TextLines(attacker))
+                {
+                    if (IsTrigger(line) && line.Contains("becomes blocked", StringComparison.OrdinalIgnoreCase) && AboutItself(line, attacker)) AddOnce(list, attacker, line);
+                    else if (HasKeywordLine(line, "Bushido", "Rampage", "Afflict")) AddOnce(list, attacker, line);
+                    else if (HasKeywordLine(line, "Flanking") && !Keywords.Printed(blocker.ShownText).Contains("Flanking")) AddOnce(list, attacker, line);
+                }
+            return list;
+        }
+
+        /// <summary>Creatures died: their own "When ~ dies", and every "whenever a creature / another creature dies" on the table (Blood Artist).</summary>
+        public static List<Reminder> Deaths(IEnumerable<Seat> seats, IReadOnlyList<GameCard> died)
+        {
+            var list = new List<Reminder>();
+            if (died.Count == 0) return list;
+            bool AnyCreature(string l) => Regex.IsMatch(l, @"\b(a|another|one or more|each)\b[^.,]*\bcreatures?\b[^.]*\bdies?\b", RegexOptions.IgnoreCase) ||
+                                          Regex.IsMatch(l, @"\bcreatures?\b[^.]*\b(you control|an opponent controls|your opponents control)\b[^.]*\bdies?\b", RegexOptions.IgnoreCase);
+            foreach (var d in died)
+                foreach (var line in TextLines(d))
+                    if (IsTrigger(line) && Regex.IsMatch(line, @"\bdies?\b", RegexOptions.IgnoreCase) && (AboutItself(line, d) || AnyCreature(line)))
+                        AddOnce(list, d, line);
+            var gone = died.Select(d => d.Id).ToHashSet();
+            foreach (var s in seats)
+                foreach (var c in s.Battlefield.Where(c => !c.FaceDown && c.MergedInto == 0 && !gone.Contains(c.Id)))
+                    foreach (var line in TextLines(c))
+                        if (IsTrigger(line) && AnyCreature(line)) AddOnce(list, c, line + (died.Count > 1 ? $" ({died.Count} died)" : ""));
+            return list;
         }
 
         /// <summary>The phrase is in the line, as words (so "echo" doesn't match "echoing" in flavor-like text, and reminder text in parentheses still counts).</summary>

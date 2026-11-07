@@ -83,7 +83,7 @@
                             <Button x:Name="BtnVersions" Content="Versions…" Padding="10,4" Margin="0,0,6,0"
                                 Click="BtnVersions_Click"
                                 ToolTip="Saved versions of this deck: save one now, compare, or restore one"/>
-                            <Button x:Name="BtnPlaytest" Content="▶ Playtest" Padding="10,4" Margin="0,0,6,0"
+                            <Button x:Name="BtnPlaytest" Content="▶ Playtest" Padding="10,4" Margin="0,0,6,0" Visibility="Collapsed"
                                 Click="BtnPlaytest_Click"
                                 ToolTip="Play this deck at the playtest table (its own window)"/>
                             <Button x:Name="BtnCloseDeck" Content="Close Deck" Padding="10,4" Margin="0,0,6,0"

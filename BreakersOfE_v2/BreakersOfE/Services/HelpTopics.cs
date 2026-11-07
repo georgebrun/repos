@@ -67,6 +67,7 @@ namespace BreakersOfE.Services
                     continue;
                 }
 
+                if (!Features.Playtest && text.Equals("playtest.md", StringComparison.OrdinalIgnoreCase)) continue;   // not finished yet
                 var topic = LoadTopic(text);
                 if (topic == null) continue;
                 _byId[topic.Id] = topic;

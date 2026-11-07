@@ -162,6 +162,21 @@ namespace BreakersOfE
                 // Same policy as the pool: never block startup on this.
             }
 
+            // Two-sided tokens have rows of their own now ("Officer // Treasure"):
+            // the old pairs are converted once (backed up first), and it's said once the window is up.
+            try
+            {
+                if (CollectionEditService.ConvertTokenPairs() is { } converted)
+                    Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(() =>
+                        System.Windows.MessageBox.Show(converted + "\n\nEach two-sided card is one row now in Collection → Tokens, " +
+                                        "and decks hold it as one token line.", "Two-Sided Tokens",
+                                        System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information)));
+            }
+            catch
+            {
+                // Never block startup: the old pairs stay, and it's tried again next time.
+            }
+
             // Pictures of your cards, kept for offline use: downloaded in the
             // background (Settings → Card pictures).
             PictureSync.StartBackground();

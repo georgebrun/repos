@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BreakersOfE.Models;
@@ -45,7 +47,7 @@ namespace BreakersOfE.Views.Playtest
             int life = S.StartingLife > 0 ? S.StartingLife : PlaytestDecks.DefaultLife(deck);
             ManaSources.Register(PlaytestDecks.Produced(deck));
             var seat = _game.AddSeat(deck, S.OpponentNameOrDefault(), life, PlaytestDecks.Layouts(deck), PlaytestDecks.Loyalties(deck));
-            seat.Kept = true;
+            KnowDeck(seat.Index, deck);                                    // their tokens and combos (they decide their own opening hand)
         }
 
         /// <summary>Ask for the deck to play against, then start.</summary>
@@ -86,14 +88,15 @@ namespace BreakersOfE.Views.Playtest
                 SplitRow.Height = two ? new GridLength(6) : new GridLength(0);
                 MyRow.Height = new GridLength(two ? 3 : 1, GridUnitType.Star);
             }
-            WindowTitleBar.Title = opp != null ? $"Playtest — {_deck.Name} against {opp.DeckName}" : $"Playtest — {_deck.Name}";
-            DeckText.Text = opp != null ? $"{_deck.Name}  against  {opp.DeckName}" : _deck.Name;
+            string first = _game.Seats.Count > 0 ? _game.Seats[0].DeckName : _deck.Name, second = two ? _game.Seats[1].DeckName : "";
+            WindowTitleBar.Title = two ? $"Playtest — {first} against {second}" : $"Playtest — {_deck.Name}";
+            DeckText.Text = two ? $"{first}  against  {second}" : _deck.Name;
             _oppVisuals.Clear();
             if (opp == null) return;
-            _oppSleeve = LoadSleeve(opp.DeckId);
-            string mat = S.PlaymatPath(opp.DeckId);
+            _oppSleeve = LoadSleeve(DeckIdOf(opp));
+            string mat = S.PlaymatPath(DeckIdOf(opp));
             _oppMatSource = mat.Length > 0 ? ImageCacheService.LoadBitmap(mat, 1600) : null;
-            _oppMatKey = PlaytestSettings.PlaymatKey(S.PlaymatFor(opp.DeckId));
+            _oppMatKey = PlaytestSettings.PlaymatKey(S.PlaymatFor(DeckIdOf(opp)));
             _oppPortrait = "\0";
             ShowOppPlaymat();
         }
@@ -155,8 +158,8 @@ namespace BreakersOfE.Views.Playtest
         /// <summary>Their badge: their picture (⚙ Table → Player), name and deck, life, and the gold edge on their turn.</summary>
         private void RenderOppBadge(Seat opp)
         {
-            string path = S.OpponentBadgePath();
-            var f = S.FramingOf(PlaytestSettings.BadgeKey(S.OpponentBadge));
+            string path = BadgePathOf(opp);                                  // their own picture, whichever side they're on
+            var f = S.FramingOf(PlaytestSettings.BadgeKey(BadgeFileOf(opp)));
             string shown = path.Length == 0 ? "" : $"{path}|{f.Zoom}|{f.CenterX}|{f.CenterY}";
             if (shown != _oppPortrait)
             {
@@ -184,6 +187,8 @@ namespace BreakersOfE.Views.Playtest
             if (opp.Poison > 0) extra.Add($"POISON · {opp.Poison}");
             if (opp.Energy > 0) extra.Add($"ENERGY · {opp.Energy}");
             if (opp.ManaTotal > 0) extra.Add($"MANA · {opp.ManaText.ToUpperInvariant()}");
+            foreach (var (cmdrId, taken) in opp.CommanderDamage.Where(kv => kv.Value > 0))
+                extra.Add($"{(_game.FindAny(cmdrId)?.ShownName ?? "COMMANDER").ToUpperInvariant()} · {taken}/21");
             OppInfo.Text = string.Join("\n", extra);
             bool theirTurn = _game.ActiveSeat == opp.Index;
             OppPortraitBox.BorderBrush = theirTurn ? Brushes.Gold : new SolidColorBrush(Color.FromArgb(0x70, 255, 255, 255));
@@ -248,13 +253,32 @@ namespace BreakersOfE.Views.Playtest
             OppPiles.Children.Clear();
             double w = PileW * 0.72, h = w / CardAspect;
             bool commander = opp.Command.Count > 0 || opp.Battlefield.Concat(opp.Graveyard).Concat(opp.Exile).Concat(opp.Hand).Any(c => c.IsCommander);
-            if (commander) OppPiles.Children.Add(OppPile(opp.Command.FirstOrDefault(), false, "COMMAND", w, h));
-            OppPiles.Children.Add(OppPile(opp.Exile.FirstOrDefault(), false, $"EXILE · {opp.Exile.Count}", w, h));
-            OppPiles.Children.Add(OppPile(opp.Graveyard.FirstOrDefault(), false, $"GRAVEYARD · {opp.Graveyard.Count}", w, h));
-            OppPiles.Children.Add(OppPile(opp.Library.FirstOrDefault(), !opp.TopRevealed, $"LIBRARY · {opp.Library.Count}", w, h));
+            if (commander) OppPiles.Children.Add(OppPile(opp.Command.FirstOrDefault(), false, "COMMAND", w, h, () => OpenBrowser(Zone.Command, 0, opp)));
+            OppPiles.Children.Add(OppPile(opp.Exile.FirstOrDefault(), false, $"EXILE · {opp.Exile.Count}", w, h, () => OpenBrowser(Zone.Exile, 0, opp)));
+            OppPiles.Children.Add(OppPile(opp.Graveyard.FirstOrDefault(), false, $"GRAVEYARD · {opp.Graveyard.Count}", w, h, () => OpenBrowser(Zone.Graveyard, 0, opp)));
+            OppPiles.Children.Add(OppPile(opp.Library.FirstOrDefault(), !opp.TopRevealed, $"LIBRARY · {opp.Library.Count}", w, h, null, opp));
         }
 
-        private FrameworkElement OppPile(GameCard? top, bool hidden, string label, double w, double h)
+        /// <summary>Their library's menu: look at the top few, search, shuffle, mill, exile from the top, play with the top revealed.</summary>
+        private void ShowOppLibraryMenu(Seat opp, FrameworkElement at)
+        {
+            var m = new ContextMenu { PlacementTarget = at, Placement = PlacementMode.Bottom };
+            m.Items.Add(new MenuItem { Header = $"{opp.Whose} library · {opp.Library.Count}", IsEnabled = false });
+            m.Items.Add(Item("Look at the Top X…", () => { if (AskNumber("Look at the top", "How many cards?") is int n) OpenBrowser(Zone.Library, n, opp); }, enabled: opp.Library.Count > 0));
+            m.Items.Add(Item("Search the Library…", () => OpenBrowser(Zone.Library, 0, opp), enabled: opp.Library.Count > 0));
+            m.Items.Add(Item("Shuffle", () => _game.Shuffle(opp)));
+            m.Items.Add(new Separator());
+            m.Items.Add(Item("Mill X…", () => { if (AskNumber("Mill", "How many cards to the graveyard?") is int n) _game.MoveTop(opp, n, Zone.Graveyard); }, enabled: opp.Library.Count > 0));
+            m.Items.Add(Item("Exile the Top X…", () => { if (AskNumber("Exile from the top", "How many cards?") is int n) _game.MoveTop(opp, n, Zone.Exile); }, enabled: opp.Library.Count > 0));
+            m.Items.Add(new Separator());
+            var reveal = new MenuItem { Header = "Played With the Top Card Revealed", IsCheckable = true, IsChecked = opp.TopRevealed };
+            reveal.Click += (_, _) => _game.SetTopRevealed(opp, !opp.TopRevealed);
+            m.Items.Add(reveal);
+            m.IsOpen = true;
+        }
+
+        /// <summary>One of their piles: its top card (or a card back) and its name; a click looks through it (the library: its menu).</summary>
+        private FrameworkElement OppPile(GameCard? top, bool hidden, string label, double w, double h, Action? open, Seat? library = null)
         {
             var sp = new StackPanel();
             FrameworkElement pic = top == null ? EmptySlot(w, h) : hidden ? SleeveVisual(w, h) : CardVisual(top, w, h);
@@ -262,7 +286,19 @@ namespace BreakersOfE.Views.Playtest
             if (top != null && !hidden) HookOpp(pic, top);
             sp.Children.Add(pic);
             sp.Children.Add(new TextBlock { Text = label, Style = (Style)FindResource("PileName"), FontSize = 9 });
-            return new Border { Style = (Style)FindResource("PileBox"), Margin = new Thickness(0, 0, 0, 6), Padding = new Thickness(4, 3, 4, 3), Child = sp };
+            var box = new Border { Style = (Style)FindResource("PileBox"), Margin = new Thickness(0, 0, 0, 6), Padding = new Thickness(4, 3, 4, 3), Child = sp };
+            if (open != null || library != null)
+            {
+                box.Cursor = Cursors.Hand;
+                box.ToolTip = library != null ? "Their library: look at the top, search, mill …" : "Click to look through it";
+                box.MouseLeftButtonUp += (_, ev) =>
+                {
+                    if (_pick != null || ev.Handled) return;                 // picking a target: the click was for that
+                    ev.Handled = true;
+                    if (library != null) ShowOppLibraryMenu(library, box); else open!();
+                };
+            }
+            return box;
         }
 
         // ── Their cards under the mouse ──────────────────────────────────
@@ -275,6 +311,21 @@ namespace BreakersOfE.Views.Playtest
             {
                 _oppHoverId = id;
                 if (_drag?.Started != true && OppHovered() is { } oc) ShowGrown(oc, v);
+            };
+            // Their card as a target: click it while an ability waits for one. A double-click shows it big.
+            v.MouseLeftButtonDown += (_, ev) =>
+            {
+                if (_pick is { } p && p.Kind == PickKind.Ability)
+                {
+                    ev.Handled = true;
+                    if (Opp?.Find(id) is { } picked) CompletePick(picked);
+                    return;
+                }
+                if (ev.ClickCount == 2 && Opp?.Find(id) is { } shown)
+                {
+                    ev.Handled = true;
+                    Zoom(shown);
+                }
             };
             v.MouseLeave += (_, _) =>
             {

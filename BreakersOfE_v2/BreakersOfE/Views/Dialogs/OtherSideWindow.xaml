@@ -11,8 +11,8 @@
         Background="{DynamicResource ApplicationBackgroundBrush}"
         Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
-    <!-- Collection → Tokens, right-click → Other Side…: what this token row is
-         paired with (Unpair), and pair it with another of your token rows. -->
+    <!-- Collection → Tokens, right-click → Other Side…: make two-sided cards of
+         this single token and the token on its back (one row of their own). -->
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -26,30 +26,9 @@
                 <TextBlock x:Name="SubText" Style="{StaticResource BoeHint}" TextWrapping="Wrap" Margin="0,2,0,0"/>
             </StackPanel>
 
-            <!-- Paired with -->
-            <StackPanel DockPanel.Dock="Top" Margin="0,8,0,0">
-                <TextBlock Text="PAIRED WITH" FontSize="11" FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                <DockPanel Margin="0,4,0,0">
-                    <ui:Button x:Name="BtnUnpair" DockPanel.Dock="Right" Content="Unpair" MinWidth="80" Margin="8,0,0,0"
-                               VerticalAlignment="Top" IsEnabled="False" Click="Unpair_Click"
-                               ToolTip="Each side becomes its own card again"/>
-                    <DataGrid x:Name="PairedGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
-                              GridLinesVisibility="None" RowHeaderWidth="0" SelectionMode="Single" MaxHeight="130" MinHeight="54"
-                              HorizontalScrollBarVisibility="Disabled"
-                              SelectionChanged="PairedGrid_SelectionChanged">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Other side" Binding="{Binding Name}" Width="*"/>
-                            <DataGridTextColumn Header="Edition" Binding="{Binding SetCode}" Width="80"/>
-                            <DataGridTextColumn Header="No." Binding="{Binding CollectorNumber}" Width="60"/>
-                            <DataGridTextColumn Header="Row" Binding="{Binding Key.Text}" Width="220"/>
-                            <DataGridTextColumn Header="Cards" Binding="{Binding Count}" Width="60"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </DockPanel>
-                <TextBlock x:Name="NoPairText" Text="Not paired: a single-sided token." Margin="0,4,0,0" FontStyle="Italic"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-            </StackPanel>
+            <!-- What you have already: two-sided cards with this token on one side -->
+            <TextBlock x:Name="PairedText" DockPanel.Dock="Top" Margin="0,8,0,0" TextWrapping="Wrap" FontStyle="Italic"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
 
             <!-- Pair with: the card pool's tokens of this release -->
             <StackPanel DockPanel.Dock="Top" Margin="0,14,0,4">
@@ -63,8 +42,8 @@
                 <WrapPanel Margin="0,6,0,0">
                     <CheckBox x:Name="SameSetsCheck" IsChecked="True" Margin="0,0,18,0" Click="Release_Changed"
                               ToolTip="Only the tokens of this release: all its token sets (booster, Commander …), as View → Sets groups them"/>
-                    <CheckBox x:Name="MineCheck" Content="Only my tokens not on a pair" Click="Filter_Changed"
-                              ToolTip="Only tokens you have in Collection → Tokens with copies not paired yet"/>
+                    <CheckBox x:Name="MineCheck" Content="Only my tokens with free single copies" Click="Filter_Changed"
+                              ToolTip="Only tokens you have as single tokens in Collection → Tokens, with copies not in decks"/>
                 </WrapPanel>
             </StackPanel>
 
@@ -91,9 +70,9 @@
                     <DataGridTextColumn Header="No." Binding="{Binding Number}" Width="55" SortMemberPath="NumberSort"/>
                     <DataGridTextColumn Header="P/T" Binding="{Binding PT}" Width="50"/>
                     <DataGridTextColumn Header="Owned" Binding="{Binding OwnedText}" Width="65" SortMemberPath="Owned"/>
-                    <DataGridTextColumn Header="Not paired" Binding="{Binding OffPairText}" Width="85" SortMemberPath="OffPair"/>
+                    <DataGridTextColumn Header="Free" Binding="{Binding OffPairText}" Width="60" SortMemberPath="OffPair"/>
                     <DataGridTextColumn Header="In use" Binding="{Binding InUseText}" Width="60" SortMemberPath="InUse"/>
-                    <DataGridTextColumn Header="Paired with" Binding="{Binding PairedWith}" Width="150"/>
+                    <DataGridTextColumn Header="Your cards with it" Binding="{Binding PairedWith}" Width="160"/>
                 </DataGrid.Columns>
             </DataGrid>
         </DockPanel>

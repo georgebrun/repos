@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using BreakersOfE.Models;
 
 namespace BreakersOfE.Playtest
@@ -59,7 +60,7 @@ namespace BreakersOfE.Playtest
         /// <summary>Raised for each new log line.</summary>
         public event Action<string>? Logged;
 
-        /// <summary>The first mulligan is free (a Commander game's house rule many tables use).</summary>
+        /// <summary>The first mulligan is free for players whose deck is Commander-style (each player by their own deck's format).</summary>
         public bool FreeFirstMulligan { get; set; } = true;
 
         private int _nextId = 1;
@@ -86,12 +87,25 @@ namespace BreakersOfE.Playtest
         public IEnumerable<Seat> Others(Seat seat) => Seats.Where(s => s.Index != seat.Index);
 
         /// <summary>The other players lose life (an opponent's damage); on your own, it's logged.</summary>
-        private void HurtOthers(Seat seat, int n, string why)
+        private int HurtOthers(Seat seat, int n, string why)
         {
             var others = Others(seat).ToList();
-            if (others.Count == 0) { Write($"{why}: no opponent at the table (theirs to count)."); return; }
+            if (others.Count == 0) { Write($"{why}: no opponent at the table (theirs to count)."); return 0; }
             foreach (var o in others) ChangeLife(o, -n);
+            return n * others.Count;
         }
+
+        /// <summary>Damage to one target: a card id on the battlefield (anyone's), -1 = you, -2 = the other players.</summary>
+        private void DamageTo(Seat seat, int target, int n, string source)
+        {
+            if (n <= 0) return;
+            if (target == -1) ChangeLife(seat, -n);
+            else if (target == -2) HurtOthers(seat, n, $"{source} deals {n} damage to an opponent");
+            else if (FindAny(target) is { } o && Seats[o.Seat].ZoneOf(o) == Zone.Battlefield) MarkDamage(o, n);
+        }
+
+        /// <summary>The power of the card using the ability, and of the creature sacrificed to pay for it (as they were, before paying).</summary>
+        private int _selfPower, _sacPower, _sacToughness;
         private readonly List<Snapshot> _undo = new();
         private const int UndoDepth = 100;
 
@@ -126,6 +140,7 @@ namespace BreakersOfE.Playtest
             LastPassed = new List<Phase>();
             if (Log.Count > s.LogCount) Log.RemoveRange(s.LogCount, Log.Count - s.LogCount);
             Write($"Undid: {s.What}");
+            RefreshStars();
             Changed?.Invoke();
             return true;
         }
@@ -138,7 +153,22 @@ namespace BreakersOfE.Playtest
 
         private void Done()
         {
-            if (_batch == 0) Changed?.Invoke();
+            if (_batch == 0)
+            {
+                RefreshStars();
+                Changed?.Invoke();
+            }
+        }
+
+        /// <summary>Every creature with a * in its power or toughness: counted again from the table as it is now (<see cref="Stars"/>).</summary>
+        public void RefreshStars()
+        {
+            foreach (var s in Seats)
+                foreach (var c in s.Battlefield)
+                {
+                    if (!c.HasStar) { c.StarPower = c.StarToughness = null; continue; }
+                    (c.StarPower, c.StarToughness) = Stars.Count(c, s, Seats);
+                }
         }
 
         // ── Starting ─────────────────────────────────────────────────────
@@ -223,6 +253,7 @@ namespace BreakersOfE.Playtest
                 seat.Library.RemoveAt(0);
                 seat.Hand.Add(c);
             }
+            if (drawn < n) seat.DrewFromEmpty = true;                     // drawing from an empty library loses the game
             return drawn;
         }
 
@@ -286,7 +317,20 @@ namespace BreakersOfE.Playtest
 
         /// <summary>Cards to put on the bottom for keeping now (the first is free when <see cref="FreeFirstMulligan"/>).</summary>
         public int ToBottomOnKeep(Seat seat) =>
-            Math.Max(0, seat.Mulligans - (FreeFirstMulligan && seat.Mulligans > 0 ? 1 : 0));
+            Math.Max(0, seat.Mulligans - (FirstMulliganFree(seat) && seat.Mulligans > 0 ? 1 : 0));
+
+        /// <summary>Is this player's first mulligan free? Commander-style decks only (Standard and Limited never).</summary>
+        public bool FirstMulliganFree(Seat seat) => FreeFirstMulligan && seat.IsCommanderGame;
+
+        /// <summary>Two or more players: who takes the first turn (before anyone plays). <paramref name="how"/>: "Coin flip" and the like, for the log.</summary>
+        public void ChooseFirst(int seat, string how)
+        {
+            if (Seats.Count < 2) return;
+            ActiveSeat = Math.Clamp(seat, 0, Seats.Count - 1);
+            var s = Active;
+            Write($"{how}: {(s.IsYou ? "you go" : s.Name + " goes")} first.");
+            Done();
+        }
 
         /// <summary>Keep the hand. Then <see cref="Seat.BottomPending"/> cards go to the bottom, one by one (<see cref="PutOnBottom"/>).</summary>
         public void Keep(Seat seat)
@@ -322,9 +366,10 @@ namespace BreakersOfE.Playtest
         /// the battlefield is gone. <paramref name="x"/>/<paramref name="y"/>:
         /// where it goes on the battlefield (0–1). <paramref name="backUp"/>:
         /// played on its back face (a modal double-faced card's other side).
+        /// <paramref name="tapped"/>: it enters the battlefield tapped (straight away, or as it resolves from the stack).
         /// </summary>
         public void Move(GameCard card, Zone to, Place place = Place.Top, double x = 0, double y = 0,
-                         bool backUp = false, bool faceDown = false)
+                         bool backUp = false, bool faceDown = false, bool tapped = false)
         {
             var seat = Seats[card.Seat];
             var c = seat.Find(card.Id);
@@ -360,6 +405,8 @@ namespace BreakersOfE.Playtest
                         seat.CommanderCasts[c.Id] = seat.CommanderCasts.GetValueOrDefault(c.Id) + 1;
                 }
                 if (from != Zone.Battlefield) c.EnteredTurn = Turn;          // summoning sickness counts from here
+                if (from != Zone.Battlefield && (tapped || c.PendingTapped)) c.Tapped = true;     // Play Tapped
+                c.PendingTapped = false;
                 // A planeswalker enters with its loyalty, a battle with its defense (as counters).
                 if (from != Zone.Battlefield && !c.FaceDown && c.EntersWith is { } enters && !c.Counters.ContainsKey(enters.Kind))
                     c.Counters[enters.Kind] = enters.Count;
@@ -368,6 +415,7 @@ namespace BreakersOfE.Playtest
             else if (to == Zone.Stack)
             {
                 if (from != Zone.Stack) c.BackUp = backUp;
+                if (tapped) c.PendingTapped = true;                          // enters tapped as it resolves
                 c.StackOrder = ++_stackCounter;
                 if (from == Zone.Command && c.IsCommander)
                     seat.CommanderCasts[c.Id] = seat.CommanderCasts.GetValueOrDefault(c.Id) + 1;
@@ -380,7 +428,9 @@ namespace BreakersOfE.Playtest
                 if (to == Zone.Hand || atBottom) list.Add(c);
                 else list.Insert(0, c);
             }
-            Write(MoveLine(seat, c, from.Value, to, place));
+            Write(MoveLine(seat, c, from.Value, to, place) +
+                  (to == Zone.Battlefield && from != Zone.Battlefield && c.Tapped ? " It entered tapped." :
+                   to == Zone.Stack && c.PendingTapped ? " It enters tapped." : ""));
             Done();
         }
 
@@ -620,6 +670,7 @@ namespace BreakersOfE.Playtest
         /// <summary>One step on. Leaving the end step is the cleanup (damage wears off) and a new turn's untap.</summary>
         private void StepCore(Seat _, bool draw)
         {
+            if (Phase == Phase.Combat) EndCombatCore();                    // leaving combat: nobody's attacking or blocking any more
             EmptyPools(Phase == Phase.End);
             var seat = Active;                                           // the step belongs to the player whose turn it is
             if (Phase == Phase.End)
@@ -813,7 +864,7 @@ namespace BreakersOfE.Playtest
 
         // ── Abilities ────────────────────────────────────────────────────
         /// <summary>What an activated ability leaves for the table to do (look at cards, search, discard, make a token it couldn't match, add mana).</summary>
-        public sealed record AbilityFollowUp(EffectKind Kind, int N, string Text, TokenSpec? Token = null);
+        public sealed record AbilityFollowUp(EffectKind Kind, int N, string Text, TokenSpec? Token = null, int Seat = -1, IReadOnlyList<int>? Choices = null);
 
         /// <summary>
         /// Activate an ability (one move, one undo): pay its costs (mana from the
@@ -826,13 +877,16 @@ namespace BreakersOfE.Playtest
         public List<AbilityFollowUp> Activate(Seat seat, GameCard card, Ability ability, int target = 0, int x = 0,
                                               Func<TokenSpec, (DeckCard Card, string Layout, double X, double Y)?>? tokenFor = null,
                                               IReadOnlyList<int>? paid = null,
-                                              Func<GameCard, (double X, double Y)>? spotFor = null)
+                                              Func<GameCard, (double X, double Y)>? spotFor = null,
+                                              IReadOnlyList<(int Target, int Amount)>? spread = null, int target2 = 0)
         {
             var left = new List<AbilityFollowUp>();
             var c = seat.Find(card.Id);
             if (c == null) return left;
             string name = c.ShownName;
             bool spell = ability.Kind == AbilityKind.Spell;
+            _selfPower = c.PowerNow ?? 0;
+            _sacPower = _sacToughness = 0;
             Remember(spell ? $"Resolve {name}" : $"{name}: {ability.Label}");
             _batch++;
             try
@@ -843,6 +897,27 @@ namespace BreakersOfE.Playtest
                 if (ability.ManaCost.Length > 0)
                 {
                     string cost = ability.ManaCost.Replace("{X}", x > 0 ? "{" + x + "}" : "");
+                    // "This ability costs {1} less to activate for each legendary creature you control": counted now.
+                    var less = Regex.Match(ability.Timing, @"costs \{(\d+)\} less to activate for each (.+?)\.", RegexOptions.IgnoreCase);
+                    if (less.Success)
+                    {
+                        if (Stars.Phrase(less.Groups[2].Value, seat, Seats) is int times)
+                        {
+                            int off = int.Parse(less.Groups[1].Value) * times;
+                            var generic = Regex.Match(cost, @"\{(\d+)\}");
+                            if (generic.Success && off > 0)
+                            {
+                                int left0 = Math.Max(0, int.Parse(generic.Groups[1].Value) - off);
+                                cost = cost.Remove(generic.Index, generic.Length).Insert(generic.Index, left0 > 0 ? "{" + left0 + "}" : "");
+                                Write($"It costs {Math.Min(off, int.Parse(generic.Groups[1].Value))} less ({times} × {less.Groups[2].Value}).");
+                            }
+                        }
+                        else
+                        {
+                            Write($"It costs less for each {less.Groups[2].Value}: the table can't count that, so pay it from the pool yourself.");
+                            cost = "";
+                        }
+                    }
                     if (cost.Length > 0 && !PayCore(seat, cost)) Write($"The pool was short of {cost}: pay the rest yourself.");
                     else if (cost.Length > 0) Write($"Paid {cost} from the pool. Pool: {seat.ManaText}.");
                 }
@@ -853,6 +928,7 @@ namespace BreakersOfE.Playtest
                 }
                 if (ability.Untap) c.Tapped = false;
                 if (ability.Life > 0) { seat.Life -= ability.Life; Write($"{seat.Name} paid {ability.Life} life: {seat.Life}."); }
+                if (ability.LifeX && x > 0) { seat.Life -= x; Write($"{seat.Name} paid {x} life: {seat.Life}."); }
                 if (ability.HalfLife) { int half = (seat.Life + 1) / 2; seat.Life -= half; Write($"{seat.Name} paid half {(seat.IsYou ? "your" : "their")} life ({half}): {seat.Life}."); }
                 if (ability.Exert) Write($"{name} is exerted: it won't untap during {seat.Whose.ToLowerInvariant()} next untap step.");
                 if (ability.PutCount > 0) AddCounters(c, ability.PutKind, ability.PutCount);
@@ -905,7 +981,11 @@ namespace BreakersOfE.Playtest
                     foreach (var p in chosen)
                         switch (choice.Kind)
                         {
-                            case ChoiceKind.Sacrifice: Move(p, Zone.Graveyard); break;
+                            case ChoiceKind.Sacrifice:
+                                _sacPower = p.PowerNow ?? 0;
+                                _sacToughness = p.ToughnessNow ?? 0;
+                                Move(p, Zone.Graveyard);
+                                break;
                             case ChoiceKind.Tap: p.Tapped = true; Write($"Tapped {p.ShownName}."); break;
                             case ChoiceKind.ExileFromGraveyard: Move(p, Zone.Exile); break;
                             case ChoiceKind.Discard: Move(p, Zone.Graveyard); break;
@@ -918,7 +998,7 @@ namespace BreakersOfE.Playtest
                                 if (kind.Length > 0) AddCounters(p, kind, -1);
                                 break;
                             }
-                            case ChoiceKind.PutCounter: AddCounters(p, choice.Counter, 1); break;
+                            case ChoiceKind.PutCounter: AddCounters(p, choice.Counter, Math.Max(1, choice.Amount)); break;
                         }
                 }
                 foreach (var other in ability.OtherCosts) Write($"Cost for you to pay: {other.Replace("~", name)}.");
@@ -928,7 +1008,7 @@ namespace BreakersOfE.Playtest
                 if (ability.SacrificeSelf) Move(c, Zone.Graveyard);
                 if (spell && seat.ZoneOf(c) == Zone.Stack) Move(c, Zone.Graveyard);       // a resolved instant or sorcery
 
-                DoEffects(seat, c, name, ability, target, x, tokenFor, spotFor, left);
+                DoEffects(seat, c, name, ability, target, x, tokenFor, spotFor, left, spread, target2);
             }
             finally
             {
@@ -941,50 +1021,115 @@ namespace BreakersOfE.Playtest
         /// <summary>An ability's or spell's effects, in order (inside <see cref="Activate"/>'s one move).</summary>
         private void DoEffects(Seat seat, GameCard c, string name, Ability ability, int target, int x,
                                Func<TokenSpec, (DeckCard Card, string Layout, double X, double Y)?>? tokenFor,
-                               Func<GameCard, (double X, double Y)>? spotFor, List<AbilityFollowUp> left)
+                               Func<GameCard, (double X, double Y)>? spotFor, List<AbilityFollowUp> left,
+                               IReadOnlyList<(int Target, int Amount)>? spread = null, int target2 = 0)
         {
             // ── Effects ──
             GameCard? picked = target > 0 ? FindAny(target) : null;                 // yours or an opponent's
             bool? won = null;                                         // the last coin flip
+            int lastLost = 0;                                         // life the other players just lost
+            int lastDestroyed = 0, lastDealt = 0;                     // what the effect before destroyed, and the damage it dealt
             foreach (var e in ability.Effects)
             {
-                if (e.Cond.Length > 0 && won is bool w && (e.Cond == "win") != w) continue;   // the other half of the flip
+                if (e.Cond == "yourturn") { if (ActiveSeat != seat.Index) { Write($"Not {seat.Whose.ToLowerInvariant()} turn: {e.Text.Replace("~", name)} doesn't happen."); continue; } }
+                else if (e.Cond.Length > 0 && won is bool w && (e.Cond == "win") != w) continue;   // the other half of the flip
                 int n = e.Amount(x);
+                if (e.Per.Length > 0)
+                {
+                    // "… for each Elf you control": counted now. "For each creature destroyed this way": what the effect before destroyed.
+                    if (System.Text.RegularExpressions.Regex.IsMatch(e.Per, @"destroyed this way$")) n *= lastDestroyed;
+                    else if (Stars.Phrase(e.Per, seat, Seats) is int times) n *= times;
+                    else { Write($"For you to do: {e.Text.Replace("~", name)} (the table can't count \"{e.Per}\")."); continue; }
+                }
                 GameCard? on = e.On == EffectOn.Self ? seat.Find(c.Id)
                              : e.On is EffectOn.Target or EffectOn.AnyTarget ? picked
                              : e.On == EffectOn.Enchanted && seat.Find(c.Id) is { AttachedTo: > 0 } self ? seat.Find(self.AttachedTo)
                              : null;
-                IEnumerable<GameCard> each = e.On == EffectOn.EachYours ? seat.Battlefield.Where(o => o.IsCreatureNow && o.MergedInto == 0).ToList()
+                IEnumerable<GameCard> each = e.What.StartsWith("multi:") && spread != null
+                                               ? spread.Select(sp => FindAny(sp.Target)).Where(o => o != null && Seats[o.Seat].ZoneOf(o) == Zone.Battlefield).Select(o => o!).ToList()
+                                           : e.On == EffectOn.EachYours ? seat.Battlefield.Where(o => o.IsCreatureNow && o.MergedInto == 0).ToList()
                                            : e.On == EffectOn.EachCreature ? Seats.SelectMany(s => s.Battlefield.Where(o => o.IsCreatureNow && o.MergedInto == 0)).ToList()
                                            : on != null && Seats[on.Seat].ZoneOf(on) == Zone.Battlefield ? new[] { on } : Array.Empty<GameCard>();
                 switch (e.Kind)
                 {
+                    case EffectKind.Draw when e.What.StartsWith("sacrificed"):
+                        Draw(seat, e.What.EndsWith("power") ? _sacPower : _sacToughness);
+                        break;
+                    case EffectKind.Draw when e.What == "greatest power":
+                        Draw(seat, seat.Battlefield.Where(o => o.IsCreatureNow && o.MergedInto == 0).Select(o => o.PowerNow ?? 0).DefaultIfEmpty(0).Max());
+                        break;
                     case EffectKind.Draw: Draw(seat, n); break;
+                    case EffectKind.TapAll:
+                    {
+                        var tapParts = e.What.Split('|');
+                        foreach (var ts in Seats.Where(s => (!tapParts.Contains("yours") || s == seat) && (!tapParts.Contains("theirs") || s != seat)).ToList())
+                            SetTapped(ts, ts.Battlefield.Where(o => !o.Tapped && o.MergedInto == 0 && Abilities.Fits(o, tapParts[0])).ToList(), true);
+                        break;
+                    }
+                    case EffectKind.ShuffleGraveyard:
+                        foreach (var gc in seat.Graveyard.ToList()) Move(gc, Zone.Library);
+                        Shuffle(seat);
+                        break;
+                    case EffectKind.DoubleCounters:
+                        foreach (var o in each) AddCounters(o, e.What, o.Counters.GetValueOrDefault(e.What));
+                        break;
+                    case EffectKind.PutBack:
+                        left.Add(new AbilityFollowUp(EffectKind.PutBack, n, e.Text));
+                        break;
                     case EffectKind.GainLife when e.What == "per creature":
                         ChangeLife(seat, n * seat.Battlefield.Count(o => o.IsCreatureNow && o.MergedInto == 0));
+                        break;
+                    case EffectKind.GainLife when e.What.StartsWith("sacrificed"):
+                        ChangeLife(seat, e.What.EndsWith("power") ? _sacPower : _sacToughness);
+                        break;
+                    case EffectKind.GainLife when e.What == "dealt":
+                        if (lastDealt > 0) ChangeLife(seat, lastDealt);
+                        break;
+                    case EffectKind.GainLife when e.What == "lost":
+                        if (lastLost > 0) ChangeLife(seat, lastLost); else Write("No life was lost this way: nothing to gain.");
                         break;
                     case EffectKind.GainLife: ChangeLife(seat, n); break;
                     case EffectKind.LoseLife: ChangeLife(seat, -n); break;
                     case EffectKind.OpponentsLoseLife:
-                        HurtOthers(seat, n, $"Each opponent loses {n} life");
+                        lastLost = HurtOthers(seat, n, $"Each opponent loses {n} life");
                         if (e.What.Length > 0 && Abilities.Number(e.What) is int gain) ChangeLife(seat, gain < 0 ? x : gain);
                         break;
                     case EffectKind.Counters: foreach (var o in each) AddCounters(o, e.What, n); break;
                     case EffectKind.Pump:
                         foreach (var o in each)
                         {
+                            if (e.Other && o.Id == c.Id) continue;                  // "Other creatures you control"
+                            if (e.What == "|attacking" && !o.Attacking) continue;  // "Attacking creatures get +1/+0"
                             Pump(o, e.P, e.T);
                             foreach (var k in Keywords.ListOf(e.What)) if (!o.TempKeywords.Contains(k)) o.TempKeywords.Add(k);
                         }
                         break;
                     case EffectKind.GainKeywords:
+                    {
+                        // "Creatures without flying can't block this turn": What is "keywords|-flying".
+                        var kwParts = e.What.Split('|');
                         foreach (var o in each)
                         {
-                            foreach (var k in e.What.Split(", ")) if (!o.TempKeywords.Contains(k)) o.TempKeywords.Add(k);
-                            Write($"{o.ShownName} gains {e.What.ToLowerInvariant()} until end of turn.");
+                            if (kwParts.Length > 1)
+                            {
+                                bool flies = Keywords.For(o, Seats[o.Seat], Seats).Contains("Flying");
+                                if (kwParts[1] == "-flying" && flies || kwParts[1] == "flying" && !flies) continue;
+                            }
+                            foreach (var k in kwParts[0].Split(", ")) if (!o.TempKeywords.Contains(k)) o.TempKeywords.Add(k);
+                            Write($"{o.ShownName} gains {kwParts[0].ToLowerInvariant()} until end of turn.");
                         }
                         break;
-                    case EffectKind.Mill: MoveTop(seat, n, Zone.Graveyard); break;
+                    }
+                    case EffectKind.Mill:
+                    {
+                        // "Target player mills": you (-1) or the player across the table; "Each player / each opponent mills".
+                        var millSeats = e.What == "each" ? Seats.ToList()
+                                      : e.What == "others" || e.On == EffectOn.Player && target != -1 ? Others(seat).ToList()
+                                      : new List<Seat> { seat };
+                        if (millSeats.Count == 0) { Write($"{e.Text.Replace("~", name)}: no opponent at the table."); break; }
+                        foreach (var millSeat in millSeats) MoveTop(millSeat, n, Zone.Graveyard);
+                        break;
+                    }
                     case EffectKind.Token:
                         if (tokenFor?.Invoke(e.Token!) is { } t)
                         {
@@ -996,10 +1141,11 @@ namespace BreakersOfE.Playtest
                         break;
                     case EffectKind.Damage when e.On == EffectOn.EachCreature:
                         foreach (var s in Seats)
-                            foreach (var o in s.Battlefield.Where(o => o.IsCreatureNow && o.MergedInto == 0).ToList())
+                            foreach (var o in s.Battlefield.Where(o => o.MergedInto == 0 && (o.IsCreatureNow ||
+                                         e.What.Contains("+walkers") && o.FaceType(o.BackUp ? 1 : 0).Contains("Planeswalker", StringComparison.OrdinalIgnoreCase))).ToList())
                             {
                                 bool flies = Keywords.For(o, s, Seats).Contains("Flying");
-                                string which = e.What.Replace("+players", "");
+                                string which = e.What.Replace("+players", "").Replace("+walkers", "");
                                 if (which == "flying" && !flies || which == "-flying" && flies) continue;
                                 MarkDamage(o, n);
                             }
@@ -1015,7 +1161,118 @@ namespace BreakersOfE.Playtest
                         ChangeLife(seat, -n);
                         HurtOthers(seat, n, $"Each other player takes {n} damage");
                         break;
+                    case EffectKind.Damage when e.What.StartsWith("divided:") || e.What.StartsWith("each:"):
+                        if (spread == null || spread.Count == 0) { Write($"For you to do: {e.Text.Replace("~", name)}."); break; }
+                        foreach (var (dt, da) in spread) DamageTo(seat, dt, e.What.StartsWith("each:") ? n : da, name);
+                        break;
+                    case EffectKind.Damage when e.What is "power" or "sacrificed":
+                    {
+                        int dmg = e.What == "power" ? _selfPower : _sacPower;
+                        int whom = e.On == EffectOn.You ? -1 : e.On == EffectOn.Opponents ? -2 : target;
+                        if (whom == 0) Write($"{name} deals {dmg} damage: yours to mark."); else DamageTo(seat, whom, dmg, name);
+                        break;
+                    }
+                    case EffectKind.Damage when e.What == "own":
+                        if (on != null && Seats[on.Seat].ZoneOf(on) == Zone.Battlefield) MarkDamage(on, on.PowerNow ?? 0);
+                        break;
+                    case EffectKind.Damage when e.What == "back":
+                        if (picked != null && Seats[picked.Seat].ZoneOf(picked) == Zone.Battlefield && seat.Find(c.Id) is { } hitBack && seat.ZoneOf(hitBack) == Zone.Battlefield)
+                            MarkDamage(hitBack, picked.PowerNow ?? 0);
+                        break;
+                    case EffectKind.Fight:
+                    {
+                        var fA = picked;
+                        var fB = target2 > 0 ? FindAny(target2) : null;
+                        if (fA == null || fB == null || Seats[fA.Seat].ZoneOf(fA) != Zone.Battlefield || Seats[fB.Seat].ZoneOf(fB) != Zone.Battlefield)
+                        {
+                            Write($"For you to do: {e.Text.Replace("~", name)} (one of them isn't on the battlefield).");
+                            break;
+                        }
+                        int pA = fA.PowerNow ?? 0, pB = fB.PowerNow ?? 0;
+                        Write(e.What == "fight" ? $"{fA.ShownName} ({pA}) and {fB.ShownName} ({pB}) fight."
+                                                : $"{fA.ShownName} deals {pA} damage to {fB.ShownName}.");
+                        MarkDamage(fB, pA);
+                        if (e.What == "fight") MarkDamage(fA, pB);
+                        break;
+                    }
+                    case EffectKind.DrawThatMany:
+                        left.Add(new AbilityFollowUp(EffectKind.DrawThatMany, n, e.Text));
+                        break;
+                    case EffectKind.DiscardRandom:
+                    {
+                        int drop = Math.Min(Math.Max(1, n), seat.Hand.Count);
+                        for (int i = 0; i < drop; i++)
+                        {
+                            var gone = seat.Hand[RandomNumberGenerator.GetInt32(seat.Hand.Count)];
+                            Move(gone, Zone.Graveyard);
+                        }
+                        if (drop == 0) Write("No card in hand to discard.");
+                        break;
+                    }
+                    case EffectKind.Discover: DiscoverCore(seat, n); break;
+                    case EffectKind.Amass:
+                    {
+                        var army = seat.Battlefield.FirstOrDefault(o => o.MergedInto == 0 && o.FaceType(o.BackUp ? 1 : 0).Contains("Army", StringComparison.OrdinalIgnoreCase));
+                        if (army == null && tokenFor?.Invoke(new TokenSpec("0", "0", "black", $"{e.What} Army creature", false, "")) is { } armyToken)
+                            army = CreateToken(seat, armyToken.Card, armyToken.X, armyToken.Y, armyToken.Layout);
+                        if (army != null) AddCounters(army, "+1/+1", n);
+                        else Write($"For you to do: {e.Text} (make a 0/0 black {e.What} Army token: Tokens ▾ → Any Token…, then put {n} +1/+1 counters on it).");
+                        break;
+                    }
+                    case EffectKind.Incubate:
+                    {
+                        if (tokenFor?.Invoke(new TokenSpec("", "", "", "Incubator artifact", false, "")) is { } incToken)
+                        {
+                            var incubator = CreateToken(seat, incToken.Card, incToken.X, incToken.Y, incToken.Layout);
+                            AddCounters(incubator, "+1/+1", n);
+                        }
+                        else Write($"For you to do: {e.Text} (an Incubator artifact token with {n} +1/+1 counters: Tokens ▾ → Any Token…).");
+                        break;
+                    }
+                    case EffectKind.Earthbend:
+                        if (on != null && Seats[on.Seat].ZoneOf(on) == Zone.Battlefield)
+                        {
+                            AddCounters(on, "+1/+1", n);
+                            if (!on.TempKeywords.Contains("Haste")) on.TempKeywords.Add("Haste");
+                            Write($"{on.ShownName} is now a 0/0 creature with haste that's still a land, with {n} +1/+1 counters.");
+                        }
+                        break;
+                    case EffectKind.OpponentSacrifices:
+                    {
+                        var sacParts = e.What.Split('|');
+                        string sacFilter = sacParts[0];
+                        bool sacGreatest = sacParts.Contains("greatest");
+                        var sacSeats = sacParts.Contains("all") ? Seats.ToList()
+                                     : e.On == EffectOn.Player && target == -1 ? new List<Seat> { seat }
+                                     : Others(seat).ToList();
+                        if (sacSeats.Count == 0) { Write($"{e.Text.Replace("~", name)}: no opponent at the table."); break; }
+                        foreach (var sacSeat in sacSeats)
+                        {
+                            var sacCan = sacSeat.Battlefield.Where(o => o.MergedInto == 0 && Abilities.Fits(o, sacFilter)).ToList();
+                            // A power the table couldn't count (a * it doesn't read): always one of the choices, the player decides.
+                            var sacUnknown = sacCan.Where(o => o.PowerNow == null).ToList();
+                            if (sacGreatest && sacCan.Count > sacUnknown.Count)
+                            {
+                                int most = sacCan.Where(o => o.PowerNow != null).Max(o => o.PowerNow!.Value);
+                                sacCan = sacCan.Where(o => o.PowerNow == most || o.PowerNow == null).ToList();
+                            }
+                            int sacNeed = Math.Max(1, n);
+                            if (sacCan.Count == 0) Write($"{sacSeat.Name} {sacSeat.Has} no {sacFilter} to sacrifice.");
+                            else if (sacCan.Count <= sacNeed && (sacUnknown.Count == 0 || !sacGreatest)) foreach (var o in sacCan) Move(o, Zone.Graveyard);
+                            else left.Add(new AbilityFollowUp(EffectKind.OpponentSacrifices, sacNeed, e.Text.Replace("~", name), Seat: sacSeat.Index, Choices: sacCan.Select(o => o.Id).ToList()));
+                        }
+                        break;
+                    }
+                    case EffectKind.ExileGraveyard:
+                    {
+                        var whose = target == -1 ? new List<Seat> { seat } : Others(seat).ToList();
+                        if (whose.Count == 0) { Write($"{e.Text.Replace("~", name)}: no opponent at the table."); break; }
+                        foreach (var ws in whose)
+                            foreach (var gc in ws.Graveyard.ToList()) Move(gc, Zone.Exile);
+                        break;
+                    }
                     case EffectKind.Damage:
+                        lastDealt = n;
                         if (target == -1 || e.On == EffectOn.You) ChangeLife(seat, -n);
                         else if (on != null && Seats[on.Seat].ZoneOf(on) == Zone.Battlefield) MarkDamage(on, n);
                         else if (target == -2 || e.On == EffectOn.Opponents) HurtOthers(seat, n, $"{name} deals {n} damage to an opponent");
@@ -1068,12 +1325,28 @@ namespace BreakersOfE.Playtest
                     case EffectKind.ExileAll:
                     case EffectKind.BounceAll:
                     {
-                        string filter = e.What.Split('|')[0];
-                        bool yours = e.What.EndsWith("|yours");
-                        var hit = Seats.Where(s => !yours || s == seat)
-                                       .SelectMany(s => s.Battlefield.Where(o => o.MergedInto == 0 && Abilities.Fits(o, filter))).ToList();
+                        var allParts = e.What.Split('|');
+                        string filter = allParts[0];
+                        bool yours = allParts.Contains("yours");
+                        // "with power 2 or less": a creature whose power the table can't count is left for you.
+                        bool Sized(GameCard o)
+                        {
+                            foreach (var part in allParts.Skip(1))
+                            {
+                                var lim = Regex.Match(part, @"^(power|toughness)(<=|>=)(\d+)$");
+                                if (!lim.Success) continue;
+                                int? v = lim.Groups[1].Value == "power" ? o.PowerNow : o.ToughnessNow;
+                                int k = int.Parse(lim.Groups[3].Value);
+                                if (v == null || (lim.Groups[2].Value == "<=" ? v > k : v < k)) return false;
+                            }
+                            return true;
+                        }
+                        bool theirs = allParts.Contains("theirs");
+                        var hit = Seats.Where(s => (!yours || s == seat) && (!theirs || s != seat))
+                                       .SelectMany(s => s.Battlefield.Where(o => o.MergedInto == 0 && Abilities.Fits(o, filter) && Sized(o))).ToList();
                         var to = e.Kind == EffectKind.DestroyAll ? Zone.Graveyard : e.Kind == EffectKind.ExileAll ? Zone.Exile : Zone.Hand;
                         foreach (var o in hit) if (Seats[o.Seat].Find(o.Id) is { } live && Seats[o.Seat].ZoneOf(live) == Zone.Battlefield) Move(live, to);
+                        lastDestroyed = hit.Count;
                         Write($"{e.Text.Replace("~", name)}: {hit.Count} {(hit.Count == 1 ? "permanent" : "permanents")}.");
                         break;
                     }
@@ -1103,7 +1376,24 @@ namespace BreakersOfE.Playtest
                         SetTapped(seat, them, false);
                         break;
                     }
-                    case EffectKind.ToLibraryTop: if (on != null) Move(on, Zone.Library, Place.Top); break;
+                    case EffectKind.ToLibraryTop:
+                        if (on != null)
+                        {
+                            Move(on, Zone.Library, e.What == "bottom" ? Place.Bottom : Place.Top);
+                            var lib = Seats[on.Seat].Library;
+                            if (e.What == "second" && lib.Count > 1 && lib[0].Id == on.Id) { lib.RemoveAt(0); lib.Insert(1, on); Write($"{on.ShownName} is second from the top."); }
+                        }
+                        break;
+                    case EffectKind.ReturnAllFromGraveyard:
+                    {
+                        var rParts = e.What.Split('|');
+                        foreach (var gc in seat.Graveyard.Where(o => Abilities.Fits(o, rParts[0])).ToList())
+                        {
+                            var rAt = spotFor?.Invoke(gc) ?? (0.3, 0.1);
+                            Move(gc, Zone.Battlefield, Place.Top, rAt.X, rAt.Y, tapped: rParts.Contains("tapped"));
+                        }
+                        break;
+                    }
                     case EffectKind.CopyToken:
                         if (on != null)
                         {
@@ -1152,7 +1442,9 @@ namespace BreakersOfE.Playtest
                             {
                                 var spot = spotFor?.Invoke(back) ?? (0.3, 0.1);
                                 Move(back, Zone.Battlefield, Place.Top, spot.X, spot.Y);
-                                if (e.What.EndsWith("tapped")) back.Tapped = true;
+                                var rsParts = e.What.Split('|');
+                                if (rsParts[0].EndsWith("tapped")) back.Tapped = true;
+                                if (rsParts.Length > 1) AddCounters(back, rsParts[1], 1);           // "with a finality counter on it"
                             }
                         }
                         break;
@@ -1166,6 +1458,14 @@ namespace BreakersOfE.Playtest
                             foreach (var kind in o.Counters.Keys.ToList()) AddCounters(o, kind, 1);
                         Write("Proliferated: one more of each counter on your permanents (an opponent's poison and the rest are yours to add).");
                         break;
+                    case EffectKind.LookTop when e.On == EffectOn.Player:
+                    {
+                        // "Look at the top N cards of target player's library": whose library goes with it.
+                        var lookSeat = target == -1 ? seat : Others(seat).FirstOrDefault();
+                        if (lookSeat == null) { Write($"{e.Text.Replace("~", name)}: no opponent at the table."); break; }
+                        left.Add(new AbilityFollowUp(e.Kind, n, e.Text, Seat: lookSeat.Index));
+                        break;
+                    }
                     case EffectKind.Scry:
                     case EffectKind.Surveil:
                     case EffectKind.LookTop:
@@ -1179,6 +1479,296 @@ namespace BreakersOfE.Playtest
                         break;
                 }
             }
+        }
+
+        /// <summary>
+        /// Discover N: cards come off the top of the library until a nonland card with
+        /// mana value N or less; it goes to the hand (cast it without paying its mana
+        /// cost, or keep it), the rest to the bottom in a random order.
+        /// </summary>
+        private void DiscoverCore(Seat seat, int n)
+        {
+            var passed = new List<GameCard>();
+            GameCard? found = null;
+            while (seat.Library.Count > 0)
+            {
+                var top = seat.Library[0];
+                seat.Library.RemoveAt(0);
+                if (!top.FaceType(0).Contains("Land", StringComparison.OrdinalIgnoreCase) && top.Card.ManaValue <= n) { found = top; break; }
+                passed.Add(top);
+            }
+            ShuffleList(passed);
+            seat.Library.AddRange(passed);
+            if (found != null)
+            {
+                seat.Hand.Add(found);
+                Write($"{seat.Name} discovered {found.ShownName} (mana value {found.Card.ManaValue}): it's in the hand, to cast without paying its mana cost or keep. " +
+                      $"{passed.Count} card{(passed.Count == 1 ? "" : "s")} went to the bottom in a random order.");
+            }
+            else Write($"Discover {n}: no nonland card with mana value {n} or less; {passed.Count} card{(passed.Count == 1 ? "" : "s")} went back to the bottom.");
+        }
+
+        // ── Combat ───────────────────────────────────────────────────────
+        /// <summary>Combat's "whenever … attacks / blocks / dies" reminders, as they come (the table shows them; your call).</summary>
+        public event Action<List<Reminder>>? Reminded;
+
+        /// <summary>Log and show combat's reminders (off: neither).</summary>
+        public bool ShowReminders { get; set; } = true;
+
+        private void Remind(List<Reminder> list)
+        {
+            if (!ShowReminders || list.Count == 0) return;
+            foreach (var r in list) Write($"Reminder: {r.Card.ShownName}: {r.Text}");
+            Reminded?.Invoke(list);
+        }
+
+        /// <summary>Printed (or given) "~ can't be blocked" / "~ can't block" on a creature.</summary>
+        private static bool Says(GameCard c, string what) =>
+            c.TempKeywords.Any(k => k.Equals(what, StringComparison.OrdinalIgnoreCase)) ||
+            (c.ShownText ?? "").Replace("\r", "").Split('\n').Any(l =>
+                System.Text.RegularExpressions.Regex.IsMatch(l.Trim(), $@"^(?:{System.Text.RegularExpressions.Regex.Escape(c.FaceName(c.BackUp ? 1 : 0))}|This creature|~) {System.Text.RegularExpressions.Regex.Escape(what)}\.?$",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase));
+
+        /// <summary>The players who've lost, and why: 0 life, 10 poison, 21 combat damage from one commander, drawing from an empty library.</summary>
+        public List<(Seat Seat, string Why)> Losers()
+        {
+            var list = new List<(Seat, string)>();
+            foreach (var s in Seats)
+            {
+                if (s.Life <= 0) list.Add((s, $"{s.Life} life"));
+                else if (s.Poison >= 10) list.Add((s, $"{s.Poison} poison counters"));
+                else if (s.CommanderDamage.FirstOrDefault(kv => kv.Value >= 21) is { Value: >= 21 } cd)
+                    list.Add((s, $"{cd.Value} damage from {(FindAny(cd.Key)?.ShownName ?? "a commander")}"));
+                else if (s.DrewFromEmpty) list.Add((s, "drew from an empty library"));
+            }
+            return list;
+        }
+        /// <summary>Someone is attacking (attackers declared this combat).</summary>
+        public bool InCombat => Seats.Any(s => s.Battlefield.Any(c => c.Attacking));
+
+        /// <summary>Combat damage has been dealt this combat.</summary>
+        public bool CombatDealt => Seats.Any(s => s.Battlefield.Any(c => c.Attacking && c.DealtCombat));
+
+        private bool HasKeyword(GameCard c, string keyword) =>
+            Keywords.For(c, Seats[c.Seat], Seats).Any(k => k.StartsWith(keyword, StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>The player being attacked: the first other player (or none, on your own).</summary>
+        private Seat? DefenderOf(Seat attacker) => Others(attacker).FirstOrDefault();
+
+        /// <summary>
+        /// Declare attackers (one move): each creature attacks the defending player or one of their
+        /// planeswalkers (<paramref name="attackers"/>: id and target, 0 = the player). It taps,
+        /// unless it has vigilance; a summoning-sick one is noted (your call).
+        /// </summary>
+        public void DeclareAttackers(Seat seat, IReadOnlyList<(int Id, int Target)> attackers)
+        {
+            var list = attackers.Select(a => (Card: seat.Find(a.Id), a.Target)).Where(a => a.Card != null && seat.ZoneOf(a.Card) == Zone.Battlefield).ToList();
+            if (list.Count == 0) return;
+            Remember($"Attack with {list.Count}");
+            var defender = DefenderOf(seat);
+            foreach (var (card, target) in list)
+            {
+                var c = card!;
+                c.Attacking = true;
+                c.AttackTarget = target;
+                c.Blocking = 0;
+                c.DealtCombat = false;
+                bool vigilance = HasKeyword(c, "Vigilance");
+                if (!vigilance) c.Tapped = true;
+                string whom = target > 0 && FindAny(target) is { } walker ? walker.ShownName : defender?.Name ?? "the defending player";
+                Write($"{c.ShownName} attacks {whom}" + (vigilance ? " (vigilance: it stays untapped)." : "."));
+                if (c.EnteredTurn == Turn && !HasKeyword(c, "Haste"))
+                    Write($"Note: {c.ShownName} came in this turn (summoning sick): it can't attack unless something gives it haste.");
+                if (HasKeyword(c, "Defender")) Write($"Note: {c.ShownName} has defender: it can't attack.");
+            }
+            Remind(Reminders.Attacks(seat, Seats, list.Select(a => a.Card!).ToList()));
+            Done();
+        }
+
+        /// <summary>A creature blocks an attacker (or, <paramref name="attacker"/> null, stops blocking).</summary>
+        public void Block(GameCard blocker, GameCard? attacker)
+        {
+            var s = Seats[blocker.Seat];
+            var b = s.Find(blocker.Id);
+            if (b == null || s.ZoneOf(b) != Zone.Battlefield) return;
+            if ((attacker?.Id ?? 0) == b.Blocking) return;
+            Remember(attacker == null ? $"{b.ShownName} doesn't block" : $"{b.ShownName} blocks {attacker.ShownName}");
+            bool firstBlock = attacker != null && !Seats.Any(o => o.Battlefield.Any(x => x.Blocking == attacker.Id));
+            b.Blocking = attacker?.Id ?? 0;
+            b.BlockOrder = attacker == null ? 0 : Seats.SelectMany(o => o.Battlefield).Where(x => x.Blocking == attacker.Id).Max(x => x.BlockOrder) + 1;
+            if (attacker == null) Write($"{b.ShownName} isn't blocking.");
+            else
+            {
+                Write($"{b.ShownName} blocks {attacker.ShownName}.");
+                if (Says(attacker, "can't be blocked")) Write($"Note: {attacker.ShownName} can't be blocked.");
+                if (Says(b, "can't block")) Write($"Note: {b.ShownName} can't block.");
+                if (HasKeyword(attacker, "Flying") && !HasKeyword(b, "Flying") && !HasKeyword(b, "Reach"))
+                    Write($"Note: {attacker.ShownName} has flying: only a creature with flying or reach can block it.");
+                if (b.Tapped) Write($"Note: {b.ShownName} is tapped: a tapped creature can't block.");
+                Remind(Reminders.Blocks(b, attacker, firstBlock));
+            }
+            Done();
+        }
+
+        /// <summary>An attacker's damage order: this blocker takes its damage first.</summary>
+        public void FirstInDamageOrder(GameCard blocker)
+        {
+            var s = Seats[blocker.Seat];
+            var b = s.Find(blocker.Id);
+            if (b == null || b.Blocking == 0) return;
+            var others = Seats.SelectMany(o => o.Battlefield).Where(x => x.Blocking == b.Blocking && x.Id != b.Id).ToList();
+            if (others.Count == 0) return;
+            Remember($"{b.ShownName} first in the damage order");
+            b.BlockOrder = others.Min(x => x.BlockOrder) - 1;
+            Write($"{b.ShownName} takes {(FindAny(b.Blocking)?.ShownName ?? "the attacker")}'s damage first.");
+            Done();
+        }
+
+        /// <summary>Blocks are set: menace blocked by just one creature is noted (your call).</summary>
+        public void BlocksDone()
+        {
+            foreach (var a in Seats.SelectMany(s => s.Battlefield.Where(c => c.Attacking)))
+            {
+                int count = Seats.Sum(s => s.Battlefield.Count(b => b.Blocking == a.Id));
+                if (count == 1 && HasKeyword(a, "Menace")) Write($"Note: {a.ShownName} has menace: it can't be blocked except by two or more creatures.");
+            }
+        }
+
+        /// <summary>
+        /// Combat damage (one move, one Undo): first strike and double strike first, then the rest.
+        /// An unblocked attacker hits the defending player (or the planeswalker it attacks); a blocked
+        /// one gives each blocker lethal damage in the order they blocked, the rest to the last (trample:
+        /// the rest to the player). Blockers hit back. Deathtouch, lifelink and infect count; creatures
+        /// with lethal damage go to the graveyard (indestructible ones stay; a regeneration shield is used).
+        /// Then combat ends: on to the second main phase.
+        /// </summary>
+        public void CombatDamage()
+        {
+            var attackers = Seats.SelectMany(s => s.Battlefield.Where(c => c.Attacking && c.MergedInto == 0)).ToList();
+            if (attackers.Count == 0 || CombatDealt) return;
+            Remember("Combat damage");
+            _batch++;
+            try
+            {
+                var deathtouched = new HashSet<int>();
+                var died = new List<GameCard>();
+                var blocked = attackers.Where(a => Seats.Any(s => s.Battlefield.Any(b => b.Blocking == a.Id))).Select(a => a.Id).ToHashSet();
+                bool OnField(GameCard c) => Seats[c.Seat].Find(c.Id) is { } live && Seats[c.Seat].ZoneOf(live) == Zone.Battlefield;
+                void Hit(GameCard from, GameCard to, int amount)
+                {
+                    if (amount <= 0) return;
+                    MarkDamage(to, amount);
+                    if (HasKeyword(from, "Deathtouch")) deathtouched.Add(to.Id);
+                    if (HasKeyword(from, "Lifelink")) ChangeLife(Seats[from.Seat], amount);
+                }
+                void HitDefender(GameCard a, int amount)
+                {
+                    if (amount <= 0) return;
+                    if (a.AttackTarget > 0 && FindAny(a.AttackTarget) is { } target && OnField(target))
+                    {
+                        string kind = target.Counters.ContainsKey("Defense") ? "Defense" : "Loyalty";
+                        AddCounters(target, kind, -Math.Min(amount, target.Counters.GetValueOrDefault(kind)));
+                        Write($"{a.ShownName} deals {amount} damage to {target.ShownName}.");
+                    }
+                    else if (DefenderOf(Seats[a.Seat]) is { } defender)
+                    {
+                        if (HasKeyword(a, "Infect")) ChangePlayerCounter(defender, "Poison", amount);
+                        else ChangeLife(defender, -amount);
+                        Write($"{a.ShownName} deals {amount} combat damage to {defender.Name}.");
+                        if (a.IsCommander)
+                        {
+                            int had = defender.CommanderDamage.GetValueOrDefault(a.Id);
+                            defender.CommanderDamage[a.Id] = had + amount;
+                            Write($"Commander damage: {defender.Name} {defender.Has} taken {had + amount} from {a.ShownName}" + (had + amount >= 21 ? " (21 or more loses the game)." : "."));
+                        }
+                    }
+                    else Write($"{a.ShownName} deals {amount} combat damage to the defending player (no opponent at the table: count it).");
+                    if (HasKeyword(a, "Lifelink")) ChangeLife(Seats[a.Seat], amount);
+                }
+                bool anyFirst = attackers.Concat(Seats.SelectMany(s => s.Battlefield.Where(b => b.Blocking != 0)))
+                                         .Any(c => HasKeyword(c, "First strike") || HasKeyword(c, "Double strike"));
+                foreach (bool first in anyFirst ? new[] { true, false } : new[] { false })
+                {
+                    bool Strikes(GameCard c) => first ? HasKeyword(c, "First strike") || HasKeyword(c, "Double strike")
+                                                      : !anyFirst || !HasKeyword(c, "First strike") || HasKeyword(c, "Double strike");
+                    foreach (var a0 in attackers)
+                    {
+                        if (!OnField(a0)) continue;
+                        var a = Seats[a0.Seat].Find(a0.Id)!;
+                        var blockers = Seats.SelectMany(s => s.Battlefield.Where(b => b.Blocking == a.Id && b.MergedInto == 0)).Where(OnField).OrderBy(b => b.BlockOrder).ToList();
+                        if (Strikes(a))
+                        {
+                            int power = Math.Max(0, a.PowerNow ?? 0);
+                            bool trample = HasKeyword(a, "Trample");
+                            if (blockers.Count == 0)
+                            {
+                                if (!blocked.Contains(a.Id) || trample) HitDefender(a, power);    // blocked, and the blockers are gone: no damage (trample: all of it)
+                            }
+                            else
+                            {
+                                int left = power;
+                                for (int i = 0; i < blockers.Count && left > 0; i++)
+                                {
+                                    var b = blockers[i];
+                                    int lethal = HasKeyword(a, "Deathtouch") ? 1 : Math.Max(0, (b.ToughnessNow ?? 0) - b.Damage);
+                                    int give = i == blockers.Count - 1 && !trample ? left : Math.Min(left, lethal);
+                                    Hit(a, b, give);
+                                    left -= give;
+                                }
+                                if (left > 0 && trample) HitDefender(a, left);
+                            }
+                        }
+                        foreach (var b in blockers.Where(Strikes)) Hit(b, a, Math.Max(0, b.PowerNow ?? 0));
+                    }
+                    // Lethal damage: to the graveyard (between first strike and the rest, too).
+                    foreach (var s in Seats)
+                        foreach (var c in s.Battlefield.Where(c => c.MergedInto == 0 && c.IsCreatureNow).ToList())
+                        {
+                            bool lethal = c.ToughnessNow is int t && c.Damage >= t || deathtouched.Contains(c.Id) && c.Damage > 0;
+                            if (!lethal) continue;
+                            if (HasKeyword(c, "Indestructible")) { Write($"{c.ShownName} has lethal damage but is indestructible."); continue; }
+                            if (c.TempKeywords.Remove("Regenerate"))
+                            {
+                                c.Tapped = true; c.Damage = 0; c.Attacking = false; c.Blocking = 0;
+                                Write($"{c.ShownName} regenerates: tapped, its damage cleared, out of combat.");
+                                continue;
+                            }
+                            Write($"{c.ShownName} dies.");
+                            died.Add(c);
+                            Move(c, Zone.Graveyard);
+                        }
+                    foreach (var s in Seats)
+                        foreach (var w in s.Battlefield.Where(w => w.FaceType(w.BackUp ? 1 : 0).Contains("Planeswalker", StringComparison.OrdinalIgnoreCase) &&
+                                                                   w.Counters.ContainsKey("Loyalty") && w.Counters["Loyalty"] <= 0).ToList())
+                        {
+                            Write($"{w.ShownName} has no loyalty left: it goes to the graveyard.");
+                            Move(w, Zone.Graveyard);
+                        }
+                }
+                foreach (var s in Seats) foreach (var a in s.Battlefield.Where(c => c.Attacking)) a.DealtCombat = true;
+                Remind(Reminders.Deaths(Seats, died));
+                // Combat is over: on to the second main phase (part of the same move, so Undo takes both back).
+                StepCore(Active, false);
+                Write($"End of combat: on to {PhaseName(Phase)}.");
+            }
+            finally
+            {
+                _batch--;
+            }
+            Done();
+        }
+
+        /// <summary>The end of combat: nothing is attacking or blocking any more.</summary>
+        private void EndCombatCore()
+        {
+            foreach (var s in Seats)
+                foreach (var c in s.Battlefield)
+                {
+                    c.Attacking = false;
+                    c.AttackTarget = 0;
+                    c.Blocking = 0;
+                    c.DealtCombat = false;
+                }
         }
 
         /// <summary>Log what an ability says without doing it (the table's "just remind me").</summary>
@@ -1446,13 +2036,18 @@ namespace BreakersOfE.Playtest
         };
 
         /// <summary>A game carried on from where it was saved.</summary>
-        public static Game Load(State s) => new()
+        public static Game Load(State s)
         {
-            Seats = s.Seats, Turn = s.Turn, Phase = s.Phase, Log = s.Log,
-            _nextId = Math.Max(s.NextId, s.Seats.SelectMany(x => Seat.AllZones.SelectMany(z => x.ZoneList(z))).Select(c => c.Id + 1).DefaultIfEmpty(1).Max()),
-            _stackCounter = s.StackCounter,
-            ActiveSeat = Math.Clamp(s.ActiveSeat, 0, Math.Max(0, s.Seats.Count - 1)),
-        };
+            var g = new Game
+            {
+                Seats = s.Seats, Turn = s.Turn, Phase = s.Phase, Log = s.Log,
+                _nextId = Math.Max(s.NextId, s.Seats.SelectMany(x => Seat.AllZones.SelectMany(z => x.ZoneList(z))).Select(c => c.Id + 1).DefaultIfEmpty(1).Max()),
+                _stackCounter = s.StackCounter,
+                ActiveSeat = Math.Clamp(s.ActiveSeat, 0, Math.Max(0, s.Seats.Count - 1)),
+            };
+            g.RefreshStars();
+            return g;
+        }
 
         /// <summary>Something has happened since the game started (worth saving when the table closes).</summary>
         public bool HasMoves => _undo.Count > 0 || Turn > 1;

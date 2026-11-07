@@ -194,7 +194,7 @@ namespace BreakersOfE.Views.Playtest
         /// Onto the battlefield: a modal double-faced card asks which face; no
         /// place given = the next free spot (lands along the bottom, the rest along the top).
         /// </summary>
-        private void PlayCard(GameCard c, double? x = null, double? y = null, bool faceDown = false)
+        private void PlayCard(GameCard c, double? x = null, double? y = null, bool faceDown = false, bool tapped = false)
         {
             bool back = false;
             if (c.IsModal && !faceDown)
@@ -226,9 +226,9 @@ namespace BreakersOfE.Views.Playtest
             string type = back ? c.FaceType(1) : c.FaceType(0);
             bool isLand = type.Contains("Land", StringComparison.OrdinalIgnoreCase);
             bool instant = type.Contains("Instant", StringComparison.OrdinalIgnoreCase) || type.Contains("Sorcery", StringComparison.OrdinalIgnoreCase);
-            if (!isLand && !faceDown && S.StackFirst) _game.Move(c, Zone.Stack, backUp: back);
+            if (!isLand && !faceDown && S.StackFirst) _game.Move(c, Zone.Stack, backUp: back, tapped: tapped && !instant);
             else if (instant && !faceDown) _game.Move(c, Zone.Graveyard);
-            else _game.Move(c, Zone.Battlefield, Place.Top, x.Value, y.Value, backUp: back, faceDown: faceDown);
+            else _game.Move(c, Zone.Battlefield, Place.Top, x.Value, y.Value, backUp: back, faceDown: faceDown, tapped: tapped);
             _lastPlayedId = c.Id;
         }
 

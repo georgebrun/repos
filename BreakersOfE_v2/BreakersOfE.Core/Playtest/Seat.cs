@@ -40,6 +40,12 @@ namespace BreakersOfE.Playtest
         public List<GameCard> Sideboard { get; set; } = new();
         public List<GameCard> Stack { get; set; } = new();
 
+        /// <summary>Tried to draw from an empty library (that loses the game).</summary>
+        public bool DrewFromEmpty { get; set; }
+
+        /// <summary>Combat damage taken from each commander (by the commander's card id): 21 from one loses the game.</summary>
+        public Dictionary<int, int> CommanderDamage { get; set; } = new();
+
         // ── Counters on you ──────────────────────────────────────────────
         public int Poison { get; set; }
         public int Energy { get; set; }
@@ -132,6 +138,7 @@ namespace BreakersOfE.Playtest
                 Tokens = Tokens,
                 Mulligans = Mulligans, Kept = Kept, BottomPending = BottomPending, TopRevealed = TopRevealed,
                 CommanderCasts = new Dictionary<int, int>(CommanderCasts),
+                DrewFromEmpty = DrewFromEmpty, CommanderDamage = new Dictionary<int, int>(CommanderDamage),
             };
         }
     }

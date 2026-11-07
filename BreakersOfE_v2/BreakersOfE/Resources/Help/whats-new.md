@@ -1,5 +1,9 @@
-# What's New in 2.1.3
-> Phone lists by Dropbox, hands-free; 2.1.2's phone lists; 2.1.1's two-sided tokens; and 2.1.0's deck builder, with card tags, combos, EDHREC, salt, a Want List per deck, print slips and deck versions.
+# What's New in 2.1.4
+> Two-sided tokens, one row each; 2.1.3's phone lists by Dropbox; 2.1.2's phone lists; 2.1.1's two-sided tokens; and 2.1.0's deck builder, with card tags, combos, EDHREC, salt, a Want List per deck, print slips and deck versions.
+
+## 2.1.4: Two-sided tokens, one row each
+- A two-sided token card is one row of its own now, **Officer // Treasure**, with its own quantity, Used and Available, and one line in a deck. Your existing pairs are converted the first time this version starts (backed up first). See [[two-sided-tokens]].
+- Fixed: a two-sided token you own and haven't used could refuse to go into a deck, because its copies were counted on the wrong side's row.
 
 ## 2.1.3: Phone lists by Dropbox
 - **Connect Dropbox…** in **Settings → Phone lists** (or **📱 Phone…**): BoE sends your Trade Binder and Want List straight to your Dropbox as they change, and the BoE Lists page on your phone gets them by itself each time you open it. Sign in once on each; no picking files, no Update, no Dropbox app needed. See [[phone-lists]].

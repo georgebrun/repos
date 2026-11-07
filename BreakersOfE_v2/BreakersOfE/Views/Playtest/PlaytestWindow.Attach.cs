@@ -24,7 +24,9 @@ namespace BreakersOfE.Views.Playtest
         /// <summary>Ask for the card to attach to (or mutate onto); the next click on the battlefield answers. Esc cancels.</summary>
         private void StartPick(GameCard c, PickKind kind, bool back = false)
         {
-            if (!Me.Battlefield.Any(o => (kind == PickKind.Ability || o.Id != c.Id) && o.MergedInto == 0 && (kind != PickKind.Mutate || o.IsCreatureNow)))
+            // An ability's target can be on either side of the table; attaching and mutating stay on yours.
+            var field = kind == PickKind.Ability ? _game.Seats.SelectMany(s => s.Battlefield) : Me.Battlefield;
+            if (!field.Any(o => (kind == PickKind.Ability || o.Id != c.Id) && o.MergedInto == 0 && (kind != PickKind.Mutate || o.IsCreatureNow)))
             {
                 System.Windows.MessageBox.Show(this, kind == PickKind.Mutate ? "There's no creature on the battlefield to mutate onto."
                                                    : kind == PickKind.Ability ? "There's nothing on the battlefield to target."
@@ -42,6 +44,8 @@ namespace BreakersOfE.Views.Playtest
             if (_pick == null) return;
             _pick = null;
             _pendingAbility = null;
+            _firstTarget = 0;
+            _spread = null;
             Render();
         }
 
@@ -54,9 +58,19 @@ namespace BreakersOfE.Views.Playtest
             while (target.MergedInto != 0 && Find(target.MergedInto) is { } top) target = top;
             if (p.Kind == PickKind.Ability)
             {
-                var pending = _pendingAbility;
+                if (c == null || _pendingAbility is not { } pa) { _pendingAbility = null; _spread = null; _firstTarget = 0; Render(); return; }
+                if (_spread != null) { AddSpreadTarget(c, target.Id); return; }                 // one of several targets
+                if (pa.Ability.NeedsTwoTargets && _firstTarget == 0)
+                {
+                    _firstTarget = target.Id;                                                    // yours first, then the other one
+                    StartPick(c, PickKind.Ability);
+                    return;
+                }
                 _pendingAbility = null;
-                if (c != null && pending is { } pa) RunAbility(c, pa.Ability, target.Id, pa.X, pa.Paid); else Render();
+                int first = _firstTarget;
+                _firstTarget = 0;
+                if (pa.Ability.NeedsTwoTargets) RunAbility(c, pa.Ability, first, pa.X, pa.Paid, target2: target.Id);
+                else RunAbility(c, pa.Ability, target.Id, pa.X, pa.Paid);
                 return;
             }
             if (c == null || c.Id == target.Id) { Render(); return; }
@@ -251,10 +265,22 @@ namespace BreakersOfE.Views.Playtest
             BtnKeep.Visibility = BtnMulligan.Visibility = Visibility.Collapsed;
             BtnSkipDiscard.Visibility = Visibility.Visible;
             BtnSkipDiscard.Content = "Cancel";
+            var pa = _pendingAbility;
+            bool two = p.Kind == PickKind.Ability && pa?.Ability.NeedsTwoTargets == true;
+            bool fights = two && pa!.Value.Ability.Effects.Any(e => e.Kind == EffectKind.Fight && e.What == "fight");
             MulliganTitle.Text = p.Kind == PickKind.Mutate ? $"Click the creature to mutate {c.FaceName(0)} onto."
-                : p.Kind == PickKind.Ability ? $"Click the target for {c.ShownName}: {_pendingAbility?.Ability.Label}"
+                : _spread != null ? $"{c.ShownName}: click target {_spread.Count + 1}" + (_spreadMax < 99 ? $" of up to {_spreadMax}" : "") +
+                                    (_spreadDivided ? $" ({_spreadLeft} damage left to divide)" : "") + "."
+                : two && _firstTarget == 0 ? $"{c.ShownName}: click your creature first."
+                : two ? $"{c.ShownName}: now click the creature it {(fights ? "fights" : "deals damage to")} (either side of the table)."
+                : p.Kind == PickKind.Ability ? $"Click the target for {c.ShownName}: {pa?.Ability.Label} (either side of the table)"
                 : $"Click the card to attach {c.ShownName} to.";
-            MulliganInfo.Text = "Esc, or Cancel, to stop.";
+            MulliganInfo.Text = _spread is { Count: > 0 } ? "Done when you have them all; Esc, or Cancel, to stop." : "Esc, or Cancel, to stop.";
+            if (_spread is { Count: > 0 })
+            {
+                BtnKeep.Visibility = Visibility.Visible;
+                BtnKeep.Content = "Done";
+            }
             return true;
         }
     }

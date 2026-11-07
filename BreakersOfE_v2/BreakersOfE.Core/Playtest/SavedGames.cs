@@ -75,6 +75,39 @@ namespace BreakersOfE.Playtest
             return n;
         }
 
+        /// <summary>Every saved game (⚙ Table → Saved Games), newest first: its file and what's in it (null when the file can't be read).</summary>
+        public static System.Collections.Generic.List<(string File, Game.State? State)> All()
+        {
+            var list = new System.Collections.Generic.List<(string File, Game.State? State)>();
+            try
+            {
+                foreach (var f in Directory.EnumerateFiles(Folder, "*.json"))
+                {
+                    Game.State? s = null;
+                    try { s = JsonSerializer.Deserialize<Game.State>(File.ReadAllText(f), Json); } catch { /* damaged: listed, to delete */ }
+                    list.Add((f, s));
+                }
+            }
+            catch
+            {
+                // No folder: nothing saved.
+            }
+            return list.OrderByDescending(e => e.State?.Saved ?? File.GetLastWriteTime(e.File)).ToList();
+        }
+
+        /// <summary>One saved game, by its file (from <see cref="All"/>).</summary>
+        public static void DeleteFile(string file)
+        {
+            try
+            {
+                if (Path.GetDirectoryName(Path.GetFullPath(file)) == Path.GetFullPath(Folder)) File.Delete(file);
+            }
+            catch
+            {
+                // In use, or gone already.
+            }
+        }
+
         public static int Count()
         {
             try { return Directory.EnumerateFiles(Folder, "*.json").Count(); } catch { return 0; }

@@ -72,6 +72,7 @@ namespace BreakersOfE.Views.Playtest
                     break;
                 case Zone.Hand:
                     m.Items.Add(Item(c.IsModal ? "Play… (pick a face)" : "Play", () => PlayCard(c), "Enter"));
+                    if (!c.IsInstantOrSorceryNow) m.Items.Add(Item("Play Tapped", () => PlayCard(c, tapped: true)));
                     m.Items.Add(Item("Play Face Down", () => PlayCard(c, faceDown: true)));
                     if (c.IsAura || c.IsEquipment) m.Items.Add(Item("Attach To…", () => StartPick(c, PickKind.Attach)));
                     if (c.HasMutate) m.Items.Add(Item("Mutate Onto…", () => StartPick(c, PickKind.Mutate)));
@@ -194,13 +195,25 @@ namespace BreakersOfE.Views.Playtest
         private void GraveyardPile_Click(object sender, MouseButtonEventArgs e) => OpenBrowser(Zone.Graveyard);
         private void ExilePile_Click(object sender, MouseButtonEventArgs e) => OpenBrowser(Zone.Exile);
 
-        private void OpenBrowser(Zone zone, int topOnly = 0)
+        /// <summary>Look through a zone: yours, or (<paramref name="whose"/>) the other player's: their graveyard, exile, library.</summary>
+        private void OpenBrowser(Zone zone, int topOnly = 0, Seat? whose = null)
         {
-            var list = Me.ZoneList(zone);
+            var seat = whose ?? Me;
+            var list = seat.ZoneList(zone);
             if (list.Count == 0) return;
-            new ZoneBrowserWindow(this, _game, Me, zone, topOnly, c => Picture(c), c => PlayCard(c), c => { _hoverId = c.Id; ShowInPanel(c); })
+            if (seat.Index == Me.Index)
             {
-                AbilityMenu = AbilitiesMenu,                       // a graveyard card's "Exile ~ from your graveyard:", a hand card's cycling
+                new ZoneBrowserWindow(this, _game, Me, zone, topOnly, c => Picture(c), c => PlayCard(c), c => { _hoverId = c.Id; ShowInPanel(c); })
+                {
+                    AbilityMenu = AbilitiesMenu,                   // a graveyard card's "Exile ~ from your graveyard:", a hand card's cycling
+                }.Show();
+                return;
+            }
+            // Theirs: a card goes to its owner's zones (onto their side of the table).
+            new ZoneBrowserWindow(this, _game, seat, zone, topOnly, c => Picture(c),
+                                  c => _game.Move(c, Zone.Battlefield, Place.Top, 0.3, 0.1), c => ShowInPanel(c))
+            {
+                Whose = seat.Whose,
             }.Show();
         }
 
@@ -238,6 +251,7 @@ namespace BreakersOfE.Views.Playtest
         /// <summary>Undo (button or Ctrl+Z); while discarding down, the count follows the hand.</summary>
         private void UndoMove()
         {
+            _quietTurn = true;                                  // if the table turns back, it doesn't cover
             _game.Undo();
             if (_discardDown > 0)
             {
@@ -249,11 +263,16 @@ namespace BreakersOfE.Views.Playtest
         private void BtnShuffle_Click(object sender, RoutedEventArgs e) => _game.Shuffle(Me);
         private void BtnUntapAll_Click(object sender, RoutedEventArgs e) => _game.UntapAll(Me);
         private void BtnPassTurn_Click(object sender, RoutedEventArgs e) => NextTurn();
-        private void BtnKeep_Click(object sender, RoutedEventArgs e) => _game.Keep(Me);
+        private void BtnKeep_Click(object sender, RoutedEventArgs e)
+        {
+            if (_spread != null && _pick is { } p && Find(p.CardId) is { } c) { FinishSpread(c); return; }     // Done: those are all the targets
+            _game.Keep(Me);
+        }
         private void BtnMulligan_Click(object sender, RoutedEventArgs e) => _game.Mulligan(Me);
 
         private void NextTurn()
         {
+            EnsureActiveView();
             if (!Me.Kept) _game.Keep(Me);                    // playing on means the hand is kept
             AfterCleanup(() =>
             {
@@ -272,7 +291,7 @@ namespace BreakersOfE.Views.Playtest
                 m.Items.Add(Item(t.Name + pt, () =>
                 {
                     var (x, y) = FreeSpot(LaneOf(t));
-                    _game.CreateToken(Me, t, x, y, _layouts.GetValueOrDefault(t.ScryfallId ?? "", ""));
+                    _game.CreateToken(Me, t, x, y, MyLayouts.GetValueOrDefault(t.ScryfallId ?? "", ""));
                 }));
             }
             if (Me.Tokens.Count == 0)
@@ -308,10 +327,11 @@ namespace BreakersOfE.Views.Playtest
 
         private void BtnSettings_Click(object sender, RoutedEventArgs e)
         {
-            new PlaytestSettingsWindow(this, _deck, FieldAspect).ShowDialog();
+            (string, string)? other = _game.Seats.Count > 1 ? (DeckIdOf(_game.Seats[1]), _game.Seats[1].DeckName) : null;
+            new PlaytestSettingsWindow(this, _deck, FieldAspect, other).ShowDialog();
             ApplySettings();
-            _game.FreeFirstMulligan = S.FreeFirstMulligan && _deck.DeckType != Models.DeckType.Standard &&
-                                      _deck.DeckType != Models.DeckType.Limited;
+            _game.FreeFirstMulligan = S.FreeFirstMulligan;
+            _game.ShowReminders = S.ShowReminders;
             Render();
         }
 
@@ -349,6 +369,14 @@ namespace BreakersOfE.Views.Playtest
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (Keyboard.FocusedElement is TextBox) return;
+
+            // Passing the screen: only Ready (Enter or Space) until the next player is in front of it.
+            if (PassCover.Visibility == Visibility.Visible)
+            {
+                if (e.Key is Key.Enter or Key.Space) PassReady();
+                e.Handled = e.Key != Key.F11;
+                return;
+            }
 
             // A zoom closes with any key (Esc included), and that key does nothing else.
             if (ZoomLayer.Visibility == Visibility.Visible)
@@ -388,6 +416,7 @@ namespace BreakersOfE.Views.Playtest
                 case Key.P when mods == ModifierKeys.None: NextStep(); break;
                 case Key.R when mods == ModifierKeys.None: ResolveTop(); break;
                 case Key.K when mods == ModifierKeys.None && !Me.Kept: _game.Keep(Me); break;
+                case Key.W when mods == ModifierKeys.None && Opp != null: SwitchSides(); break;
                 case Key.M when mods == ModifierKeys.None && !Me.Kept: _game.Mulligan(Me); break;
 
                 // Quick moves for the selected (or hovered) card.

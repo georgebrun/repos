@@ -29,6 +29,11 @@ namespace BreakersOfE.Views.Playtest
 
         private Seat Seat => _game.Seats[_seat];
 
+        /// <summary>Whose zone, for the title: "Your" (the default), or the other player's ("Opponent's").</summary>
+        internal string Whose { get; init; } = "Your";
+
+        private bool Theirs => Whose != "Your";
+
         /// <summary>A card's abilities from where it is (the table's "Abilities" menu), or null.</summary>
         internal Func<GameCard, MenuItem?>? AbilityMenu { get; init; }
 
@@ -70,7 +75,7 @@ namespace BreakersOfE.Views.Playtest
                 Margin = new Thickness(12, 0, 12, 4), FontSize = 12, TextWrapping = TextWrapping.Wrap,
                 Text = zone == Zone.Hand
                     ? "Double-click a card to play it; right-click to send it anywhere else."
-                    : "Double-click a card to put it in your hand; right-click to send it anywhere else.",
+                    : "Double-click a card to put it in its owner's hand; right-click to send it anywhere else.",
             };
             hint.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
 
@@ -113,10 +118,11 @@ namespace BreakersOfE.Views.Playtest
                 cards = cards.Where(c => c.Card.Name.Contains(find, StringComparison.OrdinalIgnoreCase) ||
                                          c.Card.TypeLine.Contains(find, StringComparison.OrdinalIgnoreCase)).ToList();
             string zoneName = Game.ZoneWord(_zone);
-            Title = _topOnly > 0 ? $"Top {_topOnly} of your library" : $"Your {zoneName}";
+            string whose = Theirs ? Whose : "your";
+            Title = _topOnly > 0 ? $"Top {_topOnly} of {whose} library" : $"{Whose} {zoneName}";
             _title.Text = _topOnly > 0
-                ? $"Top {Math.Min(_topOnly, all.Count)} of your library (top first)"
-                : $"Your {zoneName} · {all.Count} card{(all.Count == 1 ? "" : "s")}" +
+                ? $"Top {Math.Min(_topOnly, all.Count)} of {whose} library (top first)"
+                : $"{Whose} {zoneName} · {all.Count} card{(all.Count == 1 ? "" : "s")}" +
                   (_zone == Zone.Library ? " (top first)" : _zone == Zone.Graveyard ? " (newest first)" : "");
 
             _tiles.Children.Clear();

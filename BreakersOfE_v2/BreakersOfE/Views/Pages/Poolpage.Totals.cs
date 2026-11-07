@@ -255,7 +255,7 @@ namespace BreakersOfE.Views.Pages
         /// <summary>▶ Playtest (a deck on screen): the deck at the playtest table, in its own window.</summary>
         private void BtnPlaytest_Click(object sender, RoutedEventArgs e)
         {
-            if (_currentTag == DeckTableTag && _openDeck != null)
+            if (global::BreakersOfE.Services.Features.Playtest && _currentTag == DeckTableTag && _openDeck != null)
                 global::BreakersOfE.Views.Playtest.PlaytestWindow.Open(_openDeck, Window.GetWindow(this));
         }
 
